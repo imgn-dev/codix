@@ -91,6 +91,11 @@ impl Project {
         self.root.join(DATA_DIR)
     }
 
+    /// The index database.
+    pub fn index_path(&self) -> PathBuf {
+        self.data_dir().join(INDEX_FILE)
+    }
+
     /// Whether paths differing only in case name the same file here.
     pub fn is_case_insensitive(&self) -> bool {
         self.case_insensitive

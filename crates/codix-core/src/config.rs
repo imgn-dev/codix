@@ -632,7 +632,7 @@ fn set(project: &Project, text: &str, raw: &str) -> Result<ConfigResponse, Error
     let key = parse_key(text, &segments, false)?;
     let value = parse_value(key.def.kind, raw)
         .ok_or_else(|| invalid_value(&key.display(), raw, key.def.kind))?;
-    Config::load(project)?;
+    let before = Config::load(project)?;
     let file = key.def.file;
     if file == ConfigFile::Local && !project.data_dir().is_dir() {
         return Err(Error::NotIndexed {
@@ -674,14 +674,14 @@ fn set(project: &Project, text: &str, raw: &str) -> Result<ConfigResponse, Error
         key: key.display(),
         value,
         file: file.path().to_owned(),
-        effect: key.def.effect.to_owned(),
+        effect: effect(project, &key, &before)?,
     })
 }
 
 fn unset(project: &Project, text: &str) -> Result<ConfigResponse, Error> {
     let segments = key_segments(text)?;
     let key = parse_key(text, &segments, true)?;
-    Config::load(project)?;
+    let before = Config::load(project)?;
     let mut files = Vec::new();
     for file in [ConfigFile::Shared, ConfigFile::Local] {
         let (_, Some(mut doc)) = read_document(project, file)? else {
@@ -692,12 +692,67 @@ fn unset(project: &Project, text: &str) -> Result<ConfigResponse, Error> {
             files.push(file.path().to_owned());
         }
     }
-    let effect = (!files.is_empty()).then(|| key.def.effect.to_owned());
+    let effect = if files.is_empty() {
+        None
+    } else {
+        Some(effect(project, &key, &before)?)
+    };
     Ok(ConfigResponse::Unset {
         key: key.display(),
         files,
         effect,
     })
+}
+
+/// What a change to `key` implies. For keys that change how files are
+/// indexed, the affected files are marked for reindex, and counted, when the
+/// project has an index; `before` is the configuration before the change.
+fn effect(project: &Project, key: &Key<'_>, before: &Config) -> Result<String, Error> {
+    let affects = |path: &str| -> bool {
+        match (key.def.path, key.entry) {
+            ("languages.overrides", Some(glob)) => {
+                override_matcher(glob).is_some_and(|m| m.is_match(path))
+            }
+            ("languages.overrides", None) => before
+                .language_overrides()
+                .iter()
+                .any(|(glob, _)| override_matcher(glob).is_some_and(|m| m.is_match(path))),
+            ("sources.roots", _) => {
+                let after = Config::load(project)
+                    .map(|c| c.source_roots())
+                    .unwrap_or_default();
+                let id = crate::project::FileId::from_canonical(path);
+                before.source_roots().iter().chain(&after).any(|root| {
+                    id.is_within(&crate::project::FileId::from_canonical(root.as_str()))
+                })
+            }
+            _ => false,
+        }
+    };
+    if !matches!(key.def.path, "languages.overrides" | "sources.roots")
+        || !project.index_path().is_file()
+    {
+        return Ok(key.def.effect.to_owned());
+    }
+    let mut store = crate::store::Store::open(&project.index_path())?;
+    let affected: Vec<String> = store
+        .snapshot()?
+        .files()?
+        .into_iter()
+        .map(|f| f.path)
+        .filter(|path| affects(path))
+        .collect();
+    let marked = store.mark_pending(&affected)?;
+    Ok(format!(
+        "{marked} {} will be reindexed on the next scan",
+        if marked == 1 { "file" } else { "files" }
+    ))
+}
+
+/// The matcher of a `languages.overrides` glob, against root-relative paths.
+/// `*` crosses directories, so `*.h` matches every `.h` file.
+pub fn override_matcher(glob: &str) -> Option<globset::GlobMatcher> {
+    globset::Glob::new(glob).ok().map(|g| g.compile_matcher())
 }
 
 fn describe(key: Option<&str>) -> Result<ConfigResponse, Error> {

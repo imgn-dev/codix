@@ -98,6 +98,9 @@ pub enum FileStatus {
     Pending,
     /// Reading or parsing failed.
     Error,
+    /// Binary: neither parsed nor searched, but kept in the manifest so an
+    /// unchanged file is not read again.
+    Skipped,
 }
 
 impl FileStatus {
@@ -107,6 +110,7 @@ impl FileStatus {
             Self::SearchOnly => "search_only",
             Self::Pending => "pending",
             Self::Error => "error",
+            Self::Skipped => "skipped",
         }
     }
 
@@ -115,6 +119,7 @@ impl FileStatus {
             "indexed" => Self::Indexed,
             "search_only" => Self::SearchOnly,
             "pending" => Self::Pending,
+            "skipped" => Self::Skipped,
             _ => Self::Error,
         }
     }
@@ -211,8 +216,9 @@ pub struct SymbolHit {
 pub struct FileUpdate {
     /// The manifest row.
     pub file: FileRow,
-    /// Every symbol of the file, replacing those stored.
-    pub symbols: Vec<SymbolRow>,
+    /// Every symbol of the file, replacing those stored; `None` keeps the
+    /// stored symbols and updates the manifest row only (a touch).
+    pub symbols: Option<Vec<SymbolRow>>,
 }
 
 /// A connection to a project's index.
@@ -305,6 +311,17 @@ impl Store {
     /// Replaces the rows of the updated files and removes the deleted ones, in
     /// one transaction.
     pub fn commit(&mut self, updates: &[FileUpdate], deleted: &[String]) -> Result<(), Error> {
+        self.commit_scan(updates, deleted, None)
+    }
+
+    /// Like [`Store::commit`], also replacing every directory hash when `dirs`
+    /// is given.
+    pub fn commit_scan(
+        &mut self,
+        updates: &[FileUpdate],
+        deleted: &[String],
+        dirs: Option<&[(String, [u8; 32])]>,
+    ) -> Result<(), Error> {
         let path = self.path.clone();
         let tx = self
             .conn
@@ -317,7 +334,31 @@ impl Store {
             tx.execute("DELETE FROM files WHERE path = ?1", [removed])
                 .map_err(|e| sql_error(&path, &e))?;
         }
+        if let Some(dirs) = dirs {
+            write_dirs(&tx, dirs).map_err(|e| sql_error(&path, &e))?;
+        }
         tx.commit().map_err(|e| sql_error(&path, &e))
+    }
+
+    /// Marks files pending, so the next scan reparses them; returns how many
+    /// were indexed.
+    pub fn mark_pending(&mut self, paths: &[String]) -> Result<usize, Error> {
+        let path = self.path.clone();
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| sql_error(&path, &e))?;
+        let mut marked = 0;
+        for file in paths {
+            marked += tx
+                .execute(
+                    "UPDATE files SET status = 'pending' WHERE path = ?1",
+                    [file],
+                )
+                .map_err(|e| sql_error(&path, &e))?;
+        }
+        tx.commit().map_err(|e| sql_error(&path, &e))?;
+        Ok(marked)
     }
 
     /// Replaces one file's rows in one transaction.
@@ -358,6 +399,9 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
         ],
         |r| r.get(0),
     )?;
+    let Some(symbols) = &update.symbols else {
+        return Ok(());
+    };
     tx.execute("DELETE FROM symbols WHERE file_id = ?1", [file_id])?;
     let mut insert = tx.prepare_cached(
         "INSERT INTO symbols (symbol_id, file_id, name, kind, qualified_name, parent,
@@ -366,7 +410,7 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
              signature, visibility, confidence)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
     )?;
-    for s in &update.symbols {
+    for s in symbols {
         insert.execute(params![
             s.symbol_id,
             file_id,
@@ -391,6 +435,15 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
                 Confidence::Low => "low",
             },
         ])?;
+    }
+    Ok(())
+}
+
+fn write_dirs(tx: &Transaction<'_>, dirs: &[(String, [u8; 32])]) -> rusqlite::Result<()> {
+    tx.execute("DELETE FROM dirs", [])?;
+    let mut insert = tx.prepare_cached("INSERT INTO dirs (path, hash) VALUES (?1, ?2)")?;
+    for (path, hash) in dirs {
+        insert.execute(params![path, hash.as_slice()])?;
     }
     Ok(())
 }
@@ -487,6 +540,20 @@ impl Snapshot<'_> {
         stmt.query_map([], file_row)
             .and_then(Iterator::collect)
             .map_err(|e| self.err(&e))
+    }
+
+    /// Every directory hash, by root-relative path.
+    pub fn dirs(&self) -> Result<std::collections::HashMap<String, [u8; 32]>, Error> {
+        let mut stmt = self
+            .tx
+            .prepare("SELECT path, hash FROM dirs")
+            .map_err(|e| self.err(&e))?;
+        stmt.query_map([], |r| {
+            let hash: Vec<u8> = r.get(1)?;
+            Ok((r.get(0)?, hash.try_into().unwrap_or([0; 32])))
+        })
+        .and_then(Iterator::collect)
+        .map_err(|e| self.err(&e))
     }
 
     /// Every symbol of `path`, in source order.

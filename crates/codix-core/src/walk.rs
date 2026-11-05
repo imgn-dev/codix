@@ -240,13 +240,15 @@ pub fn mtime_ns(metadata: &Metadata) -> i64 {
     }
 }
 
+/// Inode number; 0 where the platform does not expose one.
 #[cfg(unix)]
-fn inode(metadata: &Metadata) -> u64 {
+pub fn inode(metadata: &Metadata) -> u64 {
     std::os::unix::fs::MetadataExt::ino(metadata)
 }
 
+/// Inode number; 0 where the platform does not expose one.
 #[cfg(not(unix))]
-fn inode(_: &Metadata) -> u64 {
+pub fn inode(_: &Metadata) -> u64 {
     0
 }
 

@@ -56,7 +56,7 @@ fn symbol(name: &str, qualified: &str, line: u32) -> SymbolRow {
 fn update(path: &str, symbols: Vec<SymbolRow>) -> FileUpdate {
     FileUpdate {
         file: file(path),
-        symbols,
+        symbols: Some(symbols),
     }
 }
 
@@ -93,7 +93,7 @@ fn replace_file_is_idempotent_and_round_trips() {
         .into_iter()
         .map(|hit| hit.symbol)
         .collect();
-    assert_eq!(stored, u.symbols);
+    assert_eq!(Some(stored), u.symbols);
     assert_eq!(snapshot.symbol_count().unwrap(), 2);
 }
 
