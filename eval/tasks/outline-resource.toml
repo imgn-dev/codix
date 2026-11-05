@@ -1,0 +1,4 @@
+category = "outline"
+prompt = """Which methods of org.springframework.core.io.Resource return a URL, a URI or a File?"""
+# The answer must contain every one of these.
+expect = ["getURL", "getURI", "getFile"]

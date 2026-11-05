@@ -1,0 +1,4 @@
+category = "outline"
+prompt = """List the methods of org.springframework.util.StopWatch that start and stop tasks, and the one that prints a table of them."""
+# The answer must contain every one of these.
+expect = ["start", "stop", "prettyPrint"]

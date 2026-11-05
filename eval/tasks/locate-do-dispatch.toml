@@ -1,0 +1,4 @@
+category = "locate"
+prompt = """Where is DispatcherServlet's doDispatch method defined? Give the file path and line."""
+# The answer must contain every one of these.
+expect = ["spring-webmvc/src/main/java/org/springframework/web/servlet/DispatcherServlet.java", "1048"]

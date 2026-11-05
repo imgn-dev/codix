@@ -1,0 +1,4 @@
+category = "outline"
+prompt = """Which classes in the package org.springframework.context.event multicast events to listeners?"""
+# The answer must contain every one of these.
+expect = ["SimpleApplicationEventMulticaster", "AbstractApplicationEventMulticaster"]

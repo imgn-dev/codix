@@ -1,0 +1,4 @@
+category = "locate"
+prompt = """Which file declares the getBean methods of the BeanFactory interface? Give its path."""
+# The answer must contain every one of these.
+expect = ["spring-beans/src/main/java/org/springframework/beans/factory/BeanFactory.java"]

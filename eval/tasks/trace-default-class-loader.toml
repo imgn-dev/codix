@@ -1,0 +1,4 @@
+category = "trace"
+prompt = """Which class loader does ClassUtils.getDefaultClassLoader() try first?"""
+# The answer must contain every one of these.
+expect = ["getContextClassLoader"]

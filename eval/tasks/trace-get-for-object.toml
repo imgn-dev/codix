@@ -1,0 +1,4 @@
+category = "trace"
+prompt = """RestTemplate.getForObject(URI, Class) delegates to which RestTemplate method?"""
+# The answer must contain every one of these.
+expect = ["execute"]

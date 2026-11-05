@@ -1,0 +1,4 @@
+category = "trace"
+prompt = """What is the default propagation of the @Transactional annotation in spring-tx?"""
+# The answer must contain every one of these.
+expect = ["REQUIRED"]

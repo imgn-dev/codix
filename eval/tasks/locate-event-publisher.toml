@@ -1,0 +1,4 @@
+category = "locate"
+prompt = """Where is the ApplicationEventPublisher interface defined? Give the file path and line."""
+# The answer must contain every one of these.
+expect = ["spring-context/src/main/java/org/springframework/context/ApplicationEventPublisher.java", "35"]

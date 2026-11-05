@@ -1,0 +1,4 @@
+category = "outline"
+prompt = """Which methods does Spring MVC's HandlerInterceptor interface declare?"""
+# The answer must contain every one of these.
+expect = ["preHandle", "postHandle", "afterCompletion"]

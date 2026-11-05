@@ -1,0 +1,4 @@
+category = "locate"
+prompt = """Which file defines the class that resolves `${...}` placeholders in strings, PropertyPlaceholderHelper? Give its path."""
+# The answer must contain every one of these.
+expect = ["spring-core/src/main/java/org/springframework/util/PropertyPlaceholderHelper.java"]

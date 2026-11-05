@@ -1,0 +1,4 @@
+category = "locate"
+prompt = """Which class and file hold the findAnnotation methods of Spring's core annotation utilities? Give the path."""
+# The answer must contain every one of these.
+expect = ["spring-core/src/main/java/org/springframework/core/annotation/AnnotationUtils.java"]

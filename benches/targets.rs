@@ -7,19 +7,13 @@
 //! and writes `benches/results/<version>.json`.
 
 use std::io::Write as _;
-use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::path::Path;
 use std::time::Duration;
 
-use codix_benches::{Pinned, checkout, files_and_lines, percentile, time};
-use serde::Serialize;
-
-const SPRING: Pinned = Pinned {
-    name: "spring-framework",
-    url: "https://github.com/spring-projects/spring-framework",
-    tag: "v6.2.0",
-    commit: "5024bb72279188f1d0dcfe19e8abdd4bdb9887c8",
+use codix_benches::{
+    Pinned, SPRING, build_codix, checkout, files_and_lines, percentile, time, workspace,
 };
+use serde::Serialize;
 
 const LINUX: Pinned = Pinned {
     name: "linux",
@@ -71,31 +65,6 @@ struct Measure {
     files: usize,
     lines: usize,
     seconds: f64,
-}
-
-fn workspace() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
-}
-
-fn build_codix() -> PathBuf {
-    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
-    let status = Command::new(cargo)
-        .args([
-            "build",
-            "--release",
-            "--quiet",
-            "-p",
-            "codix-cli",
-            "--features",
-            "full",
-        ])
-        .current_dir(workspace())
-        .status()
-        .expect("run cargo build");
-    assert!(status.success(), "building codix failed");
-    workspace()
-        .join("target/release")
-        .join(format!("codix{}", std::env::consts::EXE_SUFFIX))
 }
 
 /// A cold index: no `.codix/`, then `codix init`.

@@ -1,0 +1,4 @@
+category = "outline"
+prompt = """Which classes are declared in spring-core's PropertySource.java, nested ones included?"""
+# The answer must contain every one of these.
+expect = ["StubPropertySource", "ComparisonPropertySource"]

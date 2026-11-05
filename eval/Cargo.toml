@@ -1,0 +1,18 @@
+[package]
+name = "codix-eval"
+description = "The LLM benchmark: agents given only codix's MCP tools, on pinned repositories"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+codix-benches = { path = "../benches" }
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+
+[lints]
+workspace = true

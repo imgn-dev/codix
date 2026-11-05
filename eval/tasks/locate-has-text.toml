@@ -1,0 +1,4 @@
+category = "locate"
+prompt = """Where is StringUtils.hasText defined? Give the file path."""
+# The answer must contain every one of these.
+expect = ["spring-core/src/main/java/org/springframework/util/StringUtils.java"]

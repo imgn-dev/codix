@@ -1,0 +1,4 @@
+category = "outline"
+prompt = """What does the Ordered interface in spring-core declare: its method and its constants?"""
+# The answer must contain every one of these.
+expect = ["getOrder", "HIGHEST_PRECEDENCE", "LOWEST_PRECEDENCE"]

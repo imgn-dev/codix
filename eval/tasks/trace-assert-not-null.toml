@@ -1,0 +1,4 @@
+category = "trace"
+prompt = """What exception does Assert.notNull(Object, String) in spring-core throw when the object is null?"""
+# The answer must contain every one of these.
+expect = ["IllegalArgumentException"]

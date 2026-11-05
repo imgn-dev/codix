@@ -1,0 +1,4 @@
+category = "locate"
+prompt = """Where is the @Transactional annotation that applications use defined (not a test copy)? Give the file path."""
+# The answer must contain every one of these.
+expect = ["spring-tx/src/main/java/org/springframework/transaction/annotation/Transactional.java"]

@@ -1,0 +1,4 @@
+category = "trace"
+prompt = """Which class does DefaultListableBeanFactory extend directly?"""
+# The answer must contain every one of these.
+expect = ["AbstractAutowireCapableBeanFactory"]

@@ -138,3 +138,42 @@ pub fn files_and_lines(repo: &Path) -> (usize, usize) {
     }
     (files, lines)
 }
+
+/// spring-framework v6.2.0: about 1.6M lines in 10k files, mostly Java.
+pub const SPRING: Pinned = Pinned {
+    name: "spring-framework",
+    url: "https://github.com/spring-projects/spring-framework",
+    tag: "v6.2.0",
+    commit: "5024bb72279188f1d0dcfe19e8abdd4bdb9887c8",
+};
+
+/// The workspace root.
+pub fn workspace() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("..")
+}
+
+/// Builds the release binary with every provider and returns its path.
+///
+/// # Panics
+///
+/// When cargo cannot run or the build fails.
+pub fn build_codix() -> PathBuf {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
+    let status = Command::new(cargo)
+        .args([
+            "build",
+            "--release",
+            "--quiet",
+            "-p",
+            "codix-cli",
+            "--features",
+            "full",
+        ])
+        .current_dir(workspace())
+        .status()
+        .expect("run cargo build");
+    assert!(status.success(), "building codix failed");
+    workspace()
+        .join("target/release")
+        .join(format!("codix{}", std::env::consts::EXE_SUFFIX))
+}

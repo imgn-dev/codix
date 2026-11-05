@@ -1,0 +1,4 @@
+category = "trace"
+prompt = """What method does AbstractApplicationContext.refresh() call first to prepare the context, right after starting the startup step?"""
+# The answer must contain every one of these.
+expect = ["prepareRefresh"]

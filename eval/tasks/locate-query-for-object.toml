@@ -1,0 +1,4 @@
+category = "locate"
+prompt = """Which file declares JdbcTemplate's queryForObject methods? Give its path."""
+# The answer must contain every one of these.
+expect = ["spring-jdbc/src/main/java/org/springframework/jdbc/core/JdbcTemplate.java"]
