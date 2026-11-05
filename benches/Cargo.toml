@@ -1,0 +1,24 @@
+[package]
+name = "codix-benches"
+description = "codix benchmarks on pinned public repositories"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+path = "lib.rs"
+
+[[bench]]
+name = "targets"
+path = "targets.rs"
+harness = false
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
