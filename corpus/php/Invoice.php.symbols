@@ -1,0 +1,17 @@
+3:11 namespace Acme\Billing | namespace Acme\Billing
+5:7 constant VERSION | const VERSION
+7:11 interface Priced | interface Priced
+9:21 method Priced.price [public] | public function price(): int
+12:7 trait Logs | trait Logs
+14:24 method Logs.log [protected] | protected function log(string $message): void
+17:6 enum Status | enum Status: string
+19:10 enum_member Status.Draft | case Draft
+20:10 enum_member Status.Sent | case Sent
+23:13 class Invoice | final class Invoice implements Priced
+27:18 constant Invoice.MAX_LINES [public] | public const MAX_LINES
+28:20 field Invoice.lines [private] | private array $lines
+29:24 field Invoice.count [public] | public static int $count
+31:21 constructor Invoice.__construct [public] | public function __construct(array $lines)
+36:21 method Invoice.price [public] | public function price(): int
+41:29 method Invoice.empty [private] | private static function empty(): self
+47:10 function report | function report(Invoice $invoice): string
