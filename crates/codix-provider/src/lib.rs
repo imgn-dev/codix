@@ -11,7 +11,8 @@ pub mod known;
 mod registry;
 
 pub use descriptor::{
-    BuildDescriptor, Descriptor, IgnoreStrategy, LanguageDescriptor, ProviderKind, VcsDescriptor,
+    BuildDescriptor, Descriptor, Detect, IgnoreStrategy, LanguageDescriptor, ProviderKind,
+    VcsDescriptor,
 };
 pub use registry::{ProviderEntry, Registry, registry};
 

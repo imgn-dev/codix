@@ -1,0 +1,8 @@
+name = "alpha"
+version = 1
+
+[detect]
+extensions = ["a"]
+filenames = ["Build.b"]
+shebangs = ["alpha"]
+modelines = ["alpha"]

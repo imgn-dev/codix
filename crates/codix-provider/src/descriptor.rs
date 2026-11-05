@@ -35,6 +35,28 @@ pub struct LanguageDescriptor {
     pub name: String,
     /// Pack version; part of the parser version stored per file.
     pub version: u32,
+    /// How files of the language are recognized.
+    #[serde(default)]
+    pub detect: Detect,
+}
+
+/// Detection rules of a language. Content heuristics for ambiguous
+/// extensions (`.h`, `.m`, `.pl`) are engine behaviors, not rules.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Detect {
+    /// Extensions without the dot, such as `java`.
+    #[serde(default)]
+    pub extensions: Vec<String>,
+    /// Exact file names, such as `Rakefile`.
+    #[serde(default)]
+    pub filenames: Vec<String>,
+    /// Interpreter names in a `#!` line, such as `python3`.
+    #[serde(default)]
+    pub shebangs: Vec<String>,
+    /// Names in Vim (`ft=`) and Emacs (`mode:`) modelines.
+    #[serde(default)]
+    pub modelines: Vec<String>,
 }
 
 /// A build system.

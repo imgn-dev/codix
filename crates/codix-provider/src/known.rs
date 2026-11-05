@@ -43,3 +43,65 @@ pub fn is_known(kind: ProviderKind, name: &str) -> bool {
     };
     names.contains(&name)
 }
+
+/// Extensions of every known language, so files of a language left out of a
+/// build are recognized as such. Packs declare the same in their descriptors.
+pub const EXTENSIONS: &[(&str, &str)] = &[
+    ("c", "c"),
+    ("c++", "cpp"),
+    ("cc", "cpp"),
+    ("cjs", "javascript"),
+    ("cpp", "cpp"),
+    ("cs", "csharp"),
+    ("cts", "typescript"),
+    ("cxx", "cpp"),
+    ("gemspec", "ruby"),
+    ("go", "go"),
+    ("hh", "cpp"),
+    ("hpp", "cpp"),
+    ("hxx", "cpp"),
+    ("java", "java"),
+    ("js", "javascript"),
+    ("json", "json"),
+    ("jsx", "javascript"),
+    ("kt", "kotlin"),
+    ("kts", "kotlin"),
+    ("markdown", "markdown"),
+    ("md", "markdown"),
+    ("mjs", "javascript"),
+    ("mts", "typescript"),
+    ("php", "php"),
+    ("py", "python"),
+    ("pyi", "python"),
+    ("rake", "ruby"),
+    ("rb", "ruby"),
+    ("rs", "rust"),
+    ("sql", "sql"),
+    ("toml", "toml"),
+    ("ts", "typescript"),
+    ("tsx", "typescript"),
+    ("txt", "text"),
+    ("xml", "xml"),
+    ("xsd", "xml"),
+    ("yaml", "yaml"),
+    ("yml", "yaml"),
+];
+
+/// Exact file names of every known language.
+pub const FILENAMES: &[(&str, &str)] = &[("Gemfile", "ruby"), ("Rakefile", "ruby")];
+
+/// The known language for an extension, compiled in or not.
+pub fn language_for_extension(extension: &str) -> Option<&'static str> {
+    EXTENSIONS
+        .iter()
+        .find(|(e, _)| *e == extension)
+        .map(|(_, language)| *language)
+}
+
+/// The known language for an exact file name, compiled in or not.
+pub fn language_for_filename(name: &str) -> Option<&'static str> {
+    FILENAMES
+        .iter()
+        .find(|(f, _)| *f == name)
+        .map(|(_, language)| *language)
+}
