@@ -81,8 +81,12 @@ pub struct Symbols {
     /// Fields holding a definition's body; its signature is the text before.
     #[serde(default)]
     pub body_fields: Vec<String>,
-    /// Tokens opening a body that no field holds, such as `{` for a Go
-    /// struct: the signature ends at the first one after the name.
+    /// Kinds of child nodes holding a body that no field names, such as
+    /// Kotlin's `class_body`; the signature is the text before.
+    #[serde(default)]
+    pub body_nodes: Vec<String>,
+    /// Tokens opening a body that no field or node holds, such as `{` for a
+    /// Go struct: the signature ends at the first one after the name.
     #[serde(default)]
     pub body_tokens: Vec<String>,
     /// `@definition.<kind>` capture kinds mapped onto [`SYMBOL_KINDS`]; a kind
@@ -98,6 +102,7 @@ impl Default for Symbols {
         Self {
             separator: default_separator(),
             body_fields: Vec::new(),
+            body_nodes: Vec::new(),
             body_tokens: Vec::new(),
             kinds: std::collections::BTreeMap::new(),
             visibility: None,

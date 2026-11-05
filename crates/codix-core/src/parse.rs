@@ -236,8 +236,21 @@ fn header_end(descriptor: &LanguageDescriptor, definition: &Definition<'_>) -> u
             .find_map(|field| node.child_by_field_name(field))
             .map(|body| body.start_byte())
     };
+    let body_node = |node: Node<'_>| {
+        let mut cursor = node.walk();
+        node.children(&mut cursor)
+            .find(|child| {
+                descriptor
+                    .symbols
+                    .body_nodes
+                    .iter()
+                    .any(|k| k == child.kind())
+            })
+            .map(|body| body.start_byte())
+    };
     body_start(definition.node)
         .or_else(|| declarator(definition).and_then(body_start))
+        .or_else(|| body_node(definition.node))
         .or_else(|| body_token(descriptor, definition))
         .unwrap_or(definition.node.end_byte())
 }

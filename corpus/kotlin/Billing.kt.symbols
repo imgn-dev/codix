@@ -1,0 +1,23 @@
+3:11 constant MAX_LINES | const val MAX_LINES
+4:5 variable defaultCurrency | val defaultCurrency
+6:11 type_alias Amount | typealias Amount
+8:11 interface Priced | interface Priced
+9:9 method Priced.price | fun price(): Amount
+12:12 enum Status | enum class Status
+13:5 enum_member Status.DRAFT | DRAFT
+13:12 enum_member Status.SENT | SENT
+15:9 method Status.label | fun label()
+18:12 class Line | data class Line(val label: String, private val amount: Amount = 0) : Priced
+18:21 property Line.label | val label: String
+18:48 property Line.amount [private] | private val amount: Amount
+19:18 method Line.price | override fun price()
+22:7 class Invoice | class Invoice(val lines: List<Line>)
+22:19 property Invoice.lines | val lines: List<Line>
+23:18 property Invoice.paid [internal] | internal var paid
+25:5 constructor Invoice.constructor | constructor() : this(emptyList())
+27:9 method Invoice.total | fun total(): Amount
+31:22 class Invoice.Factory | companion object Factory
+32:13 method Invoice.Factory.empty | fun empty()
+36:8 class Registry | object Registry
+37:17 property Registry.invoices [private] | private val invoices
+40:5 function report | fun report(invoice: Invoice, verbose: Boolean = false): String

@@ -9,6 +9,8 @@ mod render;
 use codix_lang_go as _;
 #[cfg(feature = "lang-java")]
 use codix_lang_java as _;
+#[cfg(feature = "lang-kotlin")]
+use codix_lang_kotlin as _;
 #[cfg(feature = "lang-python")]
 use codix_lang_python as _;
 #[cfg(feature = "lang-typescript")]
@@ -366,6 +368,10 @@ mod tests {
             (
                 cfg!(feature = "lang-python"),
                 (ProviderKind::Language, "python"),
+            ),
+            (
+                cfg!(feature = "lang-kotlin"),
+                (ProviderKind::Language, "kotlin"),
             ),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
