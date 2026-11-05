@@ -5,6 +5,8 @@ use std::fmt;
 use std::io;
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 /// Process exit codes shared by every frontend.
 pub mod exit {
     /// Success with results.
@@ -88,12 +90,30 @@ pub enum Error {
         /// What went wrong.
         message: String,
     },
+    /// An error that happened in a daemon, as it reported it.
+    Remote(ErrorReport),
+}
+
+/// An error as it crosses the daemon socket: everything a frontend shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ErrorReport {
+    /// Stable code.
+    pub code: String,
+    /// One line saying what went wrong.
+    pub cause: String,
+    /// The next step.
+    pub hint: String,
+    /// Symbol IDs listed with the error.
+    pub candidates: Vec<String>,
+    /// Process exit code.
+    pub exit_code: u8,
 }
 
 impl Error {
     /// The stable code, such as `ambiguous_symbol`.
-    pub fn code(&self) -> &'static str {
+    pub fn code(&self) -> &str {
         match self {
+            Self::Remote(report) => &report.code,
             Self::NoProject { .. } => "no_project",
             Self::NotIndexed { .. } => "not_indexed",
             Self::AmbiguousSymbol { .. } => "ambiguous_symbol",
@@ -110,6 +130,7 @@ impl Error {
     /// One line saying what went wrong.
     pub fn cause(&self) -> String {
         match self {
+            Self::Remote(report) => report.cause.clone(),
             Self::NoProject { start } => format!(
                 "no codix project in {} or any parent directory",
                 start.display()
@@ -136,6 +157,7 @@ impl Error {
     /// The next step to take.
     pub fn hint(&self) -> String {
         match self {
+            Self::Remote(report) => report.hint.clone(),
             Self::NoProject { .. } | Self::NotIndexed { .. } => {
                 "run `codix init` at the project root".to_owned()
             }
@@ -161,6 +183,7 @@ impl Error {
     pub fn candidates(&self) -> &[String] {
         match self {
             Self::AmbiguousSymbol { candidates, .. } => candidates,
+            Self::Remote(report) => &report.candidates,
             _ => &[],
         }
     }
@@ -168,6 +191,7 @@ impl Error {
     /// The process exit code for this error.
     pub fn exit_code(&self) -> u8 {
         match self {
+            Self::Remote(report) => report.exit_code,
             Self::NoProject { .. } | Self::NotIndexed { .. } => exit::NO_PROJECT,
             Self::AmbiguousSymbol { .. } => exit::AMBIGUOUS,
             Self::UnknownSymbol { .. } => exit::NO_RESULTS,
@@ -176,6 +200,19 @@ impl Error {
             }
             Self::DaemonRunning { .. } => exit::REFUSED,
             Self::Io { .. } | Self::Internal { .. } => exit::INTERNAL,
+        }
+    }
+}
+
+impl Error {
+    /// The error as a frontend shows it, to send across the daemon socket.
+    pub fn report(&self) -> ErrorReport {
+        ErrorReport {
+            code: self.code().to_owned(),
+            cause: self.cause(),
+            hint: self.hint(),
+            candidates: self.candidates().to_vec(),
+            exit_code: self.exit_code(),
         }
     }
 }

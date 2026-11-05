@@ -73,6 +73,7 @@ use codix_core::query::{
     ShowRequest,
 };
 use codix_core::store::MatchMode;
+use codix_daemon::client::{self, Route};
 use codix_daemon::{control, server};
 use render::{Style, TextRender};
 
@@ -430,12 +431,30 @@ fn finish(written: io::Result<()>, code: u8) -> u8 {
     }
 }
 
+/// Runs an operation through the project's daemon when one runs, otherwise
+/// in-process; both render the same way.
 fn run<O>(output: &Output, op: &O, ctx: &Context, request: Result<O::Request, Error>) -> u8
 where
     O: Operation,
     O::Response: TextRender,
 {
-    match request.and_then(|request| op.run(ctx, request)) {
+    let request = match request {
+        Ok(request) => request,
+        Err(error) => return output.error(&error),
+    };
+    let (outcome, warnings) = match client::call::<O>(ctx, &request) {
+        Route::Daemon { outcome, warnings } => (outcome, warnings),
+        Route::InProcess { warnings } => {
+            let mut all = output.warnings.clone();
+            all.extend(warnings);
+            (op.run(ctx, request), all)
+        }
+    };
+    let output = Output {
+        warnings,
+        ..*output
+    };
+    match outcome {
         Ok(response) => output.response(O::NAME, &response),
         Err(error) => output.error(&error),
     }

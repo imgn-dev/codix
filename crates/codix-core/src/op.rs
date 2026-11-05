@@ -70,6 +70,49 @@ impl Context {
         })
     }
 
+    /// The context of a request that a daemon serving `project` received from
+    /// a client in `cwd`, with `--root` as `root`: what [`Context::discover`]
+    /// gives, without opening the project again. A cwd of another project is
+    /// a `usage` error.
+    pub fn within(
+        project: &Project,
+        warnings: &[Warning],
+        cwd: &Path,
+        root: Option<&Path>,
+    ) -> Result<Self, Error> {
+        let cwd = crate::project::canonicalize(cwd).map_err(|source| Error::Io {
+            path: cwd.to_path_buf(),
+            source,
+        })?;
+        let found = match root {
+            Some(root) => {
+                let root = cwd.join(root);
+                Some(
+                    crate::project::canonicalize(&root)
+                        .map_err(|source| Error::Io { path: root, source })?,
+                )
+            }
+            None => crate::project::find_root(&cwd)?,
+        };
+        if found.as_deref() != Some(project.root()) {
+            return Err(Error::Usage {
+                cause: format!(
+                    "{} is not in the project at {}",
+                    cwd.display(),
+                    project.root().display()
+                ),
+                hint: "send requests to the daemon of the project they are about".to_owned(),
+            });
+        }
+        Ok(Self {
+            cwd,
+            project: Some(project.clone()),
+            root_override: root.is_some(),
+            warnings: warnings.to_vec(),
+            gate: Arc::new(FileGate),
+        })
+    }
+
     /// The same context, writing through `gate`: a daemon's, which holds the
     /// write lock.
     #[must_use]
@@ -85,6 +128,11 @@ impl Context {
     /// The canonical directory the command runs from.
     pub fn cwd(&self) -> &Path {
         &self.cwd
+    }
+
+    /// Whether the project was given with `--root` rather than discovered.
+    pub fn root_override(&self) -> bool {
+        self.root_override
     }
 
     /// Warnings about the project, for every response.

@@ -2,7 +2,7 @@
 //! when asked or after `daemon.idle_timeout` without requests.
 
 use std::fs::{self, File, OpenOptions, TryLockError};
-use std::io::{BufReader, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, PoisonError};
@@ -12,12 +12,14 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use codix_core::Error;
 use codix_core::config::Config;
 use codix_core::daemon::{DAEMON_FILE, DAEMON_LOCK, DaemonRecord, PROTOCOL, read_record};
-use codix_core::lock::{HeldGate, WriteLock};
+use codix_core::dispatch::dispatch;
+use codix_core::lock::{HeldGate, WriteGate, WriteLock, network_filesystem_warning};
+use codix_core::op::{Context, Warning};
 use codix_core::project::Project;
 use interprocess::local_socket::{GenericFilePath, ListenerOptions, Stream, prelude::*};
 
 use crate::paths::socket_name;
-use crate::protocol::{Request, Response, Stats, read_frame, write_frame};
+use crate::protocol::{OpRequest, Request, Response, Stats, read_frame, write_frame};
 use crate::registry;
 
 /// Makes the daemon report this version instead of its own, for tests only.
@@ -39,13 +41,39 @@ pub fn reported_version() -> String {
 /// What every connection shares.
 struct State {
     record: DaemonRecord,
+    project: Project,
+    warnings: Vec<Warning>,
+    gate: Arc<dyn WriteGate>,
     last_request: Mutex<Instant>,
     stopping: AtomicBool,
-    // Used by the operation requests of the socket protocol.
-    _gate: Arc<HeldGate>,
 }
 
 impl State {
+    fn touch(&self) {
+        *self
+            .last_request
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Instant::now();
+    }
+
+    /// Runs an operation as the client would have in-process, with this
+    /// daemon's write gate.
+    fn run(&self, op: OpRequest) -> Response {
+        self.touch();
+        let result = Context::within(&self.project, &self.warnings, &op.cwd, op.root.as_deref())
+            .and_then(|ctx| dispatch(&ctx.with_gate(Arc::clone(&self.gate)), &op.name, op.request));
+        // A long operation is activity until it ends.
+        self.touch();
+        let warnings = self.warnings.clone();
+        match result {
+            Ok(result) => Response::Done { result, warnings },
+            Err(error) => Response::Failed {
+                error: error.report(),
+                warnings,
+            },
+        }
+    }
+
     fn idle(&self) -> Duration {
         self.last_request
             .lock()
@@ -129,11 +157,16 @@ fn serve_project(root: &Path) -> Result<(), Error> {
         record.pid
     ));
 
+    let warnings = network_filesystem_warning(&project.data_dir())
+        .into_iter()
+        .collect();
     let state = Arc::new(State {
         record,
+        project,
+        warnings,
+        gate: Arc::new(HeldGate::new(write_lock)),
         last_request: Mutex::new(Instant::now()),
         stopping: AtomicBool::new(false),
-        _gate: Arc::new(HeldGate::new(write_lock)),
     });
     watch_idle(&state, config.idle_timeout());
 
@@ -144,23 +177,21 @@ fn serve_project(root: &Path) -> Result<(), Error> {
         match connection {
             Ok(stream) => {
                 let state = Arc::clone(&state);
-                thread::spawn(move || serve(&state, &stream));
+                thread::spawn(move || serve(&state, BufReader::new(&stream), &stream));
             }
             Err(e) => log(&format!("accept failed: {e}")),
         }
     }
 
     drop(listener);
-    fs::remove_file(project.data_dir().join(DAEMON_FILE)).ok();
-    registry::unregister(project.root());
+    fs::remove_file(state.project.data_dir().join(DAEMON_FILE)).ok();
+    registry::unregister(state.project.root());
     log("daemon stopped");
     Ok(())
 }
 
 /// Answers the requests of one connection until the client closes it.
-fn serve(state: &State, stream: &Stream) {
-    let mut reader = BufReader::new(stream);
-    let mut writer = stream;
+fn serve(state: &State, mut reader: impl BufRead, mut writer: impl Write) {
     loop {
         let request = match read_frame::<Request>(&mut reader) {
             Ok(Some(request)) => request,
@@ -177,6 +208,7 @@ fn serve(state: &State, stream: &Stream) {
                 idle_seconds: state.idle().as_secs(),
             }),
             Request::Stop => Response::Stopping,
+            Request::Op(op) => state.run(op),
         };
         let stop = response == Response::Stopping;
         if let Err(e) = write_frame(&mut writer, &response) {
@@ -272,5 +304,151 @@ fn log(message: &str) {
         None => {
             writeln!(std::io::stderr().lock(), "{message}").ok();
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+    use std::path::PathBuf;
+
+    use serde_json::json;
+
+    use super::*;
+
+    fn state(root: &Path) -> State {
+        fs::create_dir_all(root.join(".codix")).expect("create .codix");
+        let project = Project::at(root).expect("project");
+        let lock = WriteLock::acquire(&project).expect("lock");
+        State {
+            record: DaemonRecord {
+                root: project.root().to_path_buf(),
+                socket: "unused".to_owned(),
+                pid: 1,
+                version: "test".to_owned(),
+                protocol: PROTOCOL,
+                started_at: 0,
+            },
+            project,
+            warnings: Vec::new(),
+            gate: Arc::new(HeldGate::new(lock)),
+            last_request: Mutex::new(Instant::now()),
+            stopping: AtomicBool::new(false),
+        }
+    }
+
+    /// Serves `requests`, one frame each, and returns the responses.
+    fn exchange(state: &State, requests: &[Request]) -> Vec<Response> {
+        let mut input = Vec::new();
+        for request in requests {
+            write_frame(&mut input, request).expect("frame");
+        }
+        let mut output = Vec::new();
+        serve(state, Cursor::new(input), &mut output);
+        let mut reader = Cursor::new(output);
+        let mut responses = Vec::new();
+        while let Some(response) = read_frame(&mut reader).expect("response") {
+            responses.push(response);
+        }
+        responses
+    }
+
+    fn op(state: &State, name: &str, request: serde_json::Value) -> Request {
+        Request::Op(OpRequest {
+            name: name.to_owned(),
+            cwd: state.project.root().to_path_buf(),
+            root: None,
+            request,
+        })
+    }
+
+    #[test]
+    fn answers_each_request_in_order_on_one_connection() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = state(dir.path());
+        let requests = [
+            Request::Hello {
+                protocol: PROTOCOL,
+                version: "test".to_owned(),
+            },
+            op(&state, "capabilities", json!({})),
+            Request::Stats,
+        ];
+        let responses = exchange(&state, &requests);
+        assert_eq!(responses.len(), 3);
+        assert_eq!(responses[0], Response::Hello(state.record.clone()));
+        assert!(
+            matches!(&responses[1], Response::Done { result, .. } if result["languages"].is_array()),
+            "{:?}",
+            responses[1]
+        );
+        assert!(matches!(responses[2], Response::Stats(_)));
+    }
+
+    #[test]
+    fn errors_cross_as_reports() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = state(dir.path());
+        let responses = exchange(
+            &state,
+            &[
+                op(&state, "status", json!({})),
+                op(&state, "frobnicate", json!({})),
+            ],
+        );
+        let Response::Failed { error, .. } = &responses[0] else {
+            panic!("{:?}", responses[0]);
+        };
+        assert_eq!((error.code.as_str(), error.exit_code), ("not_indexed", 6));
+        assert!(error.hint.contains("codix init"), "{}", error.hint);
+        let Response::Failed { error, .. } = &responses[1] else {
+            panic!("{:?}", responses[1]);
+        };
+        assert_eq!(error.cause, "unknown operation `frobnicate`");
+    }
+
+    #[test]
+    fn a_request_from_another_project_is_refused() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let other = tempfile::tempdir().expect("tempdir");
+        let state = state(dir.path());
+        let request = Request::Op(OpRequest {
+            name: "status".to_owned(),
+            cwd: PathBuf::from(other.path()),
+            root: None,
+            request: json!({}),
+        });
+        let responses = exchange(&state, &[request]);
+        let Response::Failed { error, .. } = &responses[0] else {
+            panic!("{:?}", responses[0]);
+        };
+        assert_eq!(error.code, "usage");
+        assert!(
+            error.cause.contains("is not in the project at"),
+            "{}",
+            error.cause
+        );
+    }
+
+    #[test]
+    fn a_malformed_frame_closes_the_connection() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = state(dir.path());
+        let mut output = Vec::new();
+        serve(
+            &state,
+            Cursor::new(b"not json\n\"stats\"\n".to_vec()),
+            &mut output,
+        );
+        assert_eq!(String::from_utf8_lossy(&output), "");
+    }
+
+    #[test]
+    fn stop_is_answered_then_the_connection_ends() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let state = state(dir.path());
+        let responses = exchange(&state, &[Request::Stop, Request::Stats]);
+        assert_eq!(responses, [Response::Stopping]);
+        assert!(state.stopping.load(Ordering::SeqCst));
     }
 }

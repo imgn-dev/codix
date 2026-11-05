@@ -52,13 +52,7 @@ impl Project {
     /// Finds the project containing `start`: the nearest directory, `start`
     /// included, that holds [`DATA_DIR`] or [`SHARED_CONFIG`].
     pub fn discover(start: &Path) -> Result<Option<Self>, Error> {
-        let start = canonical(start)?;
-        for dir in start.ancestors() {
-            if dir.join(DATA_DIR).is_dir() || dir.join(SHARED_CONFIG).is_file() {
-                return Ok(Some(Self::open(dir.to_path_buf())));
-            }
-        }
-        Ok(None)
+        Ok(find_root(start)?.map(Self::open))
     }
 
     /// The project rooted at `root`, without searching (`--root`).
@@ -235,6 +229,16 @@ pub fn without_verbatim_prefix(path: &str) -> Option<String> {
     };
     let parts_sound = rest.split('\\').filter(|p| !p.is_empty()).all(sound);
     (ordinary.len() < MAX_PATH && parts_sound).then_some(ordinary)
+}
+
+/// The root of the project containing `start`: the nearest directory, `start`
+/// included, holding `.codix/` or `codix.toml`.
+pub fn find_root(start: &Path) -> Result<Option<PathBuf>, Error> {
+    let start = canonical(start)?;
+    Ok(start
+        .ancestors()
+        .find(|dir| dir.join(DATA_DIR).is_dir() || dir.join(SHARED_CONFIG).is_file())
+        .map(Path::to_path_buf))
 }
 
 fn canonical(path: &Path) -> Result<PathBuf, Error> {

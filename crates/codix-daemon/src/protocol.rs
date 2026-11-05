@@ -6,10 +6,14 @@
 //! with.
 
 use std::io::{self, BufRead, Write};
+use std::path::PathBuf;
 
 use codix_core::daemon::DaemonRecord;
+use codix_core::error::ErrorReport;
+use codix_core::op::Warning;
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 /// A request to the daemon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -26,6 +30,21 @@ pub enum Request {
     Stats,
     /// Stop now.
     Stop,
+    /// Run an operation.
+    Op(OpRequest),
+}
+
+/// An operation request, as the client would run it in-process.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpRequest {
+    /// The operation's name, such as `find`.
+    pub name: String,
+    /// The client's current directory, absolute.
+    pub cwd: PathBuf,
+    /// The client's `--root`, as given.
+    pub root: Option<PathBuf>,
+    /// The operation's request.
+    pub request: Value,
 }
 
 /// The daemon's answer.
@@ -38,6 +57,20 @@ pub enum Response {
     Stats(Stats),
     /// Answers `stop`; the daemon exits after sending it.
     Stopping,
+    /// The operation's response.
+    Done {
+        /// The response.
+        result: Value,
+        /// Warnings about the project.
+        warnings: Vec<Warning>,
+    },
+    /// The operation's error.
+    Failed {
+        /// The error, as the frontend shows it.
+        error: ErrorReport,
+        /// Warnings about the project.
+        warnings: Vec<Warning>,
+    },
 }
 
 /// What a daemon reports about itself.

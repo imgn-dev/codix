@@ -298,8 +298,10 @@ fn live_an_idle_daemon_stops_by_itself() {
     let out = runtime.codix(&root, &["config", "daemon.idle_timeout", "1s"]);
     assert_eq!(out.code, Some(0), "{}", out.stderr);
     runtime.start(&root);
-    wait_until(|| daemon_pid(&runtime.json(&root, &["status"])).is_none());
-    assert!(!root.join(".codix/daemon.json").exists());
+    // Watched without a request: `status` would go to the daemon and count
+    // as activity.
+    wait_until(|| !root.join(".codix/daemon.json").exists());
+    assert_eq!(daemon_pid(&runtime.json(&root, &["status"])), None);
     assert_eq!(runtime.codix(&root, &["daemon", "list"]).code, Some(1));
 }
 
