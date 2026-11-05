@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::config::Config;
-use crate::lock::WriteLock;
+use crate::lock::WriteGate;
 use crate::project::{FileId, Project};
 use crate::store::{FileRow, FileStatus, FileUpdate, Store, SymbolRow};
 use crate::vcs::Vcs;
@@ -99,8 +99,9 @@ pub fn scan(
     project: &Project,
     config: &Config,
     indexer: &dyn Indexer,
+    gate: &dyn WriteGate,
 ) -> Result<ScanReport, Error> {
-    scan_within(project, config, indexer, None)?.ok_or_else(|| Error::Internal {
+    scan_within(project, config, indexer, gate, None)?.ok_or_else(|| Error::Internal {
         message: "the write lock was given up without a timeout".to_owned(),
     })
 }
@@ -112,6 +113,7 @@ pub fn scan_within(
     project: &Project,
     config: &Config,
     indexer: &dyn Indexer,
+    gate: &dyn WriteGate,
     wait: Option<Duration>,
 ) -> Result<Option<ScanReport>, Error> {
     let start_ns = now_ns();
@@ -171,7 +173,7 @@ pub fn scan_within(
         .collect();
     report.deleted = deleted.len();
 
-    let Some(_lock) = lock(project, wait)? else {
+    let Some(_access) = gate.enter(project, wait)? else {
         return Ok(None);
     };
     recheck(project, indexer, &mut outcomes, start_ns);
@@ -195,6 +197,7 @@ pub fn scan_within(
 pub fn rescan(
     project: &Project,
     indexer: &dyn Indexer,
+    gate: &dyn WriteGate,
     paths: &[String],
     wait: Duration,
 ) -> Result<Option<ScanReport>, Error> {
@@ -225,7 +228,7 @@ pub fn rescan(
         .iter()
         .map(|(file, row)| process(project, indexer, file, row.as_ref(), start_ns))
         .collect();
-    let Some(_lock) = WriteLock::try_acquire_for(project, wait)? else {
+    let Some(_access) = gate.enter(project, Some(wait))? else {
         return Ok(None);
     };
     recheck(project, indexer, &mut outcomes, start_ns);
@@ -235,13 +238,6 @@ pub fn rescan(
     store.commit(&updates, &deleted)?;
     report.errors.sort();
     Ok(Some(report))
-}
-
-fn lock(project: &Project, wait: Option<Duration>) -> Result<Option<WriteLock>, Error> {
-    match wait {
-        None => WriteLock::acquire(project).map(Some),
-        Some(wait) => WriteLock::try_acquire_for(project, wait),
-    }
 }
 
 fn rows_by_path(rows: Vec<FileRow>) -> HashMap<String, FileRow> {

@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process::{Child, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use codix_core::lock::{QUERY_WAIT, WriteLock};
+use codix_core::lock::{FileGate, HeldGate, QUERY_WAIT, WriteGate, WriteLock};
 use codix_core::project::Project;
 
 const HOLDER_VAR: &str = "CODIX_LOCK_HOLDER";
@@ -84,6 +84,41 @@ fn the_lock_is_released_on_drop() {
     assert!(
         WriteLock::try_acquire_for(&p, Duration::from_secs(1))
             .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
+fn a_held_gate_lets_one_writer_in_at_a_time() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let p = project(dir.path());
+    let gate = HeldGate::new(WriteLock::acquire(&p).expect("lock"));
+    let first = gate.enter(&p, None).expect("enter").expect("free gate");
+
+    let start = Instant::now();
+    assert!(gate.enter(&p, Some(QUERY_WAIT)).expect("enter").is_none());
+    assert!(start.elapsed() >= QUERY_WAIT);
+
+    drop(first);
+    assert!(gate.enter(&p, Some(QUERY_WAIT)).expect("enter").is_some());
+}
+
+#[test]
+fn a_held_gate_keeps_other_processes_and_file_gates_out() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let p = project(dir.path());
+    let gate = HeldGate::new(WriteLock::acquire(&p).expect("lock"));
+    assert!(
+        FileGate
+            .enter(&p, Some(QUERY_WAIT))
+            .expect("enter")
+            .is_none()
+    );
+    drop(gate);
+    assert!(
+        FileGate
+            .enter(&p, Some(QUERY_WAIT))
+            .expect("enter")
             .is_some()
     );
 }

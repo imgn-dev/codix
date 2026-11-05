@@ -16,6 +16,7 @@ clap = { version = "4.6.7", features = ["derive"] }
 codix-build-gradle = { path = "crates/codix-build-gradle" }
 codix-build-maven = { path = "crates/codix-build-maven" }
 codix-core = { path = "crates/codix-core" }
+codix-daemon = { path = "crates/codix-daemon" }
 codix-lang-c = { path = "crates/codix-lang-c" }
 codix-lang-cpp = { path = "crates/codix-lang-cpp" }
 codix-lang-csharp = { path = "crates/codix-lang-csharp" }
@@ -41,6 +42,7 @@ codix-vcs-hg = { path = "crates/codix-vcs-hg" }
 codix-vcs-svn = { path = "crates/codix-vcs-svn" }
 globset = "0.4.21"
 ignore = "0.4.34"
+interprocess = "2.4.7"
 inventory = "0.3.25"
 rayon = "1.12.0"
 roxmltree = "0.21.2"

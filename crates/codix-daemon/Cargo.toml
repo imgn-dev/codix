@@ -1,0 +1,24 @@
+[package]
+name = "codix-daemon"
+description = "The per-project codix daemon: lifecycle, socket protocol and runtime registry"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+blake3.workspace = true
+codix-core.workspace = true
+interprocess.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# `system`: the daemon's own memory, for `daemon list`.
+sysinfo = { workspace = true, features = ["system"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

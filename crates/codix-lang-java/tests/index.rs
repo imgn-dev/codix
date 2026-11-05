@@ -4,6 +4,7 @@
 use std::fs;
 
 use codix_core::config::Config;
+use codix_core::lock::FileGate;
 use codix_core::parse::PackIndexer;
 use codix_core::project::Project;
 use codix_core::scan::scan;
@@ -27,7 +28,7 @@ fn scanning_indexes_java_files_and_keeps_others_for_search() {
 
     let project = Project::discover(&root).unwrap().unwrap();
     let config = Config::load(&project).unwrap();
-    let report = scan(&project, &config, &PackIndexer::new(&config)).unwrap();
+    let report = scan(&project, &config, &PackIndexer::new(&config), &FileGate).unwrap();
     assert_eq!(report.indexed, 3, "{report:?}");
 
     let mut store = Store::open(&project.index_path()).unwrap();

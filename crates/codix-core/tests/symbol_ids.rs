@@ -5,6 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use codix_core::config::Config;
+use codix_core::lock::FileGate;
 use codix_core::parse::{PackIndexer, extract};
 use codix_core::project::Project;
 use codix_core::scan::scan;
@@ -97,7 +98,7 @@ fn project() -> (tempfile::TempDir, PathBuf, Project) {
         .expect("discover")
         .expect("project");
     let config = Config::load(&project).expect("config");
-    scan(&project, &config, &PackIndexer::new(&config)).expect("scan");
+    scan(&project, &config, &PackIndexer::new(&config), &FileGate).expect("scan");
     (dir, root, project)
 }
 

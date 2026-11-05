@@ -84,13 +84,20 @@ fn indexed(ctx: &Context) -> Result<(&Project, Config), Error> {
 /// reindexes them and runs it again. The flag is set when the write lock
 /// stayed busy, so changed files could not be reindexed.
 fn lookup<T>(
+    ctx: &Context,
     project: &Project,
     config: &Config,
     query: impl Fn(&Snapshot<'_>) -> Result<(T, Vec<String>), Error>,
 ) -> Result<(T, bool), Error> {
     let mut store = Store::open(&project.index_path())?;
     let (first, paths) = query(&store.snapshot()?)?;
-    match rescan(project, &PackIndexer::new(config), &paths, QUERY_WAIT)? {
+    match rescan(
+        project,
+        &PackIndexer::new(config),
+        ctx.gate(),
+        &paths,
+        QUERY_WAIT,
+    )? {
         None => Ok((first, true)),
         Some(r) if r.indexed + r.touched + r.deleted + r.pending == 0 => Ok((first, false)),
         Some(_) => Ok((query(&store.snapshot()?)?.0, false)),
@@ -162,7 +169,7 @@ impl Operation for FindOp {
                 && (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
                 && (request.languages.is_empty() || request.languages.contains(&hit.language))
         };
-        let ((mode, hits), possibly_stale) = lookup(project, &config, |snapshot| {
+        let ((mode, hits), possibly_stale) = lookup(ctx, project, &config, |snapshot| {
             let mut last = (modes[modes.len() - 1], Vec::new());
             for &mode in &modes {
                 let hits: Vec<SymbolHit> = snapshot
@@ -235,7 +242,7 @@ impl Operation for DefOp {
     fn run(&self, ctx: &Context, request: DefRequest) -> Result<DefResponse, Error> {
         let (project, config) = indexed(ctx)?;
         let scope = ctx.scope(&request.scope)?;
-        let (hit, possibly_stale) = lookup(project, &config, |snapshot| {
+        let (hit, possibly_stale) = lookup(ctx, project, &config, |snapshot| {
             let hit = resolve_where(snapshot, project, ctx.cwd(), &request.symbol, &|hit| {
                 (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
                     && scope.contains(&FileId::from_canonical(hit.path.as_str()))
@@ -318,7 +325,7 @@ impl Operation for OutlineOp {
                 return Err(e);
             }
         }
-        let (files, possibly_stale) = lookup(project, &config, |snapshot| {
+        let (files, possibly_stale) = lookup(ctx, project, &config, |snapshot| {
             let paths: Vec<(String, String)> = snapshot
                 .files()?
                 .into_iter()
@@ -434,7 +441,7 @@ impl Operation for ShowOp {
     fn run(&self, ctx: &Context, request: ShowRequest) -> Result<ShowResponse, Error> {
         let (project, config) = indexed(ctx)?;
         let scope = ctx.scope(&request.scope)?;
-        let (hit, possibly_stale) = lookup(project, &config, |snapshot| {
+        let (hit, possibly_stale) = lookup(ctx, project, &config, |snapshot| {
             let hit = resolve_where(snapshot, project, ctx.cwd(), &request.symbol, &|hit| {
                 (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
                     && scope.contains(&FileId::from_canonical(hit.path.as_str()))
@@ -553,6 +560,7 @@ impl Operation for GrepOp {
             project,
             &config,
             &PackIndexer::new(&config),
+            ctx.gate(),
             Some(QUERY_WAIT),
         )?
         .is_none();

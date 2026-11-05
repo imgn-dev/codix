@@ -2,12 +2,13 @@
 //! every frontend so they cannot behave differently.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
-use crate::lock::network_filesystem_warning;
+use crate::lock::{FileGate, WriteGate, network_filesystem_warning};
 use crate::page::Location;
 use crate::project::{FileId, Project, Scope, ScopeRequest};
 
@@ -38,6 +39,7 @@ pub struct Context {
     project: Option<Project>,
     root_override: bool,
     warnings: Vec<Warning>,
+    gate: Arc<dyn WriteGate>,
 }
 
 impl Context {
@@ -64,7 +66,20 @@ impl Context {
             project,
             root_override: root.is_some(),
             warnings,
+            gate: Arc::new(FileGate),
         })
+    }
+
+    /// The same context, writing through `gate`: a daemon's, which holds the
+    /// write lock.
+    #[must_use]
+    pub fn with_gate(self, gate: Arc<dyn WriteGate>) -> Self {
+        Self { gate, ..self }
+    }
+
+    /// How this context's writes take the write lock.
+    pub fn gate(&self) -> &dyn WriteGate {
+        self.gate.as_ref()
     }
 
     /// The canonical directory the command runs from.

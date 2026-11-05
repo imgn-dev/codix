@@ -89,6 +89,15 @@ impl KeyDef {
 /// Every key, sorted by path.
 pub const KEYS: &[KeyDef] = &[
     KeyDef {
+        path: "daemon.idle_timeout",
+        map: false,
+        kind: Kind::Duration,
+        default: Some("30m"),
+        description: "How long a daemon runs without a request before it stops.",
+        file: ConfigFile::Local,
+        effect: "takes effect the next time a daemon starts",
+    },
+    KeyDef {
         path: "index.max_file_size",
         map: false,
         kind: Kind::Size,

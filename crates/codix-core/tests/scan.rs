@@ -7,6 +7,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, SystemTime};
 
 use codix_core::config::Config;
+use codix_core::lock::FileGate;
 use codix_core::project::{FileId, Project};
 use codix_core::scan::{Indexed, Indexer, ScanReport, scan};
 use codix_core::store::{Confidence, FileRow, FileStatus, Point, Span, Store, SymbolRow};
@@ -106,7 +107,7 @@ const OLD: Duration = Duration::from_hours(1);
 fn run(root: &Path, indexer: &LineIndexer) -> ScanReport {
     let project = Project::discover(root).expect("discover").expect("project");
     let config = Config::load(&project).expect("config");
-    scan(&project, &config, indexer).expect("scan")
+    scan(&project, &config, indexer, &FileGate).expect("scan")
 }
 
 fn symbols(root: &Path) -> Vec<(String, String)> {

@@ -14,6 +14,7 @@ use codix_core::query::{
 };
 use codix_core::scan::ScanReport;
 use codix_core::store::MatchMode;
+use codix_daemon::control::{ListResponse, StartResponse, StopResponse};
 use codix_provider::ProviderKind;
 use serde::Serialize;
 
@@ -37,6 +38,29 @@ impl Style {
         } else {
             text.to_owned()
         }
+    }
+}
+
+/// Seconds since the Unix epoch.
+pub(crate) fn since_epoch() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs())
+}
+
+/// A duration in its two largest units, such as `2h 5m`.
+pub(crate) fn elapsed(seconds: u64) -> String {
+    let (d, h, m, s) = (
+        seconds / 86_400,
+        seconds / 3600 % 24,
+        seconds / 60 % 60,
+        seconds % 60,
+    );
+    match (d, h, m) {
+        (0, 0, 0) => format!("{s}s"),
+        (0, 0, _) => format!("{m}m {s}s"),
+        (0, _, _) => format!("{h}h {m}m"),
+        _ => format!("{d}d {h}h"),
     }
 }
 
@@ -391,6 +415,64 @@ impl TextRender for InitResponse {
     }
 }
 
+impl TextRender for StartResponse {
+    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+        if let Some(old) = &self.replaced {
+            writeln!(
+                w,
+                "stopped the codix {} daemon (pid {}), which this codix cannot talk to",
+                old.version, old.pid
+            )?;
+        }
+        let d = &self.daemon;
+        writeln!(
+            w,
+            "daemon started for {}: pid {}, socket {}",
+            d.root.display(),
+            d.pid,
+            d.socket
+        )
+    }
+}
+
+impl TextRender for StopResponse {
+    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+        if self.stopped.is_empty() {
+            return writeln!(w, "no daemon running");
+        }
+        for d in &self.stopped {
+            writeln!(w, "stopped daemon for {} (pid {})", d.root.display(), d.pid)?;
+        }
+        Ok(())
+    }
+}
+
+impl TextRender for ListResponse {
+    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+        if self.daemons.is_empty() {
+            return writeln!(w, "no daemon running");
+        }
+        for listed in &self.daemons {
+            let d = &listed.daemon;
+            let stats = listed.stats.as_ref().map_or_else(String::new, |s| {
+                format!(
+                    "  {} MB  idle {}",
+                    s.memory_bytes >> 20,
+                    elapsed(s.idle_seconds)
+                )
+            });
+            writeln!(
+                w,
+                "{}  pid {}{stats}  codix {}",
+                d.root.display(),
+                d.pid,
+                d.version
+            )?;
+        }
+        writeln!(w, "{} running", self.daemons.len())
+    }
+}
+
 impl TextRender for StatusResponse {
     fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
         let f = &self.files;
@@ -400,6 +482,16 @@ impl TextRender for StatusResponse {
             "files: {} indexed, {} search only, {} pending, {} errors, {} skipped",
             f.indexed, f.search_only, f.pending, f.errors, f.skipped
         )?;
+        match &self.daemon {
+            Some(d) => writeln!(
+                w,
+                "daemon: pid {}, up {}, codix {}",
+                d.pid,
+                elapsed(since_epoch().saturating_sub(d.started_at)),
+                d.version
+            )?,
+            None => writeln!(w, "daemon: not running")?,
+        }
         let c = &self.changed;
         if c.new.is_empty() && c.modified.is_empty() && c.deleted.is_empty() {
             writeln!(w, "changed since last scan: none")?;
@@ -579,6 +671,14 @@ mod tests {
         )
         .unwrap();
         String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn elapsed_shows_the_two_largest_units() {
+        assert_eq!(elapsed(42), "42s");
+        assert_eq!(elapsed(125), "2m 5s");
+        assert_eq!(elapsed(7_500), "2h 5m");
+        assert_eq!(elapsed(273_600), "3d 4h");
     }
 
     #[test]

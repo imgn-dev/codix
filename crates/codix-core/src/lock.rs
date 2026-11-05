@@ -1,8 +1,10 @@
 //! The project write lock, and the network filesystem check that tells users
 //! when that lock cannot be trusted.
 
+use std::fmt;
 use std::fs::{File, OpenOptions, TryLockError};
 use std::path::Path;
+use std::sync::{Mutex, MutexGuard, PoisonError, TryLockError as MutexBusy};
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -66,6 +68,85 @@ impl WriteLock {
                         source,
                     });
                 }
+            }
+        }
+    }
+}
+
+/// How writes get the project write lock: per write from the OS ([`FileGate`]),
+/// or from a daemon that holds it for its lifetime ([`HeldGate`]).
+pub trait WriteGate: fmt::Debug + Send + Sync {
+    /// Enters the gate for one write, waiting up to `wait`, or as long as
+    /// needed when `None`; `None` when it stays busy.
+    fn enter(
+        &self,
+        project: &Project,
+        wait: Option<Duration>,
+    ) -> Result<Option<WriteAccess<'_>>, Error>;
+}
+
+/// Exclusive write access to the index, released on drop.
+#[derive(Debug)]
+#[must_use]
+pub enum WriteAccess<'a> {
+    /// The OS lock, taken for this write.
+    File(WriteLock),
+    /// A turn at the lock a daemon holds.
+    Held(MutexGuard<'a, WriteLock>),
+}
+
+/// Takes the OS lock for each write: the gate of every process but a daemon.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct FileGate;
+
+impl WriteGate for FileGate {
+    fn enter(
+        &self,
+        project: &Project,
+        wait: Option<Duration>,
+    ) -> Result<Option<WriteAccess<'_>>, Error> {
+        let lock = match wait {
+            None => Some(WriteLock::acquire(project)?),
+            Some(wait) => WriteLock::try_acquire_for(project, wait)?,
+        };
+        Ok(lock.map(WriteAccess::File))
+    }
+}
+
+/// A daemon's gate: it holds the OS lock for its lifetime, so no other process
+/// writes, and its own writers take turns. A second OS lock in the same
+/// process would wait for the first forever.
+#[derive(Debug)]
+pub struct HeldGate {
+    lock: Mutex<WriteLock>,
+}
+
+impl HeldGate {
+    /// A gate over the lock the daemon has taken.
+    pub fn new(lock: WriteLock) -> Self {
+        Self {
+            lock: Mutex::new(lock),
+        }
+    }
+}
+
+impl WriteGate for HeldGate {
+    fn enter(&self, _: &Project, wait: Option<Duration>) -> Result<Option<WriteAccess<'_>>, Error> {
+        // A writer that panicked left the index as SQLite's rollback left it,
+        // so the lock is still good to use.
+        let Some(wait) = wait else {
+            let guard = self.lock.lock().unwrap_or_else(PoisonError::into_inner);
+            return Ok(Some(WriteAccess::Held(guard)));
+        };
+        let deadline = Instant::now() + wait;
+        loop {
+            match self.lock.try_lock() {
+                Ok(guard) => return Ok(Some(WriteAccess::Held(guard))),
+                Err(MutexBusy::Poisoned(poisoned)) => {
+                    return Ok(Some(WriteAccess::Held(poisoned.into_inner())));
+                }
+                Err(MutexBusy::WouldBlock) if Instant::now() < deadline => thread::sleep(POLL),
+                Err(MutexBusy::WouldBlock) => return Ok(None),
             }
         }
     }

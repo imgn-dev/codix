@@ -73,6 +73,7 @@ use codix_core::query::{
     ShowRequest,
 };
 use codix_core::store::MatchMode;
+use codix_daemon::{control, server};
 use render::{Style, TextRender};
 
 /// Headless code index for LLM agents.
@@ -141,6 +142,30 @@ enum Command {
     },
     /// Search indexed files with a regular expression; each match names its enclosing symbol.
     Grep(GrepArgs),
+    /// Start, stop or list per-project daemons, which keep the index open and answer in milliseconds.
+    #[command(subcommand)]
+    Daemon(DaemonCommand),
+}
+
+#[derive(Subcommand)]
+enum DaemonCommand {
+    /// Start this project's daemon in the background.
+    Start,
+    /// Stop this project's daemon, or every daemon of this user.
+    Stop {
+        /// Stop every running daemon, whatever its project.
+        #[arg(long)]
+        all: bool,
+    },
+    /// Every running daemon of this user: project, process, memory, idle time.
+    List,
+    /// Run the daemon in the foreground; `daemon start` runs this, detached.
+    #[command(hide = true)]
+    Run {
+        /// Append log lines to this file instead of standard error.
+        #[arg(long, value_name = "FILE")]
+        log: Option<PathBuf>,
+    },
 }
 
 #[derive(Args)]
@@ -416,6 +441,43 @@ where
     }
 }
 
+fn daemon(output: &Output, ctx: &Context, command: DaemonCommand) -> u8 {
+    match command {
+        DaemonCommand::Start => {
+            let result = ctx.project().and_then(|project| {
+                let exe = env::current_exe().map_err(|source| Error::Io {
+                    path: "codix".into(),
+                    source,
+                })?;
+                control::start(project, &exe)
+            });
+            output_of(output, "daemon start", result)
+        }
+        DaemonCommand::Stop { all: true } => output_of(output, "daemon stop", control::stop_all()),
+        DaemonCommand::Stop { all: false } => {
+            output_of(output, "daemon stop", ctx.project().and_then(control::stop))
+        }
+        DaemonCommand::List => output_of(output, "daemon list", control::list()),
+        DaemonCommand::Run { log } => match ctx
+            .project()
+            .and_then(|p| server::run(p.root(), log.as_deref()))
+        {
+            Ok(()) => exit::SUCCESS,
+            Err(error) => output.error(&error),
+        },
+    }
+}
+
+fn output_of<R>(output: &Output, command: &str, result: Result<R, Error>) -> u8
+where
+    R: serde::Serialize + TextRender + Outcome,
+{
+    match result {
+        Ok(response) => output.response(command, &response),
+        Err(error) => output.error(&error),
+    }
+}
+
 /// Turns a clap parse failure into a `usage` error, except for help and
 /// version requests, which clap prints itself.
 fn usage_error(error: &clap::Error) -> Error {
@@ -526,6 +588,7 @@ fn main() -> ExitCode {
             };
             run(&output, &ShowOp, &ctx, Ok(request))
         }
+        Command::Daemon(command) => daemon(&output, &ctx, command),
         Command::Grep(args) => {
             let request = args.page.page().map(|page| GrepRequest {
                 pattern: args.pattern,

@@ -32,7 +32,7 @@ fn text_output_warns_on_stderr() {
     let (code, stdout, stderr) = run(dir.path(), &["config", "--list"]);
     assert_eq!(code, Some(0));
     assert!(
-        stdout.starts_with("index.max_file_size = 2MB\n"),
+        stdout.starts_with("daemon.idle_timeout = 30m\nindex.max_file_size = 2MB\n"),
         "{stdout}"
     );
     assert!(

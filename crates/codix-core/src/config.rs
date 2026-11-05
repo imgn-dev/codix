@@ -323,6 +323,13 @@ impl Config {
             .unwrap_or(2 << 20)
     }
 
+    /// `daemon.idle_timeout`.
+    pub fn idle_timeout(&self) -> Duration {
+        self.text("daemon.idle_timeout")
+            .and_then(schema::parse_duration)
+            .unwrap_or(Duration::from_mins(30))
+    }
+
     /// `index.scan_interval`.
     pub fn scan_interval(&self) -> Duration {
         self.text("index.scan_interval")
@@ -796,7 +803,10 @@ mod tests {
 
     #[test]
     fn map_entries_are_quoted_when_needed() {
-        let def = &KEYS[2];
+        let def = KEYS
+            .iter()
+            .find(|k| k.path == "languages.overrides")
+            .expect("languages.overrides is a key");
         assert_eq!(
             display_key(def, Some("*.h")),
             r#"languages.overrides."*.h""#

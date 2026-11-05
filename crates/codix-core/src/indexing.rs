@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::config::Config;
+use crate::daemon::DaemonRecord;
 use crate::op::{Context, Operation, Outcome};
 use crate::parse::PackIndexer;
 use crate::project::{DATA_DIR, Project};
@@ -64,7 +65,7 @@ impl Operation for InitOp {
         let vcs = Vcs::detect(project.root());
         let hints = vcs.apply_ignore_strategies(&project)?;
         let config = Config::load(&project)?;
-        let report = scan(&project, &config, &PackIndexer::new(&config))?;
+        let report = scan(&project, &config, &PackIndexer::new(&config), ctx.gate())?;
         Ok(InitResponse {
             root: project.root().to_path_buf(),
             created,
@@ -105,10 +106,13 @@ impl Operation for IndexOp {
             });
         }
         if request.full {
+            // Under the gate, so no write of this process or another lands
+            // in the database being removed.
+            let _access = ctx.gate().enter(project, None)?;
             remove_index(project)?;
         }
         let config = Config::load(project)?;
-        scan(project, &config, &PackIndexer::new(&config))
+        scan(project, &config, &PackIndexer::new(&config), ctx.gate())
     }
 }
 
@@ -174,6 +178,8 @@ pub struct StatusResponse {
     pub modules: Vec<Module>,
     /// Build constructs codix could not interpret.
     pub build_issues: Vec<Unsupported>,
+    /// The daemon serving the project, if one runs.
+    pub daemon: Option<DaemonRecord>,
 }
 
 impl Outcome for StatusResponse {
@@ -246,6 +252,7 @@ impl Operation for StatusOp {
             errors,
             modules: build.modules,
             build_issues: build.unsupported,
+            daemon: crate::daemon::running(project)?,
         })
     }
 }

@@ -96,7 +96,7 @@ fn invalid_config() {
         "invalid_config",
         2,
         "error[invalid_config]: unknown key `previews.expiri`\n\
-         hint: valid keys: index.max_file_size, index.scan_interval, languages.overrides.\"<glob>\", sources.roots\n",
+         hint: valid keys: daemon.idle_timeout, index.max_file_size, index.scan_interval, languages.overrides.\"<glob>\", sources.roots\n",
     );
 }
 

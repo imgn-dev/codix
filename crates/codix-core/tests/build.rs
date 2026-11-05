@@ -4,6 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use codix_core::config::Config;
+use codix_core::lock::FileGate;
 use codix_core::project::Project;
 use codix_core::scan::{TextIndexer, scan};
 use codix_core::store::Store;
@@ -27,7 +28,7 @@ fn project(files: &[(&str, &str)]) -> (tempfile::TempDir, PathBuf) {
 fn scanned(root: &Path) -> BuildModel {
     let project = Project::discover(root).expect("discover").expect("project");
     let config = Config::load(&project).expect("config");
-    scan(&project, &config, &TextIndexer).expect("scan");
+    scan(&project, &config, &TextIndexer, &FileGate).expect("scan");
     let mut store = Store::open(&project.index_path()).expect("open index");
     store.snapshot().expect("snapshot").build().expect("build")
 }

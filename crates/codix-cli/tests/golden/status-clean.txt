@@ -1,5 +1,6 @@
 project: <root>
 files: <counts>
+daemon: not running
 changed since last scan: none
 modules:
   maven  shop  .

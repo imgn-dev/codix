@@ -139,14 +139,15 @@ fn local_overrides_shared_and_show_origin_says_so() {
     let out = config(&root, &["--list", "--show-origin"]);
     assert_eq!(
         out.stdout,
-        ".codix/config.toml  index.max_file_size = 16MB\n\
+        "default             daemon.idle_timeout = 30m\n\
+         .codix/config.toml  index.max_file_size = 16MB\n\
          default             index.scan_interval = 10m\n\
          codix.toml          languages.overrides.\"*.h\" = cpp\n"
     );
 
     let out = config(&root, &["--list"]);
     assert_eq!(
-        out.stdout.lines().next(),
+        out.stdout.lines().nth(1),
         Some("index.max_file_size = 16MB")
     );
 }
@@ -192,7 +193,7 @@ fn unknown_keys_and_invalid_values_write_nothing() {
     let out = config(&root, &["index.max_file_sise", "1MB"]);
     assert!(
         out.stderr
-            .contains("hint: valid keys: index.max_file_size, "),
+            .contains("hint: valid keys: daemon.idle_timeout, index.max_file_size, "),
         "{}",
         out.stderr
     );

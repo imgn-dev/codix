@@ -76,6 +76,13 @@ pub enum Error {
         /// The underlying error.
         source: io::Error,
     },
+    /// A daemon already serves the project.
+    DaemonRunning {
+        /// Its process ID.
+        pid: u32,
+        /// Its socket.
+        socket: String,
+    },
     /// A bug in codix.
     Internal {
         /// What went wrong.
@@ -95,6 +102,7 @@ impl Error {
             Self::NotSupportedInBuild { .. } => "not_supported_in_build",
             Self::Usage { .. } => "usage",
             Self::Io { .. } => "io",
+            Self::DaemonRunning { .. } => "daemon_running",
             Self::Internal { .. } => "internal",
         }
     }
@@ -118,6 +126,9 @@ impl Error {
                 format!("{path}: {provider} is not supported in this build")
             }
             Self::Io { path, source } => format!("{}: {source}", path.display()),
+            Self::DaemonRunning { pid, socket } => {
+                format!("a daemon already serves this project (pid {pid}, socket {socket})")
+            }
             Self::Internal { message } => message.clone(),
         }
     }
@@ -139,6 +150,9 @@ impl Error {
                 "use the full codix build, which includes every provider".to_owned()
             }
             Self::Io { .. } => "check that the file exists and is accessible".to_owned(),
+            Self::DaemonRunning { .. } => {
+                "use it as it is, or stop it first with `codix daemon stop`".to_owned()
+            }
             Self::Internal { .. } => "this is a bug in codix; please report it".to_owned(),
         }
     }
@@ -160,6 +174,7 @@ impl Error {
             Self::InvalidConfig { .. } | Self::NotSupportedInBuild { .. } | Self::Usage { .. } => {
                 exit::USAGE
             }
+            Self::DaemonRunning { .. } => exit::REFUSED,
             Self::Io { .. } | Self::Internal { .. } => exit::INTERNAL,
         }
     }

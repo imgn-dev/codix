@@ -1,3 +1,9 @@
+daemon.idle_timeout
+  How long a daemon runs without a request before it stops.
+  type: duration, such as 10m (units s, m, h, d)
+  default: 30m
+  file: .codix/config.toml
+
 index.max_file_size
   Files larger than this are skipped.
   type: size, such as 2MB (units B, KB, MB, GB; 1 KB = 1024 B)
