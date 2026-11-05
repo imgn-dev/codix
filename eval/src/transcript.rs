@@ -30,7 +30,7 @@ pub(crate) struct Setup {
     pub(crate) tools: Vec<String>,
     /// MCP servers, by name.
     pub(crate) mcp_servers: Vec<String>,
-    /// Plugins loaded.
+    /// Plugins loaded, by source, such as `name@marketplace`.
     pub(crate) plugins: Vec<String>,
     /// The output style.
     pub(crate) output_style: String,
@@ -53,7 +53,9 @@ impl Setup {
         if !self.mcp_servers.iter().any(|s| s == "codix") {
             leaks.push("no codix MCP server".to_owned());
         }
-        for plugin in &self.plugins {
+        // Claude Code ships its built-in plugins in every install; their
+        // skills and agents need the Skill and Agent tools, which runs lack.
+        for plugin in self.plugins.iter().filter(|p| !p.ends_with("@builtin")) {
             leaks.push(format!("plugin {plugin}"));
         }
         if !self.output_style.is_empty() && !self.output_style.eq_ignore_ascii_case("default") {
@@ -112,7 +114,7 @@ pub(crate) fn parse(stream: &str) -> Transcript {
                     seen: true,
                     tools: names("tools", None),
                     mcp_servers: names("mcp_servers", Some("name")),
-                    plugins: names("plugins", Some("name")),
+                    plugins: names("plugins", Some("source")),
                     output_style: event["output_style"]
                         .as_str()
                         .unwrap_or_default()
@@ -222,14 +224,14 @@ not json
     #[test]
     fn anything_but_codix_in_the_setup_is_a_leak() {
         let t = parse(
-            r#"{"type":"system","subtype":"init","tools":["Bash","mcp__codix__find"],"mcp_servers":[{"name":"codix"},{"name":"other"}],"plugins":[{"name":"frontend-design"}],"output_style":"Concise"}"#,
+            r#"{"type":"system","subtype":"init","tools":["Bash","mcp__codix__find"],"mcp_servers":[{"name":"codix"},{"name":"other"}],"plugins":[{"name":"frontend-design","source":"frontend-design@anthropic-plugin-directory"},{"name":"cc-plugin-telemetry","source":"cc-plugin-telemetry@builtin"}],"output_style":"Concise"}"#,
         );
         assert_eq!(
             t.setup.leaks(),
             [
                 "tool Bash",
                 "MCP server other",
-                "plugin frontend-design",
+                "plugin frontend-design@anthropic-plugin-directory",
                 "output style Concise"
             ]
         );
