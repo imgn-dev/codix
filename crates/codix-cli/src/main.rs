@@ -59,10 +59,13 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::error::ErrorKind;
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use codix_core::Error;
-use codix_core::capabilities::{CapabilitiesOp, CapabilitiesRequest};
+use codix_core::capabilities::{
+    CapabilitiesOp, CapabilitiesRequest, LanguagesOp, LanguagesRequest,
+};
 use codix_core::config::{ConfigOp, ConfigRequest};
+use codix_core::describe::describe;
 use codix_core::error::exit;
 use codix_core::indexing::{IndexOp, IndexRequest, InitOp, InitRequest, StatusOp, StatusRequest};
 use codix_core::op::{Context, Operation, Outcome, Warning};
@@ -101,37 +104,40 @@ struct Cli {
     command: Command,
 }
 
+/// The commands. Their descriptions come from `codix_core::describe`, applied
+/// by [`described`], so `--help`, MCP and the docs say the same thing.
 #[derive(Subcommand)]
 enum Command {
-    /// Create a project here: .codix/, kept out of version control, then a first index.
-    Init,
-    /// Bring the index up to date with the files on disk.
+    Init {
+        /// Also write a workflow guide for agents to this file, relative to the root.
+        #[arg(
+            long,
+            value_name = "PATH",
+            num_args = 0..=1,
+            default_missing_value = "CODIX.md"
+        )]
+        agent_docs: Option<PathBuf>,
+    },
     Index {
         /// Rebuild the index from nothing.
         #[arg(long)]
         full: bool,
     },
-    /// Index state, like `git status`: files, changes since the last scan, build modules.
     Status,
-    /// What this build supports: each language's tier and the compiled-in providers.
     Capabilities,
-    /// Read or edit codix.toml and .codix/config.toml, like `git config`.
+    Languages,
     Config(ConfigArgs),
-    /// Find symbols by name: exact, then prefix, then fuzzy, unless a mode is given.
     Find(FindArgs),
-    /// Where a symbol is defined, by ID, path part, `file:line:col` or name.
     Def {
         /// Symbol ID, its path part, `file:line:col`, or a name.
         symbol: String,
         #[command(flatten)]
         narrow: NarrowArgs,
     },
-    /// The symbol tree of a file or directory, signatures only.
     Outline {
         /// File or directory.
         path: String,
     },
-    /// A symbol's source.
     Show {
         /// Symbol ID, its path part, `file:line:col`, or a name.
         symbol: String,
@@ -141,26 +147,20 @@ enum Command {
         #[arg(long, default_value_t = 0, value_name = "N")]
         context: usize,
     },
-    /// Search indexed files with a regular expression; each match names its enclosing symbol.
     Grep(GrepArgs),
-    /// Run this project's daemon in the foreground, logging to stderr, until interrupted.
     Watch,
-    /// Start, stop or list per-project daemons, which keep the index open and answer in milliseconds.
     #[command(subcommand)]
     Daemon(DaemonCommand),
 }
 
 #[derive(Subcommand)]
 enum DaemonCommand {
-    /// Start this project's daemon in the background.
     Start,
-    /// Stop this project's daemon, or every daemon of this user.
     Stop {
         /// Stop every running daemon, whatever its project.
         #[arg(long)]
         all: bool,
     },
-    /// Every running daemon of this user: project, process, memory, idle time.
     List,
     /// Run the daemon in the foreground; `daemon start` runs this, detached.
     #[command(hide = true)]
@@ -499,6 +499,38 @@ where
     }
 }
 
+/// The command line with each command's canonical description: its summary
+/// for `--help` lists, the whole description for `codix help <command>` and
+/// `--help`, and its example after the flags.
+fn described(cli: clap::Command) -> clap::Command {
+    fn apply(command: clap::Command, path: &str) -> clap::Command {
+        let names: Vec<String> = command
+            .get_subcommands()
+            .map(|c| c.get_name().to_owned())
+            .collect();
+        let mut command = command;
+        for name in names {
+            let full = if path.is_empty() {
+                name.clone()
+            } else {
+                format!("{path} {name}")
+            };
+            command = command.mut_subcommand(&name, |sub| {
+                let sub = match describe(&full) {
+                    Some(d) => sub
+                        .about(d.summary)
+                        .long_about(d.details())
+                        .after_long_help(format!("Example:\n  {}", d.example)),
+                    None => sub,
+                };
+                apply(sub, &full)
+            });
+        }
+        command
+    }
+    apply(cli, "")
+}
+
 /// Turns a clap parse failure into a `usage` error, except for help and
 /// version requests, which clap prints itself.
 fn usage_error(error: &clap::Error) -> Error {
@@ -525,11 +557,14 @@ fn usage_error(error: &clap::Error) -> Error {
     Error::Usage { cause, hint }
 }
 
-fn main() -> ExitCode {
+/// Parses the command line; help and version requests exit here, as clap
+/// prints them, and other failures are rendered as `usage` errors.
+fn parse() -> Result<Cli, ExitCode> {
     let args: Vec<OsString> = env::args_os().collect();
-    let cli = match Cli::try_parse_from(&args) {
-        Ok(cli) => cli,
-        Err(e) => {
+    described(Cli::command())
+        .try_get_matches_from(&args)
+        .and_then(|matches| Cli::from_arg_matches(&matches))
+        .map_err(|e| {
             if matches!(
                 e.kind(),
                 ErrorKind::DisplayHelp
@@ -539,8 +574,14 @@ fn main() -> ExitCode {
                 e.exit();
             }
             let json = args.iter().skip(1).any(|arg| arg == "--json");
-            return ExitCode::from(Output::detect(json).error(&usage_error(&e)));
-        }
+            ExitCode::from(Output::detect(json).error(&usage_error(&e)))
+        })
+}
+
+fn main() -> ExitCode {
+    let cli = match parse() {
+        Ok(cli) => cli,
+        Err(code) => return code,
     };
     let output = Output::detect(cli.json);
     let ctx = match env::current_dir()
@@ -558,9 +599,9 @@ fn main() -> ExitCode {
         ..output
     };
     let code = match cli.command {
-        Command::Init => {
+        Command::Init { agent_docs } => {
             output.progress("indexing");
-            run(&output, &InitOp, &ctx, Ok(InitRequest {}))
+            run(&output, &InitOp, &ctx, Ok(InitRequest { agent_docs }))
         }
         Command::Index { full } => {
             output.progress("indexing");
@@ -568,6 +609,7 @@ fn main() -> ExitCode {
         }
         Command::Status => run(&output, &StatusOp, &ctx, Ok(StatusRequest {})),
         Command::Capabilities => run(&output, &CapabilitiesOp, &ctx, Ok(CapabilitiesRequest {})),
+        Command::Languages => run(&output, &LanguagesOp, &ctx, Ok(LanguagesRequest {})),
         Command::Config(args) => {
             let (request, show_origin) = args.request();
             let output = Output {
@@ -627,6 +669,38 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn every_command_has_a_description_and_every_description_a_command() {
+        fn visit(command: &clap::Command, path: &str, seen: &mut Vec<String>) {
+            for sub in command.get_subcommands() {
+                if sub.is_hide_set() || sub.get_name() == "help" {
+                    continue;
+                }
+                let full = if path.is_empty() {
+                    sub.get_name().to_owned()
+                } else {
+                    format!("{path} {}", sub.get_name())
+                };
+                assert!(
+                    codix_core::describe::describe(&full).is_some(),
+                    "`{full}` has no description"
+                );
+                visit(sub, &full, seen);
+                seen.push(full);
+            }
+        }
+        let mut seen = Vec::new();
+        visit(&super::Cli::command(), "", &mut seen);
+        for d in codix_core::describe::COMMANDS {
+            assert!(
+                seen.iter().any(|s| s == d.name),
+                "`{}` is not a command",
+                d.name
+            );
+        }
+    }
+
+    use clap::CommandFactory;
     use codix_provider::{ProviderKind, known, registry};
 
     #[test]

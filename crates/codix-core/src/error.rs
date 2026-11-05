@@ -78,6 +78,11 @@ pub enum Error {
         /// The underlying error.
         source: io::Error,
     },
+    /// A file would be overwritten that codix did not write.
+    FileExists {
+        /// The file.
+        path: PathBuf,
+    },
     /// A daemon already serves the project.
     DaemonRunning {
         /// Its process ID.
@@ -122,6 +127,7 @@ impl Error {
             Self::NotSupportedInBuild { .. } => "not_supported_in_build",
             Self::Usage { .. } => "usage",
             Self::Io { .. } => "io",
+            Self::FileExists { .. } => "file_exists",
             Self::DaemonRunning { .. } => "daemon_running",
             Self::Internal { .. } => "internal",
         }
@@ -147,6 +153,9 @@ impl Error {
                 format!("{path}: {provider} is not supported in this build")
             }
             Self::Io { path, source } => format!("{}: {source}", path.display()),
+            Self::FileExists { path } => {
+                format!("{} exists and was not written by codix", path.display())
+            }
             Self::DaemonRunning { pid, socket } => {
                 format!("a daemon already serves this project (pid {pid}, socket {socket})")
             }
@@ -175,6 +184,9 @@ impl Error {
             Self::DaemonRunning { .. } => {
                 "use it as it is, or stop it first with `codix daemon stop`".to_owned()
             }
+            Self::FileExists { .. } => {
+                "pass another path, or move the file out of the way".to_owned()
+            }
             Self::Internal { .. } => "this is a bug in codix; please report it".to_owned(),
         }
     }
@@ -198,7 +210,7 @@ impl Error {
             Self::InvalidConfig { .. } | Self::NotSupportedInBuild { .. } | Self::Usage { .. } => {
                 exit::USAGE
             }
-            Self::DaemonRunning { .. } => exit::REFUSED,
+            Self::DaemonRunning { .. } | Self::FileExists { .. } => exit::REFUSED,
             Self::Io { .. } | Self::Internal { .. } => exit::INTERNAL,
         }
     }

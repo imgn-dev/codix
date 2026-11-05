@@ -3,7 +3,7 @@
 use std::io::{self, Write};
 
 use codix_core::Error;
-use codix_core::capabilities::{Capabilities, Tier};
+use codix_core::capabilities::{Capabilities, LanguagesResponse, Tier};
 use codix_core::config::{ConfigResponse, Setting};
 use codix_core::indexing::{InitResponse, StatusResponse};
 use codix_core::op::Warning;
@@ -357,12 +357,12 @@ impl TextRender for Capabilities {
             .unwrap_or(0);
         writeln!(w, "languages:")?;
         for language in &self.languages {
-            let tier = match language.tier {
-                Tier::Symbols => "tier 1 (symbols)",
-                Tier::Search => "search only",
-                Tier::NotInBuild => "not in this build",
-            };
-            writeln!(w, "  {:width$}{COLUMN_GAP}{tier}", language.name)?;
+            writeln!(
+                w,
+                "  {:width$}{COLUMN_GAP}{}",
+                language.name,
+                tier_text(language.tier)
+            )?;
         }
         writeln!(w, "providers:")?;
         for kind in [
@@ -378,6 +378,90 @@ impl TextRender for Capabilities {
                 .collect();
             if !names.is_empty() {
                 writeln!(w, "  {kind:8}{COLUMN_GAP}{}", names.join(", "))?;
+            }
+        }
+        writeln!(w, "commands:")?;
+        let width = self
+            .commands
+            .iter()
+            .map(|c| c.name.len())
+            .max()
+            .unwrap_or(0);
+        for command in &self.commands {
+            let needs = match command.tier {
+                Some(Tier::Symbols) => "needs tier 1 (symbols)",
+                Some(Tier::Search | Tier::NotInBuild) => "any indexed text",
+                None => "any project",
+            };
+            writeln!(w, "  {:width$}{COLUMN_GAP}{needs}", command.name)?;
+        }
+        if let Some(project) = &self.project {
+            writeln!(w, "project: {}", project.root.display())?;
+            writeln!(
+                w,
+                "  {} indexed, {} pending",
+                files(project.files),
+                project.pending
+            )?;
+            for language in &project.languages {
+                writeln!(
+                    w,
+                    "  {}{COLUMN_GAP}{}{COLUMN_GAP}{}",
+                    language.name,
+                    files(language.files),
+                    tier_text(language.tier)
+                )?;
+            }
+            match &project.daemon {
+                Some(d) => writeln!(w, "  daemon: pid {}", d.pid)?,
+                None => writeln!(w, "  daemon: not running")?,
+            }
+        }
+        Ok(())
+    }
+}
+
+fn files(count: usize) -> String {
+    if count == 1 {
+        "1 file".to_owned()
+    } else {
+        format!("{count} files")
+    }
+}
+
+fn tier_text(tier: Tier) -> &'static str {
+    match tier {
+        Tier::Symbols => "tier 1 (symbols)",
+        Tier::Search => "search only",
+        Tier::NotInBuild => "not in this build",
+    }
+}
+
+impl TextRender for LanguagesResponse {
+    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+        let width = self
+            .languages
+            .iter()
+            .map(|l| l.name.len())
+            .max()
+            .unwrap_or(0);
+        for language in &self.languages {
+            let files: Vec<String> = language
+                .extensions
+                .iter()
+                .map(|e| format!("*.{e}"))
+                .chain(language.filenames.iter().cloned())
+                .collect();
+            let tier = tier_text(language.tier);
+            if files.is_empty() {
+                writeln!(w, "{:width$}{COLUMN_GAP}{tier}", language.name)?;
+            } else {
+                writeln!(
+                    w,
+                    "{:width$}{COLUMN_GAP}{tier:17}{COLUMN_GAP}{}",
+                    language.name,
+                    files.join(" ")
+                )?;
             }
         }
         Ok(())
@@ -419,7 +503,15 @@ impl TextRender for InitResponse {
         for hint in &self.hints {
             writeln!(w, "hint: {hint}")?;
         }
-        self.scan.render_text(w, style)
+        self.scan.render_text(w, style)?;
+        if let Some(path) = &self.agent_docs {
+            writeln!(
+                w,
+                "agent guide written to {}; add it to your agent's instructions",
+                path.display()
+            )?;
+        }
+        Ok(())
     }
 }
 

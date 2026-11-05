@@ -22,9 +22,14 @@ use crate::walk::walk;
 /// and indexes the project.
 pub struct InitOp;
 
-/// Request for [`InitOp`]: nothing to choose.
+/// Request for [`InitOp`].
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct InitRequest {}
+pub struct InitRequest {
+    /// Also write the workflow guide for agents to this file, relative to the
+    /// project root.
+    #[serde(default)]
+    pub agent_docs: Option<PathBuf>,
+}
 
 /// What `init` did.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -40,6 +45,8 @@ pub struct InitResponse {
     pub hints: Vec<String>,
     /// The first index.
     pub scan: ScanReport,
+    /// The workflow guide written, if asked for.
+    pub agent_docs: Option<PathBuf>,
 }
 
 impl Outcome for InitResponse {
@@ -53,7 +60,7 @@ impl Operation for InitOp {
     type Request = InitRequest;
     type Response = InitResponse;
 
-    fn run(&self, ctx: &Context, _: InitRequest) -> Result<InitResponse, Error> {
+    fn run(&self, ctx: &Context, request: InitRequest) -> Result<InitResponse, Error> {
         let root = ctx.init_root();
         let data = root.join(DATA_DIR);
         let created = !data.is_dir();
@@ -66,14 +73,39 @@ impl Operation for InitOp {
         let hints = vcs.apply_ignore_strategies(&project)?;
         let config = Config::load(&project)?;
         let report = scan(&project, &config, &PackIndexer::new(&config), ctx.gate())?;
+        let agent_docs = request
+            .agent_docs
+            .map(|path| write_agent_docs(&project.root().join(path)))
+            .transpose()?;
         Ok(InitResponse {
             root: project.root().to_path_buf(),
             created,
             vcs: vcs.names().into_iter().map(str::to_owned).collect(),
             hints: if created { hints } else { Vec::new() },
             scan: report,
+            agent_docs,
         })
     }
+}
+
+/// Writes the agent guide to `path`, unless a file codix did not write is
+/// there.
+fn write_agent_docs(path: &std::path::Path) -> Result<PathBuf, Error> {
+    let io = |source| Error::Io {
+        path: path.to_path_buf(),
+        source,
+    };
+    match fs::read_to_string(path) {
+        Ok(text) if !text.starts_with(crate::describe::AGENT_DOCS_MARKER) => {
+            return Err(Error::FileExists {
+                path: path.to_path_buf(),
+            });
+        }
+        Err(e) if e.kind() != std::io::ErrorKind::NotFound => return Err(io(e)),
+        _ => {}
+    }
+    fs::write(path, crate::describe::agent_guide()).map_err(io)?;
+    Ok(path.to_path_buf())
 }
 
 /// The `index` operation: brings the index up to date.

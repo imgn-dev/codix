@@ -4,7 +4,7 @@
 use serde_json::Value;
 
 use crate::Error;
-use crate::capabilities::CapabilitiesOp;
+use crate::capabilities::{CapabilitiesOp, LanguagesOp};
 use crate::config::ConfigOp;
 use crate::indexing::{IndexOp, InitOp, StatusOp};
 use crate::op::{Context, Operation};
@@ -35,6 +35,7 @@ operations!(
     IndexOp,
     StatusOp,
     CapabilitiesOp,
+    LanguagesOp,
     ConfigOp,
     FindOp,
     DefOp,

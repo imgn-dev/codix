@@ -5,6 +5,7 @@ pub mod build;
 pub mod capabilities;
 pub mod config;
 pub mod daemon;
+pub mod describe;
 pub mod detect;
 pub mod dispatch;
 pub mod error;

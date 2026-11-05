@@ -1,2 +1,3 @@
 crates/*/tests/golden/** text eol=lf
 corpus/** text eol=lf
+docs/commands.md text eol=lf

@@ -29,17 +29,21 @@ fn codix(runtime: &Path, cwd: &Path, args: &[&str]) -> Run {
     }
 }
 
-/// `status` names the daemon, the one place where the two paths differ.
+/// `status` and `capabilities` name the daemon, the one place where the two
+/// paths differ.
 fn without_daemon_line(run: Run) -> Run {
     let mask = |text: &str| -> String {
-        if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text)
-            && value["command"] == "status"
-        {
-            value["result"]["daemon"] = serde_json::Value::Null;
+        if let Ok(mut value) = serde_json::from_str::<serde_json::Value>(text) {
+            if value["command"] == "status" {
+                value["result"]["daemon"] = serde_json::Value::Null;
+            }
+            if value["command"] == "capabilities" && value["result"]["project"].is_object() {
+                value["result"]["project"]["daemon"] = serde_json::Value::Null;
+            }
             return format!("{value}\n");
         }
         text.split_inclusive('\n')
-            .filter(|line| !line.starts_with("daemon: "))
+            .filter(|line| !line.trim_start().starts_with("daemon: "))
             .collect()
     };
     Run {

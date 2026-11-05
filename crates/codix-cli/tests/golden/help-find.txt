@@ -1,0 +1,58 @@
+Find symbols by name: exact match, then prefix, then fuzzy.
+
+When: Instead of grep to locate a class, function or method: it matches names, not text, and returns IDs the other commands accept.
+Returns: Matching symbols with kind, location and ID, best match first.
+Needs: tier 1 (symbols); see `codix capabilities`.
+
+Usage: codix find [OPTIONS] <QUERY>
+
+Arguments:
+  <QUERY>
+          Name to look for
+
+Options:
+      --exact
+          The name equals the query
+
+      --json
+          Print JSON instead of text
+
+      --prefix
+          The name starts with the query, ignoring case
+
+      --root <PATH>
+          Use the project at this directory instead of searching upward
+
+      --fuzzy
+          The name is within a few edits of the query, ignoring case
+
+      --glob
+          The qualified name matches a glob, such as `Invoice.*`
+
+      --kind <KIND>
+          Keep symbols of this kind, such as method; repeatable
+
+      --lang <LANGUAGE>
+          Keep symbols of this language; repeatable
+
+      --here
+          Limit results to the current directory's subtree
+
+      --path <DIR>
+          Limit results to this subtree; repeatable
+
+      --limit <LIMIT>
+          Maximum number of results
+          
+          [default: 50]
+
+      --offset <OFFSET>
+          Number of results to skip
+          
+          [default: 0]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Example:
+  codix find Invoice --kind class
