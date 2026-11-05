@@ -83,7 +83,14 @@ pub fn extract(
     })?;
     let query = tags_query(&descriptor.name, grammar)?;
     let definitions = definitions(descriptor, &query, tree.root_node(), content);
-    Ok(symbols(descriptor, path, content, &definitions))
+    let (mut rows, parents) = symbols(descriptor, path, content, &definitions);
+    symbol_id::disambiguate(&mut rows, &descriptor.id_prefix, path);
+    // Parents by position, now that every ID is final.
+    let ids: Vec<String> = rows.iter().map(|r| r.symbol_id.clone()).collect();
+    for (row, parent) in rows.iter_mut().zip(parents) {
+        row.parent = parent.map(|p| ids[p].clone());
+    }
+    Ok(rows)
 }
 
 fn definitions<'tree>(
@@ -128,13 +135,16 @@ fn definitions<'tree>(
     found
 }
 
+/// The symbols of the definitions, each with the index of its parent; parent
+/// IDs are filled in by the caller.
 fn symbols(
     descriptor: &LanguageDescriptor,
     path: &str,
     content: &str,
     definitions: &[Definition<'_>],
-) -> Vec<SymbolRow> {
+) -> (Vec<SymbolRow>, Vec<Option<usize>>) {
     let mut rows: Vec<SymbolRow> = Vec::with_capacity(definitions.len());
+    let mut parents: Vec<Option<usize>> = Vec::with_capacity(definitions.len());
     // Indices into `rows` of the definitions enclosing the current one.
     let mut open: Vec<usize> = Vec::new();
     for (i, definition) in definitions.iter().enumerate() {
@@ -150,7 +160,8 @@ fn symbols(
             open.pop();
         }
         let name = text(content, definition.name);
-        let parent = open.last().map(|&p| &rows[p]);
+        let parent_index = open.last().copied();
+        let parent = parent_index.map(|p| &rows[p]);
         let qualified_name = match parent {
             Some(parent) => format!(
                 "{}{}{name}",
@@ -171,7 +182,7 @@ fn symbols(
             name: name.to_owned(),
             kind: definition.kind.clone(),
             qualified_name,
-            parent: parent.map(|p| p.symbol_id.clone()),
+            parent: None,
             range: span(content, definition.node),
             name_range: span(content, definition.name),
             signature,
@@ -182,9 +193,10 @@ fn symbols(
                 Confidence::Normal
             },
         });
+        parents.push(parent_index);
         open.push(i);
     }
-    rows
+    (rows, parents)
 }
 
 fn text<'a>(content: &'a str, node: Node<'_>) -> &'a str {

@@ -19,7 +19,7 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Schema migrations, in order. Migration `n` (1-based) moves the database
 /// from version `n - 1` to `n`; later phases append to this list.
-const MIGRATIONS: &[&str] = &[MIGRATION_1];
+const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2];
 
 const MIGRATION_1: &str = "
 CREATE TABLE files (
@@ -85,6 +85,9 @@ CREATE TRIGGER symbols_fts_update AFTER UPDATE ON symbols BEGIN
     VALUES (new.id, new.name, new.qualified_name);
 END;
 ";
+
+/// Symbol lookup by qualified name, for commands naming a symbol by name.
+const MIGRATION_2: &str = "CREATE INDEX symbols_by_qualified_name ON symbols(qualified_name);";
 
 /// How a file is held in the index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -568,6 +571,30 @@ impl Snapshot<'_> {
             .map_err(|e| self.err(&e))
     }
 
+    /// Symbols whose ID starts with `prefix`, sorted by ID.
+    pub fn symbols_with_id_prefix(&self, prefix: &str) -> Result<Vec<SymbolHit>, Error> {
+        let sql = format!(
+            "SELECT {SYMBOL_COLUMNS} FROM symbols s JOIN files f ON f.id = s.file_id
+             WHERE s.symbol_id >= ?1 AND s.symbol_id < ?2 ORDER BY s.symbol_id"
+        );
+        let mut stmt = self.tx.prepare(&sql).map_err(|e| self.err(&e))?;
+        stmt.query_map([prefix, &prefix_end(prefix)], symbol_hit)
+            .and_then(Iterator::collect)
+            .map_err(|e| self.err(&e))
+    }
+
+    /// Symbols whose simple or qualified name is `name`, sorted by ID.
+    pub fn symbols_named(&self, name: &str) -> Result<Vec<SymbolHit>, Error> {
+        let sql = format!(
+            "SELECT {SYMBOL_COLUMNS} FROM symbols s JOIN files f ON f.id = s.file_id
+             WHERE s.qualified_name = ?1 OR s.name = ?1 ORDER BY s.symbol_id"
+        );
+        let mut stmt = self.tx.prepare(&sql).map_err(|e| self.err(&e))?;
+        stmt.query_map([name], symbol_hit)
+            .and_then(Iterator::collect)
+            .map_err(|e| self.err(&e))
+    }
+
     /// Symbols whose name matches `query`; see [`NameQuery`].
     pub fn find(&self, query: &NameQuery) -> Result<Vec<SymbolHit>, Error> {
         search::find(&self.tx, query).map_err(|e| self.err(&e))
@@ -580,6 +607,18 @@ impl Snapshot<'_> {
             .map(|n| u64::try_from(n).unwrap_or(0))
             .map_err(|e| self.err(&e))
     }
+}
+
+/// The smallest string greater than every string starting with `prefix`.
+fn prefix_end(prefix: &str) -> String {
+    let mut chars: Vec<char> = prefix.chars().collect();
+    while let Some(last) = chars.pop() {
+        if let Some(next) = char::from_u32(u32::from(last) + 1) {
+            chars.push(next);
+            return chars.into_iter().collect();
+        }
+    }
+    String::from(char::MAX)
 }
 
 fn file_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<FileRow> {
