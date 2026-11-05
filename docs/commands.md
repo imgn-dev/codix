@@ -144,7 +144,7 @@ codix watch
 Serve codix's commands as MCP tools on stdin and stdout.
 
 - **When:** To give an agent codix as tools: add `codix mcp` as an MCP server. Each call can name its directory, so one server covers several projects.
-- **Returns:** MCP tool results: the text the CLI prints, and its JSON as structured content.
+- **Returns:** MCP tool results with the text the CLI prints; `--json` on the CLI gives the JSON.
 
 ```
 codix mcp

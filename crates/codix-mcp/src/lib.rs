@@ -18,7 +18,7 @@ use codix_core::describe::describe;
 use codix_core::indexing::{IndexOp, InitOp, StatusOp};
 use codix_core::op::{Context, Operation, Warning};
 use codix_core::query::{DefOp, FindOp, GrepOp, OutlineOp, ShowOp};
-use codix_core::render::{SCHEMA_VERSION, Style, TextRender, json_response};
+use codix_core::render::{Style, TextRender};
 use codix_daemon::client::{self, Route};
 use codix_daemon::control;
 use rmcp::ErrorData as McpError;
@@ -152,13 +152,14 @@ operations!(
     GrepOp,
 );
 
-/// The tool for `O`: its name and canonical description, its request's
-/// schema plus `cwd`, and its JSON envelope's schema.
+/// The tool for `O`: its name and canonical description, and its request's
+/// schema plus `cwd`. It declares no output schema and its results carry no
+/// structured content: clients then give the model the compact text, as the
+/// CLI prints it, rather than the much larger JSON.
 fn tool<O>() -> Tool
 where
     O: Operation,
     O::Request: schemars::JsonSchema,
-    O::Response: schemars::JsonSchema,
 {
     let description =
         describe(O::NAME).map_or_else(String::new, codix_core::describe::Description::details);
@@ -178,41 +179,7 @@ where
             }),
         );
     }
-    let mut tool = Tool::new(O::NAME, description, Arc::new(input));
-    tool.output_schema = Some(Arc::new(envelope_schema(object(schemars::schema_for!(
-        O::Response
-    )))));
-    tool
-}
-
-/// The schema of a successful result's JSON envelope, as `--json` prints it,
-/// around the schema of the response.
-fn envelope_schema(mut result: JsonObject) -> JsonObject {
-    let definitions = result.remove("$defs");
-    result.remove("$schema");
-    let mut warning = object(schemars::schema_for!(Warning));
-    warning.remove("$schema");
-    let mut envelope = serde_json::json!({
-        "type": "object",
-        "properties": {
-            "schema_version": {
-                "type": "integer",
-                "const": SCHEMA_VERSION,
-                "description": "Version of the JSON output format; incremented on breaking changes only."
-            },
-            "command": { "type": "string" },
-            "result": result,
-            "warnings": { "type": "array", "items": warning }
-        },
-        "required": ["schema_version", "command", "result", "warnings"]
-    });
-    if let (Some(definitions), Value::Object(envelope)) = (definitions, &mut envelope) {
-        envelope.insert("$defs".to_owned(), definitions);
-    }
-    match envelope {
-        Value::Object(envelope) => envelope,
-        _ => JsonObject::new(),
-    }
+    Tool::new(O::NAME, description, Arc::new(input))
 }
 
 fn object(schema: schemars::Schema) -> JsonObject {
@@ -303,13 +270,7 @@ where
         );
     }
     text.push_str(&String::from_utf8_lossy(&rendered));
-    let mut json = Vec::new();
-    let structured = json_response(&mut json, O::NAME, response, warnings)
-        .ok()
-        .and_then(|()| serde_json::from_slice::<Value>(&json).ok());
-    let mut result = CallToolResult::success(vec![ContentBlock::text(text)]);
-    result.structured_content = structured;
-    result
+    CallToolResult::success(vec![ContentBlock::text(text)])
 }
 
 /// An error result: text only, since the tool's output schema describes
