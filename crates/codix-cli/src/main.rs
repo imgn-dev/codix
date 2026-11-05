@@ -9,6 +9,8 @@ mod render;
 use codix_lang_c as _;
 #[cfg(feature = "lang-cpp")]
 use codix_lang_cpp as _;
+#[cfg(feature = "lang-csharp")]
+use codix_lang_csharp as _;
 #[cfg(feature = "lang-go")]
 use codix_lang_go as _;
 #[cfg(feature = "lang-java")]
@@ -391,6 +393,10 @@ mod tests {
             ),
             (cfg!(feature = "lang-c"), (ProviderKind::Language, "c")),
             (cfg!(feature = "lang-cpp"), (ProviderKind::Language, "cpp")),
+            (
+                cfg!(feature = "lang-csharp"),
+                (ProviderKind::Language, "csharp"),
+            ),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
             (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),

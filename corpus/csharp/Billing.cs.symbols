@@ -1,0 +1,20 @@
+3:11 namespace Acme.Billing | namespace Acme.Billing
+5:26 type_alias Acme.Billing.Paid [public] | public delegate void Paid(Invoice invoice)
+7:22 interface Acme.Billing.IPriced [public] | public interface IPriced
+9:17 method Acme.Billing.IPriced.Price | decimal Price()
+12:17 enum Acme.Billing.Status [public] | public enum Status
+12:26 enum_member Acme.Billing.Status.Draft | Draft
+12:33 enum_member Acme.Billing.Status.Sent | Sent
+14:19 struct Acme.Billing.Money [public] | public struct Money
+16:24 field Acme.Billing.Money.Amount [public] | public decimal Amount
+19:19 class Acme.Billing.Line [public] | public record Line(string Label, decimal Amount)
+21:18 class Acme.Billing.Invoice [public] | public class Invoice : IPriced
+23:26 constant Acme.Billing.Invoice.MaxLines [public] | public const int MaxLines
+24:37 field Acme.Billing.Invoice.lines [private] | private readonly List<Line> lines
+25:27 field Acme.Billing.Invoice.OnPaid [public] | public event Paid OnPaid
+27:16 constructor Acme.Billing.Invoice.Invoice [public] | public Invoice(List<Line> lines)
+32:10 method Acme.Billing.Invoice.Invoice | ~Invoice()
+34:24 property Acme.Billing.Invoice.Total [public] | public decimal Total
+36:25 property Acme.Billing.Invoice.Label [internal] | internal string Label
+38:24 method Acme.Billing.Invoice.Price [public] | public decimal Price()
+40:32 method Acme.Billing.Invoice.Empty [private] | private static Invoice Empty()
