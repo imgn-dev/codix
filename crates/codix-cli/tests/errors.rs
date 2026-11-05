@@ -177,17 +177,36 @@ fn usage_names_the_missing_argument() {
 
 #[test]
 fn usage_names_codix_whatever_the_binary_is_called() {
-    let dir = tempfile::tempdir().unwrap();
-    let renamed = dir
-        .path()
-        .join(format!("renamed-codix{}", std::env::consts::EXE_SUFFIX));
-    std::fs::copy(CODIX, &renamed).unwrap();
-    let out = codix_testkit::run_in(
-        dir.path(),
-        renamed.to_str().unwrap(),
-        &["find", "x", "--bogus"],
-    );
-    assert!(out.stderr.contains("usage: codix find"), "{}", out.stderr);
+    let out = run_renamed(&["find", "x", "--bogus"]);
+    assert!(out.contains("usage: codix find"), "{out}");
+}
+
+/// Runs codix under another name and returns its stderr. On Unix, argv[0]
+/// is set directly: running a fresh copy can fail with "Text file busy" when
+/// another test forks while the copy is still open for writing.
+#[cfg(unix)]
+fn run_renamed(args: &[&str]) -> String {
+    use std::os::unix::process::CommandExt;
+    let output = std::process::Command::new(CODIX)
+        .arg0("renamed-codix")
+        .args(args)
+        .output()
+        .expect("start codix");
+    String::from_utf8(output.stderr).expect("UTF-8")
+}
+
+/// Runs codix under another name and returns its stderr: Windows takes
+/// argv[0] from the file name, so this runs a renamed copy.
+#[cfg(windows)]
+fn run_renamed(args: &[&str]) -> String {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let renamed = dir.path().join("renamed-codix.exe");
+    std::fs::copy(CODIX, &renamed).expect("copy codix");
+    let output = std::process::Command::new(&renamed)
+        .args(args)
+        .output()
+        .expect("start codix");
+    String::from_utf8(output.stderr).expect("UTF-8")
 }
 
 #[cfg(feature = "lang-java")]
