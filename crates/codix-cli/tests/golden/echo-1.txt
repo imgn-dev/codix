@@ -1,0 +1,2 @@
+src/file0.rs:10:1  def  item0
+1 result

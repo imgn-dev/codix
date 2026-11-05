@@ -19,6 +19,12 @@ minimal = []
 
 [dependencies]
 clap.workspace = true
+codix-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+codix-testkit.workspace = true
 
 [lints]
 workspace = true
