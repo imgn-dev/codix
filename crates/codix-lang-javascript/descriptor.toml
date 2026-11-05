@@ -1,0 +1,12 @@
+name = "javascript"
+version = 1
+id_prefix = "js"
+
+[detect]
+extensions = ["js", "mjs", "cjs", "jsx"]
+shebangs = ["node", "nodejs"]
+modelines = ["javascript", "js"]
+
+[symbols]
+separator = "."
+body_fields = ["body", "value"]

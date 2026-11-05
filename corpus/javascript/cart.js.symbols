@@ -1,0 +1,13 @@
+2:14 constant VERSION | VERSION
+3:7 constant MAX | MAX
+5:7 class Cart | class Cart
+6:10 field Cart.count | static count
+7:3 field Cart.#secret | #secret
+9:3 constructor Cart.constructor | constructor(items)
+13:3 method Cart.total | total()
+17:7 method Cart.size | get size()
+22:11 function ids | function* ids()
+26:17 function checkout | function checkout(cart)
+30:7 function discount | discount
+33:3 method format | format(value)
+36:3 function round | round
