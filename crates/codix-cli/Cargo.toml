@@ -1,0 +1,24 @@
+[package]
+name = "codix-cli"
+description = "Headless code index for LLM agents: navigation and safe refactoring from the command line"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "codix"
+path = "src/main.rs"
+
+[features]
+default = []
+full = ["default"]
+minimal = []
+
+[dependencies]
+clap.workspace = true
+
+[lints]
+workspace = true

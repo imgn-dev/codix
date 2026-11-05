@@ -1,0 +1,60 @@
+name: Release build
+
+# Builds release binaries as workflow artifacts. Nothing is published.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+            musl: true
+          - target: aarch64-unknown-linux-musl
+            os: ubuntu-24.04-arm
+            musl: true
+          - target: aarch64-apple-darwin
+            os: macos-26
+          - target: x86_64-apple-darwin
+            os: macos-26-intel
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+            exe: .exe
+            python: python
+            rustflags: -C target-feature=+crt-static
+    runs-on: ${{ matrix.os }}
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install
+      - run: rustup target add ${{ matrix.target }}
+      # Grammars and SQLite are C, so static musl builds need musl-gcc.
+      - if: matrix.musl
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - run: cargo build --release --locked --target ${{ matrix.target }} -p codix-cli --features full
+      - name: Record size and startup time
+        shell: bash
+        run: >
+          ${{ matrix.python || 'python3' }} .github/scripts/measure.py
+          target/${{ matrix.target }}/release/codix${{ matrix.exe }}
+          ${{ matrix.target }}
+          measurements.json
+          >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: codix-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/codix${{ matrix.exe }}
+            measurements.json
