@@ -11,6 +11,7 @@ publish = false
 codix-provider.workspace = true
 globset.workspace = true
 ignore.workspace = true
+rusqlite.workspace = true
 serde.workspace = true
 toml_edit.workspace = true
 
