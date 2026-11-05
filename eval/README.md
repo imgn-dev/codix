@@ -16,8 +16,11 @@ real codebase and only codix's MCP tools, with no instructions about codix.
   - *guessed flag:* an argument the tool does not take;
   - *grep fallback:* `grep` called for a *locate* task.
 
-Run it outside the Claude Code sandbox, which has no access to the Claude
-Code login:
+Run it from a terminal, not from a Claude Code session, whose sandbox has no
+access to the Claude Code login. Each run starts Claude Code without the user's
+settings, `CLAUDE.md` or plugins, and with its sandbox, hooks and auto memory
+off; with every built-in tool off, the sandbox has nothing to guard. The
+benchmark stops if a run's setup shows anything but codix's tools:
 
 ```
 cargo run -p codix-eval --release

@@ -21,9 +21,53 @@ pub(crate) struct ToolCall {
     pub(crate) is_error: bool,
 }
 
+/// What Claude Code started the run with, from its `init` event.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct Setup {
+    /// Whether the event was there.
+    pub(crate) seen: bool,
+    /// Every tool the model was given.
+    pub(crate) tools: Vec<String>,
+    /// MCP servers, by name.
+    pub(crate) mcp_servers: Vec<String>,
+    /// Plugins loaded.
+    pub(crate) plugins: Vec<String>,
+    /// The output style.
+    pub(crate) output_style: String,
+}
+
+impl Setup {
+    /// What would make the run measure more than codix's own names and
+    /// descriptions: other tools, servers, plugins, or an output style.
+    pub(crate) fn leaks(&self) -> Vec<String> {
+        if !self.seen {
+            return vec!["no init event".to_owned()];
+        }
+        let mut leaks = Vec::new();
+        for tool in self.tools.iter().filter(|t| !t.starts_with(TOOL_PREFIX)) {
+            leaks.push(format!("tool {tool}"));
+        }
+        for server in self.mcp_servers.iter().filter(|s| *s != "codix") {
+            leaks.push(format!("MCP server {server}"));
+        }
+        if !self.mcp_servers.iter().any(|s| s == "codix") {
+            leaks.push("no codix MCP server".to_owned());
+        }
+        for plugin in &self.plugins {
+            leaks.push(format!("plugin {plugin}"));
+        }
+        if !self.output_style.is_empty() && !self.output_style.eq_ignore_ascii_case("default") {
+            leaks.push(format!("output style {}", self.output_style));
+        }
+        leaks
+    }
+}
+
 /// What a run did.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct Transcript {
+    /// What the run started with.
+    pub(crate) setup: Setup,
     /// Tool calls in order.
     pub(crate) calls: Vec<ToolCall>,
     /// The final answer.
@@ -51,6 +95,30 @@ pub(crate) fn parse(stream: &str) -> Transcript {
     {
         let content = event["message"]["content"].as_array();
         match event["type"].as_str() {
+            Some("system") if event["subtype"] == "init" => {
+                let names = |key: &str, field: Option<&str>| -> Vec<String> {
+                    event[key]
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .filter_map(|v| match field {
+                            Some(field) => v[field].as_str(),
+                            None => v.as_str(),
+                        })
+                        .map(str::to_owned)
+                        .collect()
+                };
+                transcript.setup = Setup {
+                    seen: true,
+                    tools: names("tools", None),
+                    mcp_servers: names("mcp_servers", Some("name")),
+                    plugins: names("plugins", Some("name")),
+                    output_style: event["output_style"]
+                        .as_str()
+                        .unwrap_or_default()
+                        .to_owned(),
+                };
+            }
             Some("assistant") => {
                 for block in content.into_iter().flatten() {
                     if block["type"] == "tool_use" {
@@ -125,7 +193,7 @@ fn text_of(content: &Value) -> String {
 mod tests {
     use super::*;
 
-    const STREAM: &str = r#"{"type":"system","subtype":"init","tools":["mcp__codix__find"]}
+    const STREAM: &str = r#"{"type":"system","subtype":"init","tools":["mcp__codix__find"],"mcp_servers":[{"name":"codix","status":"connected"}],"plugins":[],"output_style":"default"}
 {"type":"assistant","message":{"content":[{"type":"text","text":"Looking."},{"type":"tool_use","id":"t1","name":"mcp__codix__def","input":{"symbol":"Assert.notNull"}}]}}
 {"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","is_error":true,"content":[{"type":"text","text":"error[ambiguous_symbol]: \"Assert.notNull\" matches 2 symbols"}]}]}}
 {"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"mcp__codix__show","input":{"symbol":"Assert.notNull","path":["spring-core/src/main"]}}]}}
@@ -148,6 +216,24 @@ not json
         assert_eq!((t.turns, t.input_tokens, t.output_tokens), (3, 1210, 50));
         assert!((t.cost_usd - 0.0123).abs() < 1e-9);
         assert_eq!(t.error, None);
+        assert_eq!(t.setup.leaks(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn anything_but_codix_in_the_setup_is_a_leak() {
+        let t = parse(
+            r#"{"type":"system","subtype":"init","tools":["Bash","mcp__codix__find"],"mcp_servers":[{"name":"codix"},{"name":"other"}],"plugins":[{"name":"frontend-design"}],"output_style":"Concise"}"#,
+        );
+        assert_eq!(
+            t.setup.leaks(),
+            [
+                "tool Bash",
+                "MCP server other",
+                "plugin frontend-design",
+                "output style Concise"
+            ]
+        );
+        assert_eq!(parse("").setup.leaks(), ["no init event"]);
     }
 
     #[test]

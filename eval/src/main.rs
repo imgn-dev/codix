@@ -2,8 +2,9 @@
 //! tools, through Claude Code headless (`claude -p`), on the pinned
 //! spring-framework checkout.
 //!
-//! Run with `cargo run -p codix-eval --release`, outside the Claude Code
-//! sandbox, which has no access to the Claude Code login. Options:
+//! Run with `cargo run -p codix-eval --release` from a terminal, not from a
+//! Claude Code session, whose sandbox has no access to the Claude Code login.
+//! Each run starts Claude Code with its own sandbox off. Options:
 //! `--models haiku,sonnet,opus` (the default), `--tasks <id>,<id>` (default
 //! all), `--claude <path>` (default `claude`). Writes
 //! `eval/results/<version>.json` and the table in `eval/README.md`; raw
@@ -103,6 +104,13 @@ fn main() {
             fs::write(out.join(format!("{model}-{}.jsonl", task.id)), &stream)
                 .expect("save the transcript");
             let transcript = transcript::parse(&stream);
+            let leaks = transcript.setup.leaks();
+            assert!(
+                leaks.is_empty(),
+                "the {model} run of {} is not a clean setup, so the benchmark stops: {}",
+                task.id,
+                leaks.join("; ")
+            );
             let run = Run {
                 model: model.clone(),
                 task: task.id.clone(),
@@ -173,6 +181,11 @@ fn run_claude(claude: &str, model: &str, prompt: &str, mcp_config: &Path, repo: 
             "mcp__codix__*",
             "--setting-sources",
             "",
+            // Built-in tools are off, so the sandbox guards nothing here;
+            // left on, it would confine codix's MCP server and its daemon.
+            // Hooks and auto memory have no place in a measurement either.
+            "--settings",
+            r#"{"sandbox":{"enabled":false},"disableAllHooks":true,"autoMemoryEnabled":false}"#,
             "--no-session-persistence",
             "--output-format",
             "stream-json",
