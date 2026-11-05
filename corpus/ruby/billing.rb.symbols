@@ -1,0 +1,12 @@
+3:1 constant VERSION | VERSION
+5:8 module Acme | module Acme
+6:10 module Acme.Billing | module Billing
+7:5 constant Acme.Billing.MAX_LINES | MAX_LINES
+9:11 class Acme.Billing.Invoice | class Invoice < Base
+12:11 constructor Acme.Billing.Invoice.initialize | def initialize(lines)
+16:11 method Acme.Billing.Invoice.total | def total
+20:16 method Acme.Billing.Invoice.empty | def self.empty
+25:13 method Acme.Billing.Invoice.build | def build(*lines)
+28:13 method Acme.Billing.Invoice.sum | alias sum total
+32:11 method Acme.Billing.Invoice.secret | def secret; end
+37:5 function report | def report(invoice)

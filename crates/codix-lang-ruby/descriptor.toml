@@ -1,0 +1,14 @@
+name = "ruby"
+version = 1
+id_prefix = "rb"
+
+[detect]
+extensions = ["rb", "rake", "gemspec"]
+filenames = ["Rakefile", "Gemfile"]
+shebangs = ["ruby", "jruby"]
+modelines = ["ruby"]
+
+[symbols]
+separator = "."
+body_fields = ["body", "right"]
+# Ruby sets visibility with `private` sections, not on each method.

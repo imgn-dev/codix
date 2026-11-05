@@ -23,6 +23,7 @@ codix-lang-javascript = { path = "crates/codix-lang-javascript" }
 codix-lang-kotlin = { path = "crates/codix-lang-kotlin" }
 codix-lang-php = { path = "crates/codix-lang-php" }
 codix-lang-python = { path = "crates/codix-lang-python" }
+codix-lang-ruby = { path = "crates/codix-lang-ruby" }
 codix-lang-rust = { path = "crates/codix-lang-rust" }
 codix-lang-typescript = { path = "crates/codix-lang-typescript" }
 codix-provider = { path = "crates/codix-provider" }
@@ -53,6 +54,7 @@ tree-sitter-kotlin-ng = "1.1.0"
 tree-sitter-language = "0.1.9"
 tree-sitter-php = "0.25.1"
 tree-sitter-python = "0.25.0"
+tree-sitter-ruby = "0.23.1"
 tree-sitter-rust = "0.24.2"
 tree-sitter-typescript = "0.23.2"
 

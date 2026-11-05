@@ -23,6 +23,8 @@ use codix_lang_kotlin as _;
 use codix_lang_php as _;
 #[cfg(feature = "lang-python")]
 use codix_lang_python as _;
+#[cfg(feature = "lang-ruby")]
+use codix_lang_ruby as _;
 #[cfg(feature = "lang-rust")]
 use codix_lang_rust as _;
 #[cfg(feature = "lang-typescript")]
@@ -400,6 +402,10 @@ mod tests {
                 (ProviderKind::Language, "csharp"),
             ),
             (cfg!(feature = "lang-php"), (ProviderKind::Language, "php")),
+            (
+                cfg!(feature = "lang-ruby"),
+                (ProviderKind::Language, "ruby"),
+            ),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
             (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),
