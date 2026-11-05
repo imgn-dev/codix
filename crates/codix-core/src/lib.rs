@@ -4,6 +4,7 @@
 pub mod config;
 pub mod debug;
 pub mod error;
+pub mod lock;
 pub mod op;
 pub mod page;
 pub mod project;

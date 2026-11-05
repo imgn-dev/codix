@@ -24,7 +24,7 @@ use codix_core::Error;
 use codix_core::config::{ConfigOp, ConfigRequest};
 use codix_core::debug::{DebugEcho, DebugEchoRequest};
 use codix_core::error::exit;
-use codix_core::op::{Context, Operation, Outcome};
+use codix_core::op::{Context, Operation, Outcome, Warning};
 use codix_core::page::{DEFAULT_LIMIT, Page};
 use codix_core::project::ScopeRequest;
 use render::{Style, TextRender};
@@ -164,6 +164,8 @@ struct Output {
     show_origin: bool,
     stdout: Style,
     stderr: Style,
+    /// Warnings about the project, added to every response and error.
+    warnings: Vec<Warning>,
 }
 
 impl Output {
@@ -180,7 +182,16 @@ impl Output {
                 color: color_allowed && io::stderr().is_terminal(),
                 show_origin: false,
             },
+            warnings: Vec::new(),
         }
+    }
+
+    /// In text mode, warnings go to stderr before the output.
+    fn text_warnings(&self) -> io::Result<()> {
+        if self.json {
+            return Ok(());
+        }
+        render::text_warnings(&mut io::stderr().lock(), &self.warnings, self.stderr)
     }
 
     fn response<R: serde::Serialize + TextRender + Outcome>(
@@ -190,7 +201,9 @@ impl Output {
     ) -> u8 {
         let mut stdout = io::stdout().lock();
         let written = if self.json {
-            render::json_response(&mut stdout, command, response, &[])
+            render::json_response(&mut stdout, command, response, &self.warnings)
+        } else if let Err(e) = self.text_warnings() {
+            Err(e)
         } else {
             let style = Style {
                 show_origin: self.show_origin,
@@ -209,9 +222,10 @@ impl Output {
     fn error(&self, error: &Error) -> u8 {
         let written = if self.json {
             let mut stdout = io::stdout().lock();
-            render::json_error(&mut stdout, error).and_then(|()| stdout.flush())
+            render::json_error(&mut stdout, error, &self.warnings).and_then(|()| stdout.flush())
         } else {
-            render::text_error(&mut io::stderr().lock(), error, self.stderr)
+            self.text_warnings()
+                .and_then(|()| render::text_error(&mut io::stderr().lock(), error, self.stderr))
         };
         finish(written, error.exit_code())
     }
@@ -289,6 +303,10 @@ fn main() -> ExitCode {
     {
         Ok(ctx) => ctx,
         Err(error) => return ExitCode::from(output.error(&error)),
+    };
+    let output = Output {
+        warnings: ctx.warnings().to_vec(),
+        ..output
     };
     let code = match cli.command {
         Command::Config(args) => {

@@ -8,6 +8,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
+use crate::lock::network_filesystem_warning;
 use crate::page::Location;
 use crate::project::{FileId, Project, Scope, ScopeRequest};
 
@@ -36,6 +37,7 @@ pub trait Outcome {
 pub struct Context {
     cwd: PathBuf,
     project: Option<Project>,
+    warnings: Vec<Warning>,
 }
 
 impl Context {
@@ -50,12 +52,28 @@ impl Context {
             Some(root) => Some(Project::at(&cwd.join(root))?),
             None => Project::discover(&cwd)?,
         };
-        Ok(Self { cwd, project })
+        let warnings = project
+            .iter()
+            .filter_map(|p| {
+                let dir = p.data_dir();
+                network_filesystem_warning(if dir.is_dir() { &dir } else { p.root() })
+            })
+            .collect();
+        Ok(Self {
+            cwd,
+            project,
+            warnings,
+        })
     }
 
     /// The canonical directory the command runs from.
     pub fn cwd(&self) -> &Path {
         &self.cwd
+    }
+
+    /// Warnings about the project, for every response.
+    pub fn warnings(&self) -> &[Warning] {
+        &self.warnings
     }
 
     /// The project, or `no_project`.

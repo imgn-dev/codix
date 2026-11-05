@@ -200,6 +200,7 @@ struct Envelope<'a, R> {
 struct ErrorEnvelope<'a> {
     schema_version: u32,
     error: ErrorBody<'a>,
+    warnings: &'a [Warning],
 }
 
 #[derive(Serialize)]
@@ -229,7 +230,7 @@ pub(crate) fn json_response<R: Serialize>(
 }
 
 /// Writes an error as one line of JSON.
-pub(crate) fn json_error(w: &mut dyn Write, error: &Error) -> io::Result<()> {
+pub(crate) fn json_error(w: &mut dyn Write, error: &Error, warnings: &[Warning]) -> io::Result<()> {
     let envelope = ErrorEnvelope {
         schema_version: SCHEMA_VERSION,
         error: ErrorBody {
@@ -238,9 +239,28 @@ pub(crate) fn json_error(w: &mut dyn Write, error: &Error) -> io::Result<()> {
             hint: error.hint(),
             candidates: error.candidates(),
         },
+        warnings,
     };
     serde_json::to_writer(&mut *w, &envelope)?;
     writeln!(w)
+}
+
+/// Writes each warning as `warning[code]: message`.
+pub(crate) fn text_warnings(
+    w: &mut dyn Write,
+    warnings: &[Warning],
+    style: Style,
+) -> io::Result<()> {
+    for warning in warnings {
+        writeln!(
+            w,
+            "{}[{}]: {}",
+            style.paint("1;33", "warning"),
+            warning.code,
+            warning.message
+        )?;
+    }
+    Ok(())
 }
 
 /// Writes an error as `error[code]: cause`, its candidates, and `hint: …`.
