@@ -17,7 +17,7 @@ path = "src/main.rs"
 default = ["lang-go", "lang-java", "vcs-git"]
 full = ["default", "all-langs", "all-vcs"]
 minimal = []
-all-langs = ["lang-c", "lang-cpp", "lang-csharp", "lang-go", "lang-java", "lang-javascript", "lang-kotlin", "lang-php", "lang-python", "lang-ruby", "lang-rust", "lang-typescript"]
+all-langs = ["lang-c", "lang-cpp", "lang-csharp", "lang-go", "lang-java", "lang-javascript", "lang-json", "lang-kotlin", "lang-markdown", "lang-php", "lang-python", "lang-ruby", "lang-rust", "lang-sql", "lang-toml", "lang-typescript", "lang-xml", "lang-yaml"]
 lang-go = ["dep:codix-lang-go"]
 lang-typescript = ["dep:codix-lang-typescript"]
 lang-python = ["dep:codix-lang-python"]
@@ -29,6 +29,12 @@ lang-cpp = ["dep:codix-lang-cpp"]
 lang-csharp = ["dep:codix-lang-csharp"]
 lang-php = ["dep:codix-lang-php"]
 lang-ruby = ["dep:codix-lang-ruby"]
+lang-json = ["dep:codix-lang-json"]
+lang-yaml = ["dep:codix-lang-yaml"]
+lang-toml = ["dep:codix-lang-toml"]
+lang-xml = ["dep:codix-lang-xml"]
+lang-markdown = ["dep:codix-lang-markdown"]
+lang-sql = ["dep:codix-lang-sql"]
 all-vcs = ["vcs-git", "vcs-hg", "vcs-svn"]
 lang-java = ["dep:codix-lang-java"]
 vcs-git = ["dep:codix-vcs-git"]
@@ -50,6 +56,12 @@ codix-lang-cpp = { workspace = true, optional = true }
 codix-lang-csharp = { workspace = true, optional = true }
 codix-lang-php = { workspace = true, optional = true }
 codix-lang-ruby = { workspace = true, optional = true }
+codix-lang-json = { workspace = true, optional = true }
+codix-lang-yaml = { workspace = true, optional = true }
+codix-lang-toml = { workspace = true, optional = true }
+codix-lang-xml = { workspace = true, optional = true }
+codix-lang-markdown = { workspace = true, optional = true }
+codix-lang-sql = { workspace = true, optional = true }
 codix-provider.workspace = true
 codix-vcs-git = { workspace = true, optional = true }
 codix-vcs-hg = { workspace = true, optional = true }

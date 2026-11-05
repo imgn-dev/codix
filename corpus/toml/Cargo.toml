@@ -1,0 +1,10 @@
+[package]
+name = "codix"
+edition = "2024"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tree-sitter.workspace = true
+
+[[bin]]
+name = "codix"

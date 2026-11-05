@@ -1,0 +1,8 @@
+2:4 property name | "name"
+3:4 property scripts | "scripts"
+3:17 property scripts.build | "build"
+3:40 property scripts.test | "test"
+4:4 property dependencies | "dependencies"
+5:6 property dependencies.react | "react"
+7:4 property files | "files"
+7:16 property files.path | "path"

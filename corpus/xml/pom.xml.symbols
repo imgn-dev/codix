@@ -1,0 +1,5 @@
+2:2 property project | <project>
+3:4 property project.modelVersion | <modelVersion>
+4:4 property project.build | <build>
+5:6 property project.build.sourceDirectory | <sourceDirectory>
+6:6 property project.build.plugins | <plugins/>

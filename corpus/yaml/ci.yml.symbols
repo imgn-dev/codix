@@ -1,0 +1,10 @@
+1:1 property name | name
+2:1 property on | on
+3:3 property on.push | push
+4:5 property on.push.branches | branches
+5:1 property jobs | jobs
+6:3 property jobs.check | check
+7:5 property jobs.check.runs-on | runs-on
+8:5 property jobs.check.steps | steps
+9:9 property jobs.check.steps.uses | uses
+10:9 property jobs.check.steps.run | run

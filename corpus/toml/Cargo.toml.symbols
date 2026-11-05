@@ -1,0 +1,10 @@
+1:2 module package | [package]
+2:1 property package.name | name
+3:1 property package.edition | edition
+5:2 module dependencies | [dependencies]
+6:1 property dependencies.serde | serde
+6:11 property dependencies.serde.version | version
+6:26 property dependencies.serde.features | features
+7:1 property dependencies.tree-sitter.workspace | tree-sitter.workspace
+9:3 module bin | [[bin]]
+10:1 property bin.name | name

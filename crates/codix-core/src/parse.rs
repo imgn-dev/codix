@@ -204,7 +204,7 @@ fn symbols(
             }
             open.pop();
         }
-        let name = text(content, definition.name);
+        let name = text(content, definition.name).trim();
         let parent_index = open.last().copied();
         let parent = parent_index.map(|p| &rows[p]);
         let separator = &descriptor.symbols.separator;

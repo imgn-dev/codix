@@ -1,0 +1,6 @@
+1:15 namespace billing | CREATE SCHEMA billing
+3:22 struct invoices | CREATE TABLE billing.invoices
+4:5 field invoices.id | id BIGINT PRIMARY KEY
+5:5 field invoices.total | total NUMERIC
+8:13 struct open_invoices | CREATE VIEW open_invoices
+10:17 variable invoice_ids | CREATE SEQUENCE invoice_ids

@@ -1,0 +1,14 @@
+name = "markdown"
+version = 1
+id_prefix = "md"
+# Headings, for search; qualified names are the heading paths.
+search_only = true
+
+[detect]
+extensions = ["md", "markdown"]
+modelines = ["markdown"]
+
+[symbols]
+separator = " > "
+# A section's signature is its heading: it ends at the first block after it.
+body_nodes = ["paragraph", "section", "list", "fenced_code_block", "indented_code_block", "block_quote", "html_block", "pipe_table", "thematic_break", "link_reference_definition", "setext_heading"]

@@ -1,0 +1,13 @@
+name = "xml"
+version = 1
+id_prefix = "xml"
+# Elements, for search; qualified names are the element paths.
+search_only = true
+
+[detect]
+extensions = ["xml", "xsd", "xsl", "xslt", "pom", "csproj", "props", "plist"]
+modelines = ["xml"]
+
+[symbols]
+separator = "."
+body_nodes = ["content"]

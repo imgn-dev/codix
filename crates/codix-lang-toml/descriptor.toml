@@ -1,0 +1,16 @@
+name = "toml"
+version = 1
+id_prefix = "toml"
+# Keys and tables, for search; qualified names are the dotted key paths.
+search_only = true
+
+[detect]
+extensions = ["toml"]
+filenames = ["Cargo.lock", "Pipfile"]
+modelines = ["toml"]
+
+[symbols]
+separator = "."
+# A table header ends at its first key; a key at its `=`.
+body_nodes = ["pair"]
+body_tokens = ["="]

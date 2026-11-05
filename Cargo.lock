@@ -98,9 +98,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.0"
+version = "1.2.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "375989decec1a0fa424442bed520fa12ede43a48475ce8c7417d2c69b32b5f6b"
+checksum = "e17dd265a7d0f31ef544e1b20e03add05d3b45b491b633b10d67145d2acc1a38"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -164,12 +164,18 @@ dependencies = [
  "codix-lang-go",
  "codix-lang-java",
  "codix-lang-javascript",
+ "codix-lang-json",
  "codix-lang-kotlin",
+ "codix-lang-markdown",
  "codix-lang-php",
  "codix-lang-python",
  "codix-lang-ruby",
  "codix-lang-rust",
+ "codix-lang-sql",
+ "codix-lang-toml",
  "codix-lang-typescript",
+ "codix-lang-xml",
+ "codix-lang-yaml",
  "codix-provider",
  "codix-testkit",
  "codix-vcs-git",
@@ -259,12 +265,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "codix-lang-json"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+ "codix-testkit",
+ "tree-sitter-json",
+]
+
+[[package]]
 name = "codix-lang-kotlin"
 version = "0.1.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
  "tree-sitter-kotlin-ng",
+]
+
+[[package]]
+name = "codix-lang-markdown"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+ "codix-testkit",
+ "tree-sitter-md",
 ]
 
 [[package]]
@@ -304,12 +328,48 @@ dependencies = [
 ]
 
 [[package]]
+name = "codix-lang-sql"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+ "codix-testkit",
+ "tree-sitter-sequel",
+]
+
+[[package]]
+name = "codix-lang-toml"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+ "codix-testkit",
+ "tree-sitter-toml-ng",
+]
+
+[[package]]
 name = "codix-lang-typescript"
 version = "0.1.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
  "tree-sitter-typescript",
+]
+
+[[package]]
+name = "codix-lang-xml"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+ "codix-testkit",
+ "tree-sitter-xml",
+]
+
+[[package]]
+name = "codix-lang-yaml"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+ "codix-testkit",
+ "tree-sitter-yaml",
 ]
 
 [[package]]
@@ -1022,6 +1082,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-json"
+version = "0.24.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4d727acca406c0020cffc6cf35516764f36c8e3dc4408e5ebe2cb35a947ec471"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-kotlin-ng"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1036,6 +1106,16 @@ name = "tree-sitter-language"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d0af592be68c579aa78a16846bd19422978c3c52e438523d45ff5d1bff1f9d4a"
+
+[[package]]
+name = "tree-sitter-md"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8ed661bfe3c264961425f77cd89ad2998bf5d629e71ce8bab1e5d7e940d6246e"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
 
 [[package]]
 name = "tree-sitter-php"
@@ -1078,10 +1158,50 @@ dependencies = [
 ]
 
 [[package]]
+name = "tree-sitter-sequel"
+version = "0.3.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d198ad3c319c02e43c21efa1ec796b837afcb96ffaef1a40c1978fbdcec7d17"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-toml-ng"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9adc2c898ae49730e857d75be403da3f92bb81d8e37a2f918a08dd10de5ebb1"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "tree-sitter-typescript"
 version = "0.23.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c5f76ed8d947a75cc446d5fccd8b602ebf0cde64ccf2ffa434d873d7a575eff"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-xml"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e670041f591d994f54d597ddcd8f4ebc930e282c4c76a42268743b71f0c8b6b3"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-yaml"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53c223db85f05e34794f065454843b0668ebc15d240ada63e2b5939f43ce7c97"
 dependencies = [
  "cc",
  "tree-sitter-language",

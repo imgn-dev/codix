@@ -1,0 +1,8 @@
+{
+  "name": "web",
+  "scripts": { "build": "vite build", "test": "vitest" },
+  "dependencies": {
+    "react": "^19.0.0"
+  },
+  "files": [{ "path": "dist" }]
+}

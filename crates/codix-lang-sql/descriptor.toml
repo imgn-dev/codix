@@ -1,0 +1,13 @@
+name = "sql"
+version = 1
+id_prefix = "sql"
+# Names of the objects statements create, for search.
+search_only = true
+
+[detect]
+extensions = ["sql"]
+modelines = ["sql"]
+
+[symbols]
+separator = "."
+body_tokens = ["("]

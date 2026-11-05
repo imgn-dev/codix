@@ -17,8 +17,12 @@ use codix_lang_go as _;
 use codix_lang_java as _;
 #[cfg(feature = "lang-javascript")]
 use codix_lang_javascript as _;
+#[cfg(feature = "lang-json")]
+use codix_lang_json as _;
 #[cfg(feature = "lang-kotlin")]
 use codix_lang_kotlin as _;
+#[cfg(feature = "lang-markdown")]
+use codix_lang_markdown as _;
 #[cfg(feature = "lang-php")]
 use codix_lang_php as _;
 #[cfg(feature = "lang-python")]
@@ -27,8 +31,16 @@ use codix_lang_python as _;
 use codix_lang_ruby as _;
 #[cfg(feature = "lang-rust")]
 use codix_lang_rust as _;
+#[cfg(feature = "lang-sql")]
+use codix_lang_sql as _;
+#[cfg(feature = "lang-toml")]
+use codix_lang_toml as _;
 #[cfg(feature = "lang-typescript")]
 use codix_lang_typescript as _;
+#[cfg(feature = "lang-xml")]
+use codix_lang_xml as _;
+#[cfg(feature = "lang-yaml")]
+use codix_lang_yaml as _;
 #[cfg(feature = "vcs-git")]
 use codix_vcs_git as _;
 #[cfg(feature = "vcs-hg")]
@@ -406,6 +418,24 @@ mod tests {
                 cfg!(feature = "lang-ruby"),
                 (ProviderKind::Language, "ruby"),
             ),
+            (
+                cfg!(feature = "lang-json"),
+                (ProviderKind::Language, "json"),
+            ),
+            (
+                cfg!(feature = "lang-yaml"),
+                (ProviderKind::Language, "yaml"),
+            ),
+            (
+                cfg!(feature = "lang-toml"),
+                (ProviderKind::Language, "toml"),
+            ),
+            (cfg!(feature = "lang-xml"), (ProviderKind::Language, "xml")),
+            (
+                cfg!(feature = "lang-markdown"),
+                (ProviderKind::Language, "markdown"),
+            ),
+            (cfg!(feature = "lang-sql"), (ProviderKind::Language, "sql")),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
             (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),
@@ -445,6 +475,22 @@ mod tests {
                 "{kind} provider {name} is missing from known"
             );
         }
+    }
+
+    #[cfg(feature = "full")]
+    #[test]
+    fn full_build_has_every_known_language() {
+        let compiled: Vec<&str> = registry()
+            .languages
+            .iter()
+            .map(|d| d.name.as_str())
+            .collect();
+        let known: Vec<&str> = known::LANGUAGES
+            .iter()
+            .copied()
+            .filter(|l| *l != "text")
+            .collect();
+        assert_eq!(compiled, known);
     }
 
     #[cfg(feature = "full")]

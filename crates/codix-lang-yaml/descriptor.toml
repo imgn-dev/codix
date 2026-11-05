@@ -1,0 +1,13 @@
+name = "yaml"
+version = 1
+id_prefix = "yaml"
+# Keys, for search; qualified names are the dotted key paths.
+search_only = true
+
+[detect]
+extensions = ["yml", "yaml"]
+modelines = ["yaml"]
+
+[symbols]
+separator = "."
+body_fields = ["value"]
