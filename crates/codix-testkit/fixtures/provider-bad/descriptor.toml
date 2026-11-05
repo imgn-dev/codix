@@ -1,0 +1,3 @@
+name = "bad"
+detect = [".bad"]
+ignore_strategy = "hint"

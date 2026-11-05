@@ -1,0 +1,7 @@
+name = "fixture-vcs"
+detect = [".fixture"]
+skip_dirs = [".fixture"]
+
+[ignore]
+strategy = "hint"
+hint = "add `.codix/` to the fixture ignore list"

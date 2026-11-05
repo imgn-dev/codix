@@ -7,5 +7,6 @@ pub mod error;
 pub mod op;
 pub mod page;
 pub mod project;
+pub mod providers;
 
 pub use error::Error;
