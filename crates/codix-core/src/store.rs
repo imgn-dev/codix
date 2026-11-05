@@ -4,6 +4,7 @@
 
 mod search;
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -340,7 +341,8 @@ impl Store {
     }
 
     /// Like [`Store::commit`], also replacing every directory hash when `dirs`
-    /// is given.
+    /// is given; otherwise the hashes of the directories holding the changed
+    /// files are dropped.
     pub fn commit_scan(
         &mut self,
         updates: &[FileUpdate],
@@ -361,6 +363,29 @@ impl Store {
         }
         if let Some(dirs) = dirs {
             write_dirs(&tx, dirs).map_err(|e| sql_error(&path, &e))?;
+        } else {
+            // The hashes of the directories above a changed file are stale
+            // now; without them, the next full scan compares those
+            // directories file by file instead of skipping them.
+            let mut stale = HashSet::new();
+            for changed in updates
+                .iter()
+                .map(|u| u.file.path.as_str())
+                .chain(deleted.iter().map(String::as_str))
+            {
+                let mut dir = changed;
+                while let Some(i) = dir.rfind('/') {
+                    dir = &dir[..i];
+                    stale.insert(dir);
+                }
+                stale.insert("");
+            }
+            let mut remove = tx
+                .prepare_cached("DELETE FROM dirs WHERE path = ?1")
+                .map_err(|e| sql_error(&path, &e))?;
+            for dir in stale {
+                remove.execute([dir]).map_err(|e| sql_error(&path, &e))?;
+            }
         }
         tx.commit().map_err(|e| sql_error(&path, &e))
     }

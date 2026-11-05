@@ -143,6 +143,8 @@ enum Command {
     },
     /// Search indexed files with a regular expression; each match names its enclosing symbol.
     Grep(GrepArgs),
+    /// Run this project's daemon in the foreground, logging to stderr, until interrupted.
+    Watch,
     /// Start, stop or list per-project daemons, which keep the index open and answer in milliseconds.
     #[command(subcommand)]
     Daemon(DaemonCommand),
@@ -608,6 +610,7 @@ fn main() -> ExitCode {
             run(&output, &ShowOp, &ctx, Ok(request))
         }
         Command::Daemon(command) => daemon(&output, &ctx, command),
+        Command::Watch => daemon(&output, &ctx, DaemonCommand::Run { log: None }),
         Command::Grep(args) => {
             let request = args.page.page().map(|page| GrepRequest {
                 pattern: args.pattern,

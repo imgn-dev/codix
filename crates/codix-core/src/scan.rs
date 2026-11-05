@@ -2,7 +2,7 @@
 //! fields with the manifest, hash only what changed, reparse only what really
 //! changed, and commit everything in one transaction.
 
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -15,7 +15,7 @@ use crate::lock::WriteGate;
 use crate::project::{FileId, Project};
 use crate::store::{FileRow, FileStatus, FileUpdate, Store, SymbolRow};
 use crate::vcs::Vcs;
-use crate::walk::{ContentClass, Skip, WalkedFile, classify, walk};
+use crate::walk::{ContentClass, Skip, WalkedFile, classify, walk, walk_where};
 
 /// Stored as the mtime of a racily clean file: modified so close to the scan
 /// that a later change within the filesystem's timestamp granularity would
@@ -187,6 +187,130 @@ pub fn scan_within(
     .collect();
     store.commit_scan(&updates, &deleted, Some(&dirs))?;
     store.replace_build(&crate::build::discover(project, config))?;
+    report.errors.sort();
+    Ok(Some(report))
+}
+
+/// The directories a partial scan covers, root-relative (`""` is the root):
+/// some for the files directly in them, some for their whole subtree.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Targets {
+    dirs: BTreeSet<String>,
+    trees: BTreeSet<String>,
+}
+
+impl Targets {
+    /// Covers the files directly in `dir`.
+    pub fn add_dir(&mut self, dir: &str) {
+        self.dirs.insert(dir.to_owned());
+    }
+
+    /// Covers every file under `dir`.
+    pub fn add_tree(&mut self, dir: &str) {
+        self.trees.insert(dir.to_owned());
+    }
+
+    /// Whether nothing is covered.
+    pub fn is_empty(&self) -> bool {
+        self.dirs.is_empty() && self.trees.is_empty()
+    }
+
+    fn covers_file(&self, path: &str) -> bool {
+        self.dirs.contains(parent_of(path)) || self.trees.iter().any(|t| within(path, t))
+    }
+
+    /// Whether the walk must enter `dir`: it is covered, or leads to a
+    /// covered directory.
+    fn enters(&self, dir: &str) -> bool {
+        self.trees.iter().any(|t| within(dir, t) || within(t, dir))
+            || self.dirs.iter().any(|d| d == dir || within(d, dir))
+    }
+}
+
+/// Whether `path` is `dir` or under it (`""` holds everything).
+fn within(path: &str, dir: &str) -> bool {
+    dir.is_empty()
+        || path == dir
+        || path
+            .strip_prefix(dir)
+            .is_some_and(|rest| rest.starts_with('/'))
+}
+
+/// Brings the files `targets` covers up to date, as a full scan would: what
+/// a file watcher reports changed. `None` when the write lock stays busy
+/// longer than `wait`.
+pub fn scan_dirs(
+    project: &Project,
+    config: &Config,
+    indexer: &dyn Indexer,
+    gate: &dyn WriteGate,
+    targets: &Targets,
+    wait: Option<Duration>,
+) -> Result<Option<ScanReport>, Error> {
+    let start_ns = now_ns();
+    let filter = targets.clone();
+    let walked = walk_where(
+        project,
+        &Vcs::detect(project.root()),
+        config.max_file_size(),
+        move |path, is_dir| {
+            if is_dir {
+                filter.enters(path)
+            } else {
+                filter.covers_file(path)
+            }
+        },
+    )?;
+    let mut store = Store::open(&project.index_path())?;
+    let manifest: HashMap<String, FileRow> = rows_by_path(store.snapshot()?.files()?)
+        .into_iter()
+        .filter(|(path, _)| targets.covers_file(path))
+        .collect();
+
+    let mut report = ScanReport {
+        skipped: walked.skipped.clone(),
+        errors: walked.errors.clone(),
+        ..ScanReport::default()
+    };
+    let mut candidates: Vec<(&WalkedFile, Option<&FileRow>)> = Vec::new();
+    for file in &walked.files {
+        match manifest.get(file.id.as_str()) {
+            Some(row) if is_current(row, indexer) && same_stat(row, file) => report.unchanged += 1,
+            row => candidates.push((file, row)),
+        }
+    }
+    let walked_ids: HashSet<&str> = walked.files.iter().map(|f| f.id.as_str()).collect();
+    let deleted: Vec<String> = manifest
+        .keys()
+        .filter(|path| !walked_ids.contains(path.as_str()))
+        .cloned()
+        .collect();
+    report.deleted = deleted.len();
+    if candidates.is_empty() && deleted.is_empty() {
+        return Ok(Some(report));
+    }
+
+    let mut outcomes: Vec<Outcome> = candidates
+        .par_iter()
+        .map(|(file, row)| process(project, indexer, file, *row, start_ns))
+        .collect();
+    let Some(_access) = gate.enter(project, wait)? else {
+        return Ok(None);
+    };
+    recheck(project, indexer, &mut outcomes, start_ns);
+    let fresh = rows_by_path(store.snapshot()?.files()?);
+    let updates = tally(outcomes, &fresh, &mut report, &mut Vec::new());
+    store.commit(&updates, &deleted)?;
+    let build_changed = updates
+        .iter()
+        .map(|u| u.file.path.as_str())
+        .chain(deleted.iter().map(String::as_str))
+        .any(|path| {
+            crate::build::is_build_file(path[parent_of(path).len()..].trim_start_matches('/'))
+        });
+    if build_changed {
+        store.replace_build(&crate::build::discover(project, config))?;
+    }
     report.errors.sort();
     Ok(Some(report))
 }

@@ -8,6 +8,7 @@ use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
+use crate::daemon::Watch;
 use crate::lock::{FileGate, WriteGate, network_filesystem_warning};
 use crate::page::Location;
 use crate::project::{FileId, Project, Scope, ScopeRequest};
@@ -40,6 +41,7 @@ pub struct Context {
     root_override: bool,
     warnings: Vec<Warning>,
     gate: Arc<dyn WriteGate>,
+    watch: Option<Arc<dyn Watch>>,
 }
 
 impl Context {
@@ -67,6 +69,7 @@ impl Context {
             root_override: root.is_some(),
             warnings,
             gate: Arc::new(FileGate),
+            watch: None,
         })
     }
 
@@ -110,6 +113,7 @@ impl Context {
             root_override: root.is_some(),
             warnings: warnings.to_vec(),
             gate: Arc::new(FileGate),
+            watch: None,
         })
     }
 
@@ -118,6 +122,20 @@ impl Context {
     #[must_use]
     pub fn with_gate(self, gate: Arc<dyn WriteGate>) -> Self {
         Self { gate, ..self }
+    }
+
+    /// The same context, kept current by a daemon's file watcher.
+    #[must_use]
+    pub fn with_watch(self, watch: Arc<dyn Watch>) -> Self {
+        Self {
+            watch: Some(watch),
+            ..self
+        }
+    }
+
+    /// The daemon's file watcher, when a daemon runs this operation.
+    pub fn watch(&self) -> Option<&dyn Watch> {
+        self.watch.as_deref()
     }
 
     /// How this context's writes take the write lock.

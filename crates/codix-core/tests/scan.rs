@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime};
 use codix_core::config::Config;
 use codix_core::lock::FileGate;
 use codix_core::project::{FileId, Project};
-use codix_core::scan::{Indexed, Indexer, ScanReport, scan};
+use codix_core::scan::{Indexed, Indexer, ScanReport, Targets, rescan, scan, scan_dirs};
 use codix_core::store::{Confidence, FileRow, FileStatus, Point, Span, Store, SymbolRow};
 use tempfile::TempDir;
 
@@ -121,6 +121,26 @@ fn symbols(root: &Path) -> Vec<(String, String)> {
         }
     }
     all
+}
+
+/// A partial scan of `targets`, as the daemon runs on watcher events.
+fn run_dirs(root: &Path, indexer: &LineIndexer, targets: &Targets) -> ScanReport {
+    let project = Project::discover(root).expect("discover").expect("project");
+    let config = Config::load(&project).expect("config");
+    scan_dirs(&project, &config, indexer, &FileGate, targets, None)
+        .expect("scan")
+        .expect("free gate")
+}
+
+fn targets(dirs: &[&str], trees: &[&str]) -> Targets {
+    let mut targets = Targets::default();
+    for dir in dirs {
+        targets.add_dir(dir);
+    }
+    for tree in trees {
+        targets.add_tree(tree);
+    }
+    targets
 }
 
 fn counts(r: &ScanReport) -> (usize, usize, usize, usize) {
@@ -323,4 +343,113 @@ fn indexing_config_changes_mark_affected_files_pending() {
     assert_eq!(effect, "2 files will be reindexed on the next scan");
     // The two headers, and codix.toml, new since the last scan.
     assert_eq!(counts(&run(&root, &indexer)), (3, 0, 0, 1));
+}
+
+#[test]
+fn a_partial_scan_covers_only_its_targets() {
+    let (_guard, root) = temp();
+    write(&root, "a/one.rs", "fn one\n", OLD);
+    write(&root, "a/deep/two.rs", "fn two\n", OLD);
+    write(&root, "b/three.rs", "fn three\n", OLD);
+    let indexer = LineIndexer::new("v1");
+    run(&root, &indexer);
+    indexer.parsed();
+
+    write(&root, "a/one.rs", "fn uno\n", OLD);
+    write(&root, "a/deep/two.rs", "fn dos\n", OLD);
+    write(&root, "b/three.rs", "fn tres\n", OLD);
+    write(&root, "a/new.rs", "fn new\n", OLD);
+    // `a` alone: its files, not its subdirectories', and nothing in `b`.
+    assert_eq!(
+        counts(&run_dirs(&root, &indexer, &targets(&["a"], &[]))),
+        (2, 0, 0, 0)
+    );
+    assert_eq!(indexer.parsed(), 2);
+    let names: Vec<String> = symbols(&root).into_iter().map(|(_, name)| name).collect();
+    assert_eq!(names, ["two", "new", "uno", "three"]);
+
+    // A tree covers its subdirectories; a removed one loses its files.
+    fs::remove_dir_all(root.join("a/deep")).unwrap();
+    assert_eq!(
+        counts(&run_dirs(&root, &indexer, &targets(&[], &["a"]))),
+        (0, 0, 1, 2)
+    );
+    assert_eq!(
+        counts(&run_dirs(&root, &indexer, &targets(&[], &["b"]))),
+        (1, 0, 0, 0)
+    );
+}
+
+#[test]
+fn a_partial_scan_honors_the_ignore_rules() {
+    let (_guard, root) = temp();
+    write(&root, ".codixignore", "*.gen.rs\n", OLD);
+    write(&root, "a/kept.rs", "fn kept\n", OLD);
+    write(&root, "a/skip.gen.rs", "fn generated\n", OLD);
+    write(&root, "node_modules/lib.rs", "fn vendored\n", OLD);
+    let indexer = LineIndexer::new("v1");
+    let report = run_dirs(&root, &indexer, &targets(&["a", "node_modules"], &[""]));
+    assert_eq!(counts(&report), (2, 0, 0, 0), "{report:?}");
+    let names: Vec<String> = symbols(&root).into_iter().map(|(_, name)| name).collect();
+    assert_eq!(names, ["kept"]);
+}
+
+#[test]
+fn a_file_already_rescanned_is_not_parsed_again() {
+    // What happens to codix's own writes: the manifest has the new stats by
+    // the time the watcher reports the file.
+    let (_guard, root) = temp();
+    write(&root, "a/one.rs", "fn one\n", OLD);
+    let indexer = LineIndexer::new("v1");
+    run(&root, &indexer);
+    write(&root, "a/one.rs", "fn uno\n", OLD);
+    let project = Project::discover(&root)
+        .expect("discover")
+        .expect("project");
+    rescan(
+        &project,
+        &indexer,
+        &FileGate,
+        &["a/one.rs".to_owned()],
+        Duration::from_secs(1),
+    )
+    .expect("rescan")
+    .expect("free gate");
+    indexer.parsed();
+
+    assert_eq!(
+        counts(&run_dirs(&root, &indexer, &targets(&["a"], &[]))),
+        (0, 0, 0, 1)
+    );
+    assert_eq!(indexer.parsed(), 0);
+}
+
+#[test]
+fn a_partial_commit_drops_the_hashes_of_the_directories_above() {
+    let (_guard, root) = temp();
+    write(&root, "a/b/one.rs", "fn one\n", OLD);
+    write(&root, "c/two.rs", "fn two\n", OLD);
+    let indexer = LineIndexer::new("v1");
+    run(&root, &indexer);
+    let dirs = || {
+        let mut store = Store::open(&root.join(".codix/index.db")).expect("open index");
+        let mut dirs: Vec<String> = store
+            .snapshot()
+            .expect("snapshot")
+            .dirs()
+            .expect("dirs")
+            .into_keys()
+            .collect();
+        dirs.sort();
+        dirs
+    };
+    assert_eq!(dirs(), ["", "a", "a/b", "c"]);
+
+    write(&root, "a/b/one.rs", "fn uno\n", OLD);
+    run_dirs(&root, &indexer, &targets(&["a/b"], &[]));
+    assert_eq!(dirs(), ["c"]);
+    // The next full scan compares those directories file by file, and
+    // stores their hashes again.
+    assert_eq!(counts(&run(&root, &indexer)), (0, 0, 0, 2));
+    assert_eq!(dirs(), ["", "a", "a/b", "c"]);
 }

@@ -6,6 +6,15 @@ use codix_provider::{BuildModel, Module, registry};
 use crate::config::Config;
 use crate::project::Project;
 
+/// Whether a file named `name` is a build file a compiled-in build system
+/// reads, such as `pom.xml`.
+pub fn is_build_file(name: &str) -> bool {
+    registry()
+        .builds
+        .iter()
+        .any(|descriptor| descriptor.detect.iter().any(|d| d == name))
+}
+
 /// The modules of the project: from `sources.roots` when set, otherwise from
 /// every build system whose files are at the root.
 pub fn discover(project: &Project, config: &Config) -> BuildModel {

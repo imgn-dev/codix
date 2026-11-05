@@ -48,6 +48,14 @@ pub(crate) fn since_epoch() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
+fn directories(count: usize) -> String {
+    if count == 1 {
+        "1 directory".to_owned()
+    } else {
+        format!("{count} directories")
+    }
+}
+
 /// A duration in its two largest units, such as `2h 5m`.
 pub(crate) fn elapsed(seconds: u64) -> String {
     let (d, h, m, s) = (
@@ -483,13 +491,31 @@ impl TextRender for StatusResponse {
             f.indexed, f.search_only, f.pending, f.errors, f.skipped
         )?;
         match &self.daemon {
-            Some(d) => writeln!(
-                w,
-                "daemon: pid {}, up {}, codix {}",
-                d.pid,
-                elapsed(since_epoch().saturating_sub(d.started_at)),
-                d.version
-            )?,
+            Some(status) => {
+                let d = &status.record;
+                let watch = match &status.watch {
+                    None => String::new(),
+                    Some(watch) if watch.recursive && watch.unwatched == 0 => {
+                        "; watching every directory".to_owned()
+                    }
+                    Some(watch) if watch.unwatched == 0 => {
+                        format!("; watching {}", directories(watch.watched))
+                    }
+                    Some(watch) => format!(
+                        "; watching {}; {} unwatched, rescanned every {}",
+                        directories(watch.watched),
+                        watch.unwatched,
+                        elapsed(watch.rescan_seconds)
+                    ),
+                };
+                writeln!(
+                    w,
+                    "daemon: pid {}, up {}, codix {}{watch}",
+                    d.pid,
+                    elapsed(since_epoch().saturating_sub(d.started_at)),
+                    d.version
+                )?;
+            }
             None => writeln!(w, "daemon: not running")?,
         }
         let c = &self.changed;

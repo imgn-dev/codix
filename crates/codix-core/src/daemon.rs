@@ -1,6 +1,7 @@
 //! What a running daemon leaves in `.codix/`: its lock and its record, so
 //! any process can tell whether one serves the project and how to reach it.
 
+use std::fmt;
 use std::fs::{self, OpenOptions, TryLockError};
 use std::path::PathBuf;
 
@@ -39,6 +40,45 @@ pub struct DaemonRecord {
     pub protocol: u32,
     /// When it started, in seconds since the Unix epoch.
     pub started_at: u64,
+}
+
+/// What a daemon's file watcher covers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WatchStatus {
+    /// Whether one recursive watch covers the project (macOS, Windows), rather
+    /// than one watch per directory (Linux).
+    pub recursive: bool,
+    /// Directories watched one by one.
+    pub watched: usize,
+    /// Directories the OS would not watch, such as past the inotify quota:
+    /// only the periodic scan sees their changes.
+    pub unwatched: usize,
+    /// Seconds between two full scans.
+    pub rescan_seconds: u64,
+    /// How long the last batch of changes took to index, in milliseconds,
+    /// from the end of its debounce to its commit.
+    pub last_batch_ms: Option<u64>,
+}
+
+/// A running file watcher, as the operations of a daemon see it.
+pub trait Watch: fmt::Debug + Send + Sync {
+    /// Indexes the changes reported so far without waiting for their debounce;
+    /// `true` when that leaves the index current, because every directory is
+    /// watched.
+    fn flush(&self) -> bool;
+
+    /// What the watcher covers.
+    fn status(&self) -> WatchStatus;
+}
+
+/// A running daemon, as `status` reports it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DaemonStatus {
+    /// Its record.
+    #[serde(flatten)]
+    pub record: DaemonRecord,
+    /// Its watcher; known only to the daemon itself.
+    pub watch: Option<WatchStatus>,
 }
 
 /// The daemon serving `project`, if one runs: its lock is held and its record

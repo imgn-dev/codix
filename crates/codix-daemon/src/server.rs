@@ -11,7 +11,7 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use codix_core::Error;
 use codix_core::config::Config;
-use codix_core::daemon::{DAEMON_FILE, DAEMON_LOCK, DaemonRecord, PROTOCOL, read_record};
+use codix_core::daemon::{DAEMON_FILE, DAEMON_LOCK, DaemonRecord, PROTOCOL, Watch, read_record};
 use codix_core::dispatch::dispatch;
 use codix_core::lock::{HeldGate, WriteGate, WriteLock, network_filesystem_warning};
 use codix_core::op::{Context, Warning};
@@ -21,6 +21,7 @@ use interprocess::local_socket::{GenericFilePath, ListenerOptions, Stream, prelu
 use crate::paths::socket_name;
 use crate::protocol::{OpRequest, Request, Response, Stats, read_frame, write_frame};
 use crate::registry;
+use crate::watch;
 
 /// Makes the daemon report this version instead of its own, for tests only.
 pub const VERSION_VAR: &str = "CODIX_TEST_DAEMON_VERSION";
@@ -44,6 +45,7 @@ struct State {
     project: Project,
     warnings: Vec<Warning>,
     gate: Arc<dyn WriteGate>,
+    watch: Arc<dyn Watch>,
     last_request: Mutex<Instant>,
     stopping: AtomicBool,
 }
@@ -61,7 +63,12 @@ impl State {
     fn run(&self, op: OpRequest) -> Response {
         self.touch();
         let result = Context::within(&self.project, &self.warnings, &op.cwd, op.root.as_deref())
-            .and_then(|ctx| dispatch(&ctx.with_gate(Arc::clone(&self.gate)), &op.name, op.request));
+            .and_then(|ctx| {
+                let ctx = ctx
+                    .with_gate(Arc::clone(&self.gate))
+                    .with_watch(Arc::clone(&self.watch));
+                dispatch(&ctx, &op.name, op.request)
+            });
         // A long operation is activity until it ends.
         self.touch();
         let warnings = self.warnings.clone();
@@ -160,11 +167,14 @@ fn serve_project(root: &Path) -> Result<(), Error> {
     let warnings = network_filesystem_warning(&project.data_dir())
         .into_iter()
         .collect();
+    let gate: Arc<dyn WriteGate> = Arc::new(HeldGate::new(write_lock));
+    let watch = Arc::new(watch::start(project.clone(), Arc::clone(&gate), log));
     let state = Arc::new(State {
         record,
         project,
         warnings,
-        gate: Arc::new(HeldGate::new(write_lock)),
+        gate,
+        watch,
         last_request: Mutex::new(Instant::now()),
         stopping: AtomicBool::new(false),
     });
@@ -316,6 +326,26 @@ mod tests {
 
     use super::*;
 
+    /// A watcher that covers nothing, so the tests run no scan pipeline.
+    #[derive(Debug)]
+    struct NoWatch;
+
+    impl Watch for NoWatch {
+        fn flush(&self) -> bool {
+            false
+        }
+
+        fn status(&self) -> codix_core::daemon::WatchStatus {
+            codix_core::daemon::WatchStatus {
+                recursive: false,
+                watched: 0,
+                unwatched: 0,
+                rescan_seconds: 0,
+                last_batch_ms: None,
+            }
+        }
+    }
+
     fn state(root: &Path) -> State {
         fs::create_dir_all(root.join(".codix")).expect("create .codix");
         let project = Project::at(root).expect("project");
@@ -332,6 +362,7 @@ mod tests {
             project,
             warnings: Vec::new(),
             gate: Arc::new(HeldGate::new(lock)),
+            watch: Arc::new(NoWatch),
             last_request: Mutex::new(Instant::now()),
             stopping: AtomicBool::new(false),
         }

@@ -67,6 +67,18 @@ pub struct Walk {
 /// detected version control systems, the default excludes and the systems'
 /// skip directories, which always win.
 pub fn walk(project: &Project, vcs: &Vcs, max_file_size: u64) -> Result<Walk, Error> {
+    walk_where(project, vcs, max_file_size, |_, _| true)
+}
+
+/// Like [`walk`], visiting only the entries `keep` accepts, given their
+/// root-relative path with `/` separators and whether they are directories.
+/// Rules apply as in a full walk, since it still starts at the root.
+pub fn walk_where(
+    project: &Project,
+    vcs: &Vcs,
+    max_file_size: u64,
+    keep: impl Fn(&str, bool) -> bool + Send + Sync + 'static,
+) -> Result<Walk, Error> {
     let root = project.root().to_path_buf();
     let mut builder = WalkBuilder::new(&root);
     builder
@@ -101,13 +113,23 @@ pub fn walk(project: &Project, vcs: &Vcs, max_file_size: u64) -> Result<Walk, Er
         .map(str::to_owned)
         .chain([DATA_DIR.to_owned()])
         .collect();
+    let filter_root = root.clone();
     builder.filter_entry(move |entry| {
         let is_dir = entry.file_type().is_some_and(|t| t.is_dir());
-        !(is_dir
+        if is_dir
             && entry
                 .file_name()
                 .to_str()
-                .is_some_and(|n| skip_dirs.iter().any(|d| d == n)))
+                .is_some_and(|n| skip_dirs.iter().any(|d| d == n))
+        {
+            return false;
+        }
+        // The root itself is always walked; a name that is not UTF-8 is
+        // reported by the visit.
+        match walked_id(&filter_root, entry.path()) {
+            Some(id) if !id.as_str().is_empty() => keep(id.as_str(), is_dir),
+            _ => true,
+        }
     });
 
     let found: Mutex<Found> = Mutex::new(Found::default());

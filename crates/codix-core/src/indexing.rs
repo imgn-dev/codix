@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::config::Config;
-use crate::daemon::DaemonRecord;
+use crate::daemon::DaemonStatus;
 use crate::op::{Context, Operation, Outcome};
 use crate::parse::PackIndexer;
 use crate::project::{DATA_DIR, Project};
@@ -179,7 +179,7 @@ pub struct StatusResponse {
     /// Build constructs codix could not interpret.
     pub build_issues: Vec<Unsupported>,
     /// The daemon serving the project, if one runs.
-    pub daemon: Option<DaemonRecord>,
+    pub daemon: Option<DaemonStatus>,
 }
 
 impl Outcome for StatusResponse {
@@ -252,7 +252,10 @@ impl Operation for StatusOp {
             errors,
             modules: build.modules,
             build_issues: build.unsupported,
-            daemon: crate::daemon::running(project)?,
+            daemon: crate::daemon::running(project)?.map(|record| DaemonStatus {
+                record,
+                watch: ctx.watch().map(crate::daemon::Watch::status),
+            }),
         })
     }
 }

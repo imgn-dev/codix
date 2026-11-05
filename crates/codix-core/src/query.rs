@@ -556,14 +556,19 @@ impl Operation for GrepOp {
             hint: "grep takes Rust regex syntax; escape special characters with \\".to_owned(),
         })?;
         let scope = ctx.scope(&request.scope)?;
-        let possibly_stale = scan_within(
-            project,
-            &config,
-            &PackIndexer::new(&config),
-            ctx.gate(),
-            Some(QUERY_WAIT),
-        )?
-        .is_none();
+        // A daemon whose watcher covers every directory has the index
+        // current once its pending changes are in; otherwise the whole tree
+        // is scanned, as without a daemon.
+        let watched = ctx.watch().is_some_and(crate::daemon::Watch::flush);
+        let possibly_stale = !watched
+            && scan_within(
+                project,
+                &config,
+                &PackIndexer::new(&config),
+                ctx.gate(),
+                Some(QUERY_WAIT),
+            )?
+            .is_none();
         let mut store = Store::open(&project.index_path())?;
         let snapshot = store.snapshot()?;
         let mut matches = Vec::new();
