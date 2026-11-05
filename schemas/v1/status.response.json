@@ -1,0 +1,314 @@
+{
+  "$defs": {
+    "Changes": {
+      "description": "Files whose stat differs from the index, found without reading them.",
+      "properties": {
+        "deleted": {
+          "description": "In the index, gone from disk.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "modified": {
+          "description": "Size, mtime or inode changed.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "new": {
+          "description": "Not in the index.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "new",
+        "modified",
+        "deleted"
+      ],
+      "type": "object"
+    },
+    "DaemonStatus": {
+      "description": "A running daemon, as `status` reports it.",
+      "properties": {
+        "pid": {
+          "description": "Its process ID.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "protocol": {
+          "description": "Its protocol version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "root": {
+          "description": "The project root it serves.",
+          "type": "string"
+        },
+        "socket": {
+          "description": "Its socket: a file path, or a pipe name on Windows.",
+          "type": "string"
+        },
+        "started_at": {
+          "description": "When it started, in seconds since the Unix epoch.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "The codix version it runs.",
+          "type": "string"
+        },
+        "watch": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WatchStatus"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Its watcher; known only to the daemon itself."
+        }
+      },
+      "required": [
+        "root",
+        "socket",
+        "pid",
+        "version",
+        "protocol",
+        "started_at"
+      ],
+      "type": "object"
+    },
+    "FileCounts": {
+      "description": "Files by how the index holds them.",
+      "properties": {
+        "errors": {
+          "description": "Could not be read or parsed.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexed": {
+          "description": "Parsed for symbols.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending": {
+          "description": "Waiting to be reparsed.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "search_only": {
+          "description": "Searched as text only.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "skipped": {
+          "description": "Binary, kept out of search.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "indexed",
+        "search_only",
+        "pending",
+        "errors",
+        "skipped"
+      ],
+      "type": "object"
+    },
+    "Module": {
+      "description": "One module of a build.",
+      "properties": {
+        "build": {
+          "description": "Build system, such as `maven`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Module name, such as a Maven `artifactId` or a Gradle project path.",
+          "type": "string"
+        },
+        "notes": {
+          "description": "What could not be resolved, such as an undefined `${property}`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "parent": {
+          "description": "Name of the parent module, if any.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "root": {
+          "description": "Module directory, root-relative; `\"\"` for the root.",
+          "type": "string"
+        },
+        "source_roots": {
+          "description": "Main source directories, root-relative.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "test_roots": {
+          "description": "Test source directories, root-relative.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "build",
+        "root",
+        "source_roots",
+        "test_roots",
+        "notes"
+      ],
+      "type": "object"
+    },
+    "Unsupported": {
+      "description": "A build construct codix does not interpret.",
+      "properties": {
+        "construct": {
+          "description": "The construct, as written.",
+          "type": "string"
+        },
+        "file": {
+          "description": "Build file, root-relative.",
+          "type": "string"
+        },
+        "line": {
+          "description": "1-based line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file",
+        "line",
+        "construct"
+      ],
+      "type": "object"
+    },
+    "WatchStatus": {
+      "description": "What a daemon's file watcher covers.",
+      "properties": {
+        "last_batch_ms": {
+          "description": "How long the last batch of changes took to index, in milliseconds,\nfrom the end of its debounce to its commit.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "recursive": {
+          "description": "Whether one recursive watch covers the project (macOS, Windows), rather\nthan one watch per directory (Linux).",
+          "type": "boolean"
+        },
+        "rescan_seconds": {
+          "description": "Seconds between two full scans.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "unwatched": {
+          "description": "Directories the OS would not watch, such as past the inotify quota:\nonly the periodic scan sees their changes.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "watched": {
+          "description": "Directories watched one by one.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "recursive",
+        "watched",
+        "unwatched",
+        "rescan_seconds"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What `status` reports.",
+  "properties": {
+    "build_issues": {
+      "description": "Build constructs codix could not interpret.",
+      "items": {
+        "$ref": "#/$defs/Unsupported"
+      },
+      "type": "array"
+    },
+    "changed": {
+      "$ref": "#/$defs/Changes",
+      "description": "Changes since the last scan."
+    },
+    "daemon": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DaemonStatus"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The daemon serving the project, if one runs."
+    },
+    "errors": {
+      "description": "Files whose last scan failed, with the reason.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "files": {
+      "$ref": "#/$defs/FileCounts",
+      "description": "Files in the index."
+    },
+    "modules": {
+      "description": "Modules found in build files.",
+      "items": {
+        "$ref": "#/$defs/Module"
+      },
+      "type": "array"
+    },
+    "root": {
+      "description": "The project root.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "root",
+    "files",
+    "changed",
+    "errors",
+    "modules",
+    "build_issues"
+  ],
+  "title": "StatusResponse",
+  "type": "object"
+}

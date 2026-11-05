@@ -2,6 +2,7 @@
 //! and golden-output helpers.
 
 pub mod fixture;
+pub mod schema;
 
 use std::fs;
 use std::path::Path;

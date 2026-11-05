@@ -15,6 +15,15 @@ macro_rules! operations {
         /// The name of every operation.
         pub const OPERATIONS: &[&str] = &[$(<$op as Operation>::NAME),*];
 
+        /// Every operation's name, request schema and response schema.
+        pub fn schemas() -> Vec<(&'static str, schemars::Schema, schemars::Schema)> {
+            vec![$((
+                <$op as Operation>::NAME,
+                schemars::schema_for!(<$op as Operation>::Request),
+                schemars::schema_for!(<$op as Operation>::Response),
+            )),*]
+        }
+
         /// Runs the operation `name` on `request`.
         pub fn dispatch(ctx: &Context, name: &str, request: Value) -> Result<Value, Error> {
             $(

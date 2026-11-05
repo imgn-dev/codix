@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`IndexOp`].",
+  "properties": {
+    "full": {
+      "default": false,
+      "description": "Rebuild the index from nothing.",
+      "type": "boolean"
+    }
+  },
+  "title": "IndexRequest",
+  "type": "object"
+}

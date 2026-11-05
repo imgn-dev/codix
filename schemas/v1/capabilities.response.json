@@ -1,0 +1,262 @@
+{
+  "$defs": {
+    "CommandSupport": {
+      "description": "A command, with the language support it needs.",
+      "properties": {
+        "name": {
+          "description": "Command name.",
+          "type": "string"
+        },
+        "tier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Tier"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The tier it needs; `None` when it works on any file."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "DaemonRecord": {
+      "description": "A running daemon, as recorded in `.codix/daemon.json` and in the runtime\nregistry.",
+      "properties": {
+        "pid": {
+          "description": "Its process ID.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "protocol": {
+          "description": "Its protocol version.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "root": {
+          "description": "The project root it serves.",
+          "type": "string"
+        },
+        "socket": {
+          "description": "Its socket: a file path, or a pipe name on Windows.",
+          "type": "string"
+        },
+        "started_at": {
+          "description": "When it started, in seconds since the Unix epoch.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "version": {
+          "description": "The codix version it runs.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "socket",
+        "pid",
+        "version",
+        "protocol",
+        "started_at"
+      ],
+      "type": "object"
+    },
+    "LanguageSupport": {
+      "description": "One language's support.",
+      "properties": {
+        "name": {
+          "description": "Language name.",
+          "type": "string"
+        },
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "description": "Support tier."
+        }
+      },
+      "required": [
+        "name",
+        "tier"
+      ],
+      "type": "object"
+    },
+    "ProjectLanguage": {
+      "description": "A language present in the project.",
+      "properties": {
+        "files": {
+          "description": "Indexed files of that language.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Language name.",
+          "type": "string"
+        },
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "description": "Support tier."
+        }
+      },
+      "required": [
+        "name",
+        "files",
+        "tier"
+      ],
+      "type": "object"
+    },
+    "ProjectSupport": {
+      "description": "What the index of the current project holds.",
+      "properties": {
+        "daemon": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DaemonRecord"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The daemon serving it, if one runs."
+        },
+        "files": {
+          "description": "Files in the index.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "languages": {
+          "description": "The languages of its files, most files first.",
+          "items": {
+            "$ref": "#/$defs/ProjectLanguage"
+          },
+          "type": "array"
+        },
+        "pending": {
+          "description": "Files waiting to be reparsed.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "root": {
+          "description": "The project root.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "files",
+        "pending",
+        "languages"
+      ],
+      "type": "object"
+    },
+    "Provider": {
+      "description": "One compiled-in provider.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ProviderKind",
+          "description": "Provider kind."
+        },
+        "name": {
+          "description": "Provider name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "type": "object"
+    },
+    "ProviderKind": {
+      "description": "The three kinds of provider.",
+      "oneOf": [
+        {
+          "const": "language",
+          "description": "A language pack.",
+          "type": "string"
+        },
+        {
+          "const": "build",
+          "description": "A build system.",
+          "type": "string"
+        },
+        {
+          "const": "vcs",
+          "description": "A version control system.",
+          "type": "string"
+        }
+      ]
+    },
+    "Tier": {
+      "description": "How deep support for a language goes.",
+      "oneOf": [
+        {
+          "const": "symbols",
+          "description": "Tier 1: definitions, outlines, name search, textual references.",
+          "type": "string"
+        },
+        {
+          "const": "search",
+          "description": "Keys, headings or text, for search only.",
+          "type": "string"
+        },
+        {
+          "const": "not_in_build",
+          "description": "Known to codix but left out of this build.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What this build supports.",
+  "properties": {
+    "commands": {
+      "description": "Every command, as `--help` lists them.",
+      "items": {
+        "$ref": "#/$defs/CommandSupport"
+      },
+      "type": "array"
+    },
+    "languages": {
+      "description": "Every known language, sorted by name.",
+      "items": {
+        "$ref": "#/$defs/LanguageSupport"
+      },
+      "type": "array"
+    },
+    "project": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ProjectSupport"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The current project's index; `None` outside an indexed project."
+    },
+    "providers": {
+      "description": "Compiled-in providers, sorted by kind and name.",
+      "items": {
+        "$ref": "#/$defs/Provider"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "commands",
+    "languages",
+    "providers"
+  ],
+  "title": "Capabilities",
+  "type": "object"
+}

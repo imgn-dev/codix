@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 codix-core.workspace = true
 codix-provider.workspace = true
+serde_json.workspace = true
 tempfile.workspace = true
 
 [lints]

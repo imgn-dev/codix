@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What `config` does.",
+  "oneOf": [
+    {
+      "description": "Print the effective value of a key.",
+      "properties": {
+        "form": {
+          "const": "get",
+          "type": "string"
+        },
+        "key": {
+          "description": "Dotted key.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form",
+        "key"
+      ],
+      "type": "object"
+    },
+    {
+      "description": "Set a key in its own file.",
+      "properties": {
+        "form": {
+          "const": "set",
+          "type": "string"
+        },
+        "key": {
+          "description": "Dotted key.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Value as typed.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form",
+        "key",
+        "value"
+      ],
+      "type": "object"
+    },
+    {
+      "description": "Remove a key from both files, back to its default.",
+      "properties": {
+        "form": {
+          "const": "unset",
+          "type": "string"
+        },
+        "key": {
+          "description": "Dotted key.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form",
+        "key"
+      ],
+      "type": "object"
+    },
+    {
+      "description": "Every effective value.",
+      "properties": {
+        "form": {
+          "const": "list",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form"
+      ],
+      "type": "object"
+    },
+    {
+      "description": "Meaning, type, default and file of one key or of every key.",
+      "properties": {
+        "form": {
+          "const": "describe",
+          "type": "string"
+        },
+        "key": {
+          "description": "Dotted key; every key when absent.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "form"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "ConfigRequest"
+}

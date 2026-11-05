@@ -1,0 +1,237 @@
+{
+  "$defs": {
+    "KeyDescription": {
+      "description": "A key's documentation.",
+      "properties": {
+        "default": {
+          "description": "Default value, if any.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "description": {
+          "description": "What the key means.",
+          "type": "string"
+        },
+        "file": {
+          "description": "Owning file.",
+          "type": "string"
+        },
+        "key": {
+          "description": "Dotted key; maps show a `\"<glob>\"` entry.",
+          "type": "string"
+        },
+        "type": {
+          "description": "Type and accepted values.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key",
+        "description",
+        "type",
+        "file"
+      ],
+      "type": "object"
+    },
+    "Origin": {
+      "description": "Where an effective value comes from.",
+      "oneOf": [
+        {
+          "const": "default",
+          "description": "The schema's default.",
+          "type": "string"
+        },
+        {
+          "const": "shared",
+          "description": "`codix.toml`.",
+          "type": "string"
+        },
+        {
+          "const": "local",
+          "description": "`.codix/config.toml`.",
+          "type": "string"
+        }
+      ]
+    },
+    "Setting": {
+      "description": "One effective setting.",
+      "properties": {
+        "key": {
+          "description": "Dotted key.",
+          "type": "string"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin",
+          "description": "Where the value comes from."
+        },
+        "value": {
+          "$ref": "#/$defs/Value",
+          "description": "Effective value."
+        }
+      },
+      "required": [
+        "key",
+        "value",
+        "origin"
+      ],
+      "type": "object"
+    },
+    "Value": {
+      "anyOf": [
+        {
+          "description": "A size, duration or language.",
+          "type": "string"
+        },
+        {
+          "description": "Directories.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      ],
+      "description": "A value: one string, or a list for list keys."
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What `config` answers.",
+  "oneOf": [
+    {
+      "description": "Effective values of the key: one, or every entry of a map.",
+      "properties": {
+        "form": {
+          "const": "get",
+          "type": "string"
+        },
+        "map": {
+          "description": "Whether the key is a whole map, answered with all its entries.",
+          "type": "boolean"
+        },
+        "settings": {
+          "description": "The settings found; empty when the key has no value.",
+          "items": {
+            "$ref": "#/$defs/Setting"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "form",
+        "map",
+        "settings"
+      ],
+      "type": "object"
+    },
+    {
+      "description": "The key was written.",
+      "properties": {
+        "effect": {
+          "description": "What the change implies.",
+          "type": "string"
+        },
+        "file": {
+          "description": "File written.",
+          "type": "string"
+        },
+        "form": {
+          "const": "set",
+          "type": "string"
+        },
+        "key": {
+          "description": "Dotted key.",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/Value",
+          "description": "Stored value."
+        }
+      },
+      "required": [
+        "form",
+        "key",
+        "value",
+        "file",
+        "effect"
+      ],
+      "type": "object"
+    },
+    {
+      "description": "The key was removed, or was not set.",
+      "properties": {
+        "effect": {
+          "description": "What the change implies; absent when nothing changed.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "files": {
+          "description": "Files it was removed from; empty when it was not set.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "form": {
+          "const": "unset",
+          "type": "string"
+        },
+        "key": {
+          "description": "Dotted key.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "form",
+        "key",
+        "files"
+      ],
+      "type": "object"
+    },
+    {
+      "description": "Every effective value.",
+      "properties": {
+        "form": {
+          "const": "list",
+          "type": "string"
+        },
+        "settings": {
+          "description": "Sorted by key.",
+          "items": {
+            "$ref": "#/$defs/Setting"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "form",
+        "settings"
+      ],
+      "type": "object"
+    },
+    {
+      "description": "Key documentation.",
+      "properties": {
+        "form": {
+          "const": "describe",
+          "type": "string"
+        },
+        "keys": {
+          "description": "Sorted by key.",
+          "items": {
+            "$ref": "#/$defs/KeyDescription"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "form",
+        "keys"
+      ],
+      "type": "object"
+    }
+  ],
+  "title": "ConfigResponse"
+}

@@ -1,0 +1,97 @@
+{
+  "$defs": {
+    "MatchMode": {
+      "description": "How a name query matches.",
+      "oneOf": [
+        {
+          "const": "exact",
+          "description": "The name equals the query.",
+          "type": "string"
+        },
+        {
+          "const": "prefix",
+          "description": "The name starts with the query, ignoring case.",
+          "type": "string"
+        },
+        {
+          "const": "glob",
+          "description": "The qualified name matches a glob (`*`, `?`, `[…]`), case-sensitively.",
+          "type": "string"
+        },
+        {
+          "const": "fuzzy",
+          "description": "The name is within a few edits of the query, ignoring case.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`FindOp`].",
+  "properties": {
+    "here": {
+      "default": false,
+      "description": "Limit results to the current directory's subtree.",
+      "type": "boolean"
+    },
+    "kind": {
+      "default": [],
+      "description": "Keep symbols of this kind, such as method; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "lang": {
+      "default": [],
+      "description": "Keep symbols of this language; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "limit": {
+      "default": 50,
+      "description": "Maximum number of results.",
+      "format": "uint",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "mode": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MatchMode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "How to match: `exact`, `prefix` and `fuzzy` ignore case, `glob` matches\nthe qualified name; by default exact, then prefix, then fuzzy."
+    },
+    "offset": {
+      "default": 0,
+      "description": "Number of results to skip.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "path": {
+      "default": [],
+      "description": "Limit results to this subtree; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "query": {
+      "description": "Name to look for.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "query"
+  ],
+  "title": "FindRequest",
+  "type": "object"
+}

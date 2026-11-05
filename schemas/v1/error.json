@@ -1,0 +1,81 @@
+{
+  "$defs": {
+    "ErrorBody": {
+      "description": "An error, as `--json` prints it.",
+      "properties": {
+        "candidates": {
+          "description": "Symbol IDs that match, for `ambiguous_symbol`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "cause": {
+          "description": "One line saying what went wrong.",
+          "type": "string"
+        },
+        "code": {
+          "description": "Stable code, such as `ambiguous_symbol`.",
+          "type": "string"
+        },
+        "hint": {
+          "description": "The next step.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "cause",
+        "hint",
+        "candidates"
+      ],
+      "type": "object"
+    },
+    "Warning": {
+      "description": "Something the user should know about a response that does not stop it,\nsuch as an index on a network filesystem.",
+      "properties": {
+        "code": {
+          "description": "Stable code, such as `network_filesystem`.",
+          "type": "string"
+        },
+        "message": {
+          "description": "One line describing the risk.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What `--json` prints for an error.",
+  "properties": {
+    "error": {
+      "$ref": "#/$defs/ErrorBody",
+      "description": "The error."
+    },
+    "schema_version": {
+      "description": "Version of the JSON output format; incremented on breaking changes only.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "warnings": {
+      "description": "Warnings about the project.",
+      "items": {
+        "$ref": "#/$defs/Warning"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "error",
+    "warnings"
+  ],
+  "title": "ErrorEnvelope",
+  "type": "object"
+}

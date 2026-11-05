@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`GrepOp`].",
+  "properties": {
+    "here": {
+      "default": false,
+      "description": "Limit results to the current directory's subtree.",
+      "type": "boolean"
+    },
+    "kind": {
+      "default": [],
+      "description": "Keep matches inside a symbol of this kind; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "lang": {
+      "default": [],
+      "description": "Search files of this language; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "limit": {
+      "default": 50,
+      "description": "Maximum number of results.",
+      "format": "uint",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "offset": {
+      "default": 0,
+      "description": "Number of results to skip.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "path": {
+      "default": [],
+      "description": "Limit results to this subtree; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "pattern": {
+      "description": "Regular expression, matched line by line.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "pattern"
+  ],
+  "title": "GrepRequest",
+  "type": "object"
+}

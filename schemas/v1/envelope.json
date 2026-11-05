@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "Warning": {
+      "description": "Something the user should know about a response that does not stop it,\nsuch as an index on a network filesystem.",
+      "properties": {
+        "code": {
+          "description": "Stable code, such as `network_filesystem`.",
+          "type": "string"
+        },
+        "message": {
+          "description": "One line describing the risk.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What `--json` prints for a response.",
+  "properties": {
+    "command": {
+      "description": "The command.",
+      "type": "string"
+    },
+    "result": {
+      "description": "Its result; each command's own schema."
+    },
+    "schema_version": {
+      "description": "Version of the JSON output format; incremented on breaking changes only.",
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "warnings": {
+      "description": "Warnings about the project.",
+      "items": {
+        "$ref": "#/$defs/Warning"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "schema_version",
+    "command",
+    "result",
+    "warnings"
+  ],
+  "title": "Envelope",
+  "type": "object"
+}

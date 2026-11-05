@@ -1,0 +1,103 @@
+{
+  "$defs": {
+    "Skip": {
+      "description": "Why a file was left out of the walk.",
+      "oneOf": [
+        {
+          "const": "too_large",
+          "description": "Over `index.max_file_size`.",
+          "type": "string"
+        },
+        {
+          "const": "link_outside_root",
+          "description": "A symlink whose target is outside the project root.",
+          "type": "string"
+        },
+        {
+          "const": "non_utf8_name",
+          "description": "A name that is not valid UTF-8.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What a scan did.",
+  "properties": {
+    "deleted": {
+      "description": "Files removed from the index.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "errors": {
+      "description": "Files that could not be read, as (path, error).",
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "type": "array"
+      },
+      "type": "array"
+    },
+    "indexed": {
+      "description": "Files parsed: new, changed, or with a new parser version.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "pending": {
+      "description": "Files that kept changing during the scan, left for the next one.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "skipped": {
+      "description": "Files left out by the walk, with the reason.",
+      "items": {
+        "maxItems": 2,
+        "minItems": 2,
+        "prefixItems": [
+          {
+            "type": "string"
+          },
+          {
+            "$ref": "#/$defs/Skip"
+          }
+        ],
+        "type": "array"
+      },
+      "type": "array"
+    },
+    "touched": {
+      "description": "Files whose stat changed but not their content.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "unchanged": {
+      "description": "Files compared and found unchanged.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "indexed",
+    "touched",
+    "deleted",
+    "unchanged",
+    "pending",
+    "skipped",
+    "errors"
+  ],
+  "title": "ScanReport",
+  "type": "object"
+}

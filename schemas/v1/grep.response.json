@@ -1,0 +1,107 @@
+{
+  "$defs": {
+    "FileId": {
+      "description": "A file or directory identity: its root-relative path with `/` separators,\nthe case found on disk, and symlinks resolved. The root itself is `\"\"`.",
+      "type": "string"
+    },
+    "GrepMatch": {
+      "description": "One match.",
+      "properties": {
+        "column": {
+          "description": "1-based column, in Unicode scalar values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "enclosing": {
+          "description": "Qualified name of the innermost symbol around the match.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "enclosing_kind": {
+          "description": "Kind of that symbol.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line": {
+          "description": "1-based line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Path relative to the cwd, with `/` separators.",
+          "type": "string"
+        },
+        "root_path": {
+          "$ref": "#/$defs/FileId",
+          "description": "Root-relative path."
+        },
+        "text": {
+          "description": "The line, cut to 200 characters.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "line",
+        "column",
+        "text"
+      ],
+      "type": "object"
+    },
+    "Paged": {
+      "description": "One page of results and the total they were taken from.",
+      "properties": {
+        "items": {
+          "description": "The results in this page.",
+          "items": {
+            "$ref": "#/$defs/GrepMatch"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "description": "Number of results skipped.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total": {
+          "description": "Number of results before paging.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "offset"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What [`GrepOp`] answers.",
+  "properties": {
+    "matches": {
+      "$ref": "#/$defs/Paged",
+      "description": "Matches, by path and position."
+    },
+    "possibly_stale": {
+      "description": "Whether another process held the write lock, so the scan before the\nsearch could not run.",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "matches",
+    "possibly_stale"
+  ],
+  "title": "GrepResponse",
+  "type": "object"
+}

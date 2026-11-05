@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`DefOp`].",
+  "properties": {
+    "here": {
+      "default": false,
+      "description": "Limit results to the current directory's subtree.",
+      "type": "boolean"
+    },
+    "kind": {
+      "default": [],
+      "description": "Consider symbols of this kind only; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "path": {
+      "default": [],
+      "description": "Limit results to this subtree; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "symbol": {
+      "description": "Symbol ID, its path part, `file:line:col`, or a name.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol"
+  ],
+  "title": "DefRequest",
+  "type": "object"
+}

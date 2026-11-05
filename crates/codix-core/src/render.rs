@@ -608,28 +608,52 @@ impl TextRender for StatusResponse {
     }
 }
 
-#[derive(Serialize)]
+/// What `--json` prints for a response.
+#[derive(Serialize, schemars::JsonSchema)]
 struct Envelope<'a, R> {
+    /// Version of the JSON output format; incremented on breaking changes only.
     schema_version: u32,
+    /// The command.
     command: &'a str,
+    /// Its result; each command's own schema.
     result: &'a R,
+    /// Warnings about the project.
     warnings: &'a [Warning],
 }
 
-#[derive(Serialize)]
+/// What `--json` prints for an error.
+#[derive(Serialize, schemars::JsonSchema)]
 struct ErrorEnvelope<'a> {
+    /// Version of the JSON output format; incremented on breaking changes only.
     schema_version: u32,
+    /// The error.
     error: ErrorBody<'a>,
+    /// Warnings about the project.
     warnings: &'a [Warning],
 }
 
-#[derive(Serialize)]
+/// An error, as `--json` prints it.
+#[derive(Serialize, schemars::JsonSchema)]
 struct ErrorBody<'a> {
+    /// Stable code, such as `ambiguous_symbol`.
     code: &'a str,
+    /// One line saying what went wrong.
     cause: String,
+    /// The next step.
     hint: String,
+    /// Symbol IDs that match, for `ambiguous_symbol`.
     #[serde(skip_serializing_if = "<[String]>::is_empty")]
     candidates: &'a [String],
+}
+
+/// The schema of every response's JSON envelope, any result.
+pub fn envelope_schema() -> schemars::Schema {
+    schemars::schema_for!(Envelope<'static, serde_json::Value>)
+}
+
+/// The schema of every error's JSON envelope.
+pub fn error_schema() -> schemars::Schema {
+    schemars::schema_for!(ErrorEnvelope<'static>)
 }
 
 /// Writes a response as one line of JSON.

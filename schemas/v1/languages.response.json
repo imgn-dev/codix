@@ -1,0 +1,74 @@
+{
+  "$defs": {
+    "LanguageInfo": {
+      "description": "One language and the files it covers.",
+      "properties": {
+        "extensions": {
+          "description": "File extensions, without the dot.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "filenames": {
+          "description": "Exact file names, such as `Gemfile`.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Language name.",
+          "type": "string"
+        },
+        "tier": {
+          "$ref": "#/$defs/Tier",
+          "description": "Support tier; `not_in_build` when this build leaves it out."
+        }
+      },
+      "required": [
+        "name",
+        "tier",
+        "extensions",
+        "filenames"
+      ],
+      "type": "object"
+    },
+    "Tier": {
+      "description": "How deep support for a language goes.",
+      "oneOf": [
+        {
+          "const": "symbols",
+          "description": "Tier 1: definitions, outlines, name search, textual references.",
+          "type": "string"
+        },
+        {
+          "const": "search",
+          "description": "Keys, headings or text, for search only.",
+          "type": "string"
+        },
+        {
+          "const": "not_in_build",
+          "description": "Known to codix but left out of this build.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What `languages` lists.",
+  "properties": {
+    "languages": {
+      "description": "Every known language, sorted by name.",
+      "items": {
+        "$ref": "#/$defs/LanguageInfo"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "languages"
+  ],
+  "title": "LanguagesResponse",
+  "type": "object"
+}

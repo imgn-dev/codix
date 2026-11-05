@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`InitOp`].",
+  "properties": {
+    "agent_docs": {
+      "default": null,
+      "description": "Also write a workflow guide for agents to this file, relative to the root.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "title": "InitRequest",
+  "type": "object"
+}

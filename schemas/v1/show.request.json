@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`ShowOp`].",
+  "properties": {
+    "context": {
+      "default": 0,
+      "description": "Lines shown before and after the symbol.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "here": {
+      "default": false,
+      "description": "Limit results to the current directory's subtree.",
+      "type": "boolean"
+    },
+    "kind": {
+      "default": [],
+      "description": "Consider symbols of this kind only; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "path": {
+      "default": [],
+      "description": "Limit results to this subtree; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "symbol": {
+      "description": "Symbol ID, its path part, `file:line:col`, or a name.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol"
+  ],
+  "title": "ShowRequest",
+  "type": "object"
+}
