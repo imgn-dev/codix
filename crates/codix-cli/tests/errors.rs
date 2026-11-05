@@ -182,3 +182,14 @@ fn usage_names_codix_whatever_the_binary_is_called() {
         out.stderr
     );
 }
+
+#[test]
+fn usage_names_the_missing_argument() {
+    let dir = tempfile::tempdir().expect("temp dir");
+    let out = run_in(dir.path(), CODIX, &["config"]);
+    assert_eq!(out.code, Some(2));
+    assert_eq!(
+        out.stderr.lines().next(),
+        Some("error[usage]: the following required arguments were not provided: <KEY>")
+    );
+}

@@ -8,7 +8,10 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+codix-provider.workspace = true
+globset.workspace = true
 serde.workspace = true
+toml_edit.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true

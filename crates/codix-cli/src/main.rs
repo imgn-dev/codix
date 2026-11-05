@@ -12,6 +12,7 @@ use std::process::ExitCode;
 use clap::error::ErrorKind;
 use clap::{Args, Parser, Subcommand};
 use codix_core::Error;
+use codix_core::config::{ConfigOp, ConfigRequest};
 use codix_core::debug::{DebugEcho, DebugEchoRequest};
 use codix_core::error::exit;
 use codix_core::op::{Context, Operation, Outcome};
@@ -45,9 +46,55 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Read or edit codix.toml and .codix/config.toml, like `git config`.
+    Config(ConfigArgs),
     /// Echo synthetic results, to exercise output rendering.
     #[command(name = "debug-echo", hide = true)]
     DebugEcho(DebugEchoArgs),
+}
+
+#[derive(Args)]
+struct ConfigArgs {
+    /// Dotted key, such as `index.max_file_size` or `languages.overrides."*.h"`.
+    #[arg(required_unless_present_any = ["list", "describe"])]
+    key: Option<String>,
+    /// New value; without it, the effective value is printed.
+    #[arg(conflicts_with_all = ["unset", "list", "describe"])]
+    value: Option<String>,
+    #[command(flatten)]
+    form: ConfigForm,
+    /// With --list, the file each value comes from.
+    #[arg(long, requires = "list")]
+    show_origin: bool,
+}
+
+#[derive(Args)]
+#[group(multiple = false)]
+struct ConfigForm {
+    /// Remove the key, back to its default.
+    #[arg(long, requires = "key")]
+    unset: bool,
+    /// Every effective value.
+    #[arg(long, conflicts_with = "key")]
+    list: bool,
+    /// Meaning, type, default, allowed values and file of a key, or of every key.
+    #[arg(long)]
+    describe: bool,
+}
+
+impl ConfigArgs {
+    fn request(self) -> (ConfigRequest, bool) {
+        let form = self.form;
+        let request = match (self.key, self.value) {
+            _ if form.list => ConfigRequest::List,
+            (key, _) if form.describe => ConfigRequest::Describe { key },
+            (Some(key), _) if form.unset => ConfigRequest::Unset { key },
+            (Some(key), Some(value)) => ConfigRequest::Set { key, value },
+            (Some(key), None) => ConfigRequest::Get { key },
+            (None, _) => unreachable!("clap requires a key without --list or --describe"),
+        };
+        (request, self.show_origin)
+    }
 }
 
 #[derive(Args)]
@@ -104,6 +151,8 @@ impl PageArgs {
 /// Where and how to write.
 struct Output {
     json: bool,
+    /// `config --list --show-origin`.
+    show_origin: bool,
     stdout: Style,
     stderr: Style,
 }
@@ -113,11 +162,14 @@ impl Output {
         let color_allowed = env::var_os("NO_COLOR").is_none_or(|value| value.is_empty());
         Self {
             json,
+            show_origin: false,
             stdout: Style {
                 color: color_allowed && io::stdout().is_terminal(),
+                show_origin: false,
             },
             stderr: Style {
                 color: color_allowed && io::stderr().is_terminal(),
+                show_origin: false,
             },
         }
     }
@@ -131,7 +183,11 @@ impl Output {
         let written = if self.json {
             render::json_response(&mut stdout, command, response, &[])
         } else {
-            response.render_text(&mut stdout, self.stdout)
+            let style = Style {
+                show_origin: self.show_origin,
+                ..self.stdout
+            };
+            response.render_text(&mut stdout, style)
         };
         let code = if response.has_results() {
             exit::SUCCESS
@@ -175,12 +231,18 @@ where
 /// version requests, which clap prints itself.
 fn usage_error(error: &clap::Error) -> Error {
     let rendered = error.render().to_string();
-    let cause = rendered
-        .lines()
+    // The first line, plus the indented lines clap lists under it (such as
+    // the missing arguments), on one line.
+    let mut lines = rendered.lines();
+    let mut cause = lines
         .next()
         .unwrap_or_default()
         .trim_start_matches("error: ")
         .to_owned();
+    for detail in lines.take_while(|line| line.starts_with(' ')) {
+        cause.push(' ');
+        cause.push_str(detail.trim());
+    }
     let hint = rendered
         .lines()
         .find_map(|line| line.strip_prefix("Usage: "))
@@ -220,6 +282,14 @@ fn main() -> ExitCode {
         Err(error) => return ExitCode::from(output.error(&error)),
     };
     let code = match cli.command {
+        Command::Config(args) => {
+            let (request, show_origin) = args.request();
+            let output = Output {
+                show_origin,
+                ..output
+            };
+            run(&output, &ConfigOp, &ctx, Ok(request))
+        }
         Command::DebugEcho(args) => {
             let request = args.page.page().map(|page| DebugEchoRequest {
                 count: args.count,

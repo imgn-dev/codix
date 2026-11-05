@@ -3,6 +3,7 @@
 use std::io::{self, Write};
 
 use codix_core::Error;
+use codix_core::config::{ConfigResponse, Setting};
 use codix_core::debug::EchoItem;
 use codix_core::op::Warning;
 use codix_core::page::{Location, Paged};
@@ -13,10 +14,12 @@ pub(crate) const SCHEMA_VERSION: u32 = 1;
 
 const COLUMN_GAP: &str = "  ";
 
-/// Whether to color a stream.
+/// How to render to a stream.
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Style {
     pub(crate) color: bool,
+    /// `config --list --show-origin`.
+    pub(crate) show_origin: bool,
 }
 
 impl Style {
@@ -113,6 +116,76 @@ fn footer<T>(page: &Paged<T>) -> String {
         Some(next) => format!("{shown} of {} {noun}; next: --offset {next}", page.total),
         None => format!("{shown} of {} {noun}", page.total),
     }
+}
+
+impl TextRender for ConfigResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        match self {
+            Self::Get {
+                map: false,
+                settings,
+            } => settings
+                .iter()
+                .try_for_each(|s| writeln!(w, "{}", s.value.display())),
+            Self::Get {
+                map: true,
+                settings,
+            } => render_settings(w, settings, false),
+            Self::Set {
+                key,
+                value,
+                file,
+                effect,
+            } => {
+                writeln!(w, "set {key} = {} in {file}", value.display())?;
+                writeln!(w, "{effect}")
+            }
+            Self::Unset { key, files, effect } => {
+                if files.is_empty() {
+                    return writeln!(w, "{key} was not set");
+                }
+                writeln!(w, "unset {key} in {}", files.join(", "))?;
+                if let Some(effect) = effect {
+                    writeln!(w, "{effect}")?;
+                }
+                Ok(())
+            }
+            Self::List { settings } => render_settings(w, settings, style.show_origin),
+            Self::Describe { keys } => {
+                for (i, key) in keys.iter().enumerate() {
+                    if i > 0 {
+                        writeln!(w)?;
+                    }
+                    writeln!(w, "{}", key.key)?;
+                    writeln!(w, "  {}", key.description)?;
+                    writeln!(w, "  type: {}", key.kind)?;
+                    writeln!(w, "  default: {}", key.default.as_deref().unwrap_or("none"))?;
+                    writeln!(w, "  file: {}", key.file)?;
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+fn render_settings(w: &mut dyn Write, settings: &[Setting], show_origin: bool) -> io::Result<()> {
+    let width = settings
+        .iter()
+        .map(|s| s.origin.display().len())
+        .max()
+        .unwrap_or(0);
+    for setting in settings {
+        if show_origin {
+            let origin = setting.origin.display();
+            write!(
+                w,
+                "{origin}{}{COLUMN_GAP}",
+                " ".repeat(width - origin.len())
+            )?;
+        }
+        writeln!(w, "{} = {}", setting.key, setting.value.display())?;
+    }
+    Ok(())
 }
 
 #[derive(Serialize)]
@@ -212,7 +285,14 @@ mod tests {
 
     fn text(page: &Paged<EchoItem>, color: bool) -> String {
         let mut out = Vec::new();
-        page.render_text(&mut out, Style { color }).unwrap();
+        page.render_text(
+            &mut out,
+            Style {
+                color,
+                show_origin: false,
+            },
+        )
+        .unwrap();
         String::from_utf8(out).unwrap()
     }
 
@@ -235,7 +315,15 @@ mod tests {
         let error = Error::UnknownSymbol {
             query: "x".to_owned(),
         };
-        text_error(&mut out, &error, Style { color: true }).unwrap();
+        text_error(
+            &mut out,
+            &error,
+            Style {
+                color: true,
+                show_origin: false,
+            },
+        )
+        .unwrap();
         let out = String::from_utf8(out).unwrap();
         assert!(out.starts_with("\x1b[1;31merror\x1b[0m[unknown_symbol]: "));
         assert!(out.contains("\x1b[1mhint\x1b[0m: "));
