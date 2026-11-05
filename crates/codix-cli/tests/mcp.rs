@@ -151,16 +151,15 @@ fn tools_are_the_operations_and_each_takes_a_cwd() {
             tool["inputSchema"]["properties"]["cwd"].is_object(),
             "{tool}"
         );
-        assert_eq!(
-            tool["outputSchema"]["properties"]["schema_version"]["const"], 1,
-            "{tool}"
-        );
+        // Clients give the model structured output instead of the text when
+        // there is any: the text is the compact form.
+        assert!(tool.get("outputSchema").is_none(), "{tool}");
     }
 }
 
 #[cfg(feature = "lang-java")]
 #[test]
-fn results_carry_the_cli_text_and_json() {
+fn results_carry_the_cli_text_only() {
     let (_guard, root) = indexed(CODIX, BILLING);
     let mut client = Client::start(&root);
     let result = client.call(
@@ -176,13 +175,7 @@ fn results_carry_the_cli_text_and_json() {
         .output()
         .expect("codix find");
     assert_eq!(text(&result), String::from_utf8_lossy(&cli.stdout));
-    let cli_json = Command::new(CODIX)
-        .args(["find", "Invoice", "--json"])
-        .current_dir(root.join("src"))
-        .output()
-        .expect("codix find --json");
-    let expected: Value = serde_json::from_slice(&cli_json.stdout).expect("JSON");
-    assert_eq!(result["structuredContent"], expected);
+    assert!(result.get("structuredContent").is_none(), "{result}");
 }
 
 #[cfg(feature = "lang-java")]
@@ -196,10 +189,7 @@ fn one_server_answers_for_several_projects() {
     let beta = client.call(3, "find", &json!({ "query": "Beta", "cwd": b }));
     assert!(text(&beta).starts_with("B.java:1:7"), "{beta}");
     let none = client.call(4, "find", &json!({ "query": "Beta", "cwd": a }));
-    assert_eq!(
-        none["structuredContent"]["result"]["results"]["total"], 0,
-        "{none}"
-    );
+    assert!(!text(&none).contains("B.java"), "{none}");
 }
 
 #[test]
@@ -219,8 +209,11 @@ fn calls_in_flight_are_answered_independently() {
     let status = client.response(3);
     let grep = client.response(2);
     assert_eq!(status["result"]["isError"], false, "{status}");
-    assert_eq!(
-        grep["result"]["structuredContent"]["result"]["matches"]["total"], 2,
+    let grep = grep["result"]["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        grep.contains("src/Invoice.java:2:") && grep.contains("src/Cart.java:2:"),
         "{grep}"
     );
 }

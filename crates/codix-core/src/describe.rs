@@ -200,7 +200,7 @@ pub const COMMANDS: &[Description] = &[
         name: "mcp",
         summary: "Serve codix's commands as MCP tools on stdin and stdout.",
         when: "To give an agent codix as tools: add `codix mcp` as an MCP server. Each call can name its directory, so one server covers several projects.",
-        returns: "MCP tool results: the text the CLI prints, and its JSON as structured content.",
+        returns: "MCP tool results with the text the CLI prints; `--json` on the CLI gives the JSON.",
         tier: None,
         example: "codix mcp",
     },
