@@ -1,0 +1,20 @@
+5:7 constant Pi | Pi, Tau
+5:11 constant Tau | Pi, Tau
+7:5 variable registry | registry
+9:6 interface Shape | Shape interface
+10:2 method Shape.Area | Area() float64
+11:2 method Shape.Name | Name() string
+14:6 struct Point | Point struct
+15:2 field Point.X | X, Y float64
+15:5 field Point.Y | X, Y float64
+16:2 field Point.label | label string
+19:6 type_alias Celsius | Celsius float64
+21:6 type_alias Alias | Alias = Point
+23:6 struct Box | Box[T any] struct
+23:25 field Box.items | items []T
+25:6 function NewPoint | func NewPoint(x, y float64) *Point
+30:17 method Point.Move | func (p *Point) Move(dx float64)
+34:16 method Point.Area | func (p Point) Area() float64
+36:18 method Box.Len | func (b *Box[T]) Len() int
+38:18 method Celsius.String | func (c Celsius) String() string
+40:6 function distance | func distance(a, b Point) float64

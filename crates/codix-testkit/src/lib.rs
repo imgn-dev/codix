@@ -105,3 +105,54 @@ pub fn check_corpus(dir: impl AsRef<Path>, extract: impl Fn(&str, &str) -> Vec<S
         assert_golden(dir.join(format!("{name}.symbols")), &actual);
     }
 }
+
+/// Checks the corpus of a compiled-in language, `corpus/<language>`: each
+/// symbol as `line:col kind qualified [visibility] (low) | signature`.
+///
+/// # Panics
+///
+/// When the language is not compiled in, or its corpus differs.
+pub fn check_language_corpus(language: &str) {
+    use codix_core::store::Confidence;
+
+    let registry = codix_provider::registry();
+    let descriptor = registry
+        .languages
+        .iter()
+        .find(|d| d.name == language)
+        .unwrap_or_else(|| panic!("{language} is not compiled in"));
+    let grammar = registry
+        .grammars
+        .get(language)
+        .unwrap_or_else(|| panic!("{language} has no grammar"));
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../corpus")
+        .join(language);
+    check_corpus(dir, |name, content| {
+        codix_core::parse::extract(descriptor, grammar, name, content)
+            .expect("extract")
+            .iter()
+            .map(|s| {
+                let visibility = s
+                    .visibility
+                    .as_ref()
+                    .map(|v| format!(" [{v}]"))
+                    .unwrap_or_default();
+                let low = if s.confidence == Confidence::Low {
+                    " (low)"
+                } else {
+                    ""
+                };
+                let signature = s
+                    .signature
+                    .as_ref()
+                    .map(|v| format!(" | {v}"))
+                    .unwrap_or_default();
+                format!(
+                    "{}:{} {} {}{visibility}{low}{signature}",
+                    s.name_range.start.line, s.name_range.start.column, s.kind, s.qualified_name
+                )
+            })
+            .collect()
+    });
+}

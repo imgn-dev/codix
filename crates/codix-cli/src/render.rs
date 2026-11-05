@@ -3,10 +3,12 @@
 use std::io::{self, Write};
 
 use codix_core::Error;
+use codix_core::capabilities::{Capabilities, Tier};
 use codix_core::config::{ConfigResponse, Setting};
 use codix_core::debug::EchoItem;
 use codix_core::op::Warning;
 use codix_core::page::{Location, Paged};
+use codix_provider::ProviderKind;
 use serde::Serialize;
 
 /// Version of the JSON output format; incremented on breaking changes only.
@@ -186,6 +188,43 @@ fn render_settings(w: &mut dyn Write, settings: &[Setting], show_origin: bool) -
         writeln!(w, "{} = {}", setting.key, setting.value.display())?;
     }
     Ok(())
+}
+
+impl TextRender for Capabilities {
+    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+        let width = self
+            .languages
+            .iter()
+            .map(|l| l.name.len())
+            .max()
+            .unwrap_or(0);
+        writeln!(w, "languages:")?;
+        for language in &self.languages {
+            let tier = match language.tier {
+                Tier::Symbols => "tier 1 (symbols)",
+                Tier::Search => "search only",
+                Tier::NotInBuild => "not in this build",
+            };
+            writeln!(w, "  {:width$}{COLUMN_GAP}{tier}", language.name)?;
+        }
+        writeln!(w, "providers:")?;
+        for kind in [
+            ProviderKind::Language,
+            ProviderKind::Build,
+            ProviderKind::Vcs,
+        ] {
+            let names: Vec<&str> = self
+                .providers
+                .iter()
+                .filter(|p| p.kind == kind)
+                .map(|p| p.name.as_str())
+                .collect();
+            if !names.is_empty() {
+                writeln!(w, "  {kind:8}{COLUMN_GAP}{}", names.join(", "))?;
+            }
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize)]

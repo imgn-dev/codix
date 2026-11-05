@@ -19,7 +19,7 @@ pub enum ProviderKind {
 
 impl fmt::Display for ProviderKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(match self {
+        f.pad(match self {
             Self::Language => "language",
             Self::Build => "build",
             Self::Vcs => "vcs",
@@ -38,6 +38,10 @@ pub struct LanguageDescriptor {
     /// Prefix of the language's symbol IDs, such as `py` in
     /// `py:src/billing/invoice.py::Invoice.total#a3f9`.
     pub id_prefix: String,
+    /// Whether symbols are extracted for search only, as keys of a data file
+    /// or headings of a document, rather than as code definitions.
+    #[serde(default)]
+    pub search_only: bool,
     /// How files of the language are recognized.
     #[serde(default)]
     pub detect: Detect,
@@ -77,6 +81,10 @@ pub struct Symbols {
     /// Fields holding a definition's body; its signature is the text before.
     #[serde(default)]
     pub body_fields: Vec<String>,
+    /// Tokens opening a body that no field holds, such as `{` for a Go
+    /// struct: the signature ends at the first one after the name.
+    #[serde(default)]
+    pub body_tokens: Vec<String>,
     /// `@definition.<kind>` capture kinds mapped onto [`SYMBOL_KINDS`]; a kind
     /// already in the vocabulary maps to itself.
     #[serde(default)]
@@ -90,6 +98,7 @@ impl Default for Symbols {
         Self {
             separator: default_separator(),
             body_fields: Vec::new(),
+            body_tokens: Vec::new(),
             kinds: std::collections::BTreeMap::new(),
             visibility: None,
         }

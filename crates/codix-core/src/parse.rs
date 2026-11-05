@@ -48,10 +48,14 @@ fn tags_query(name: &str, grammar: &Grammar) -> Result<Arc<Query>, Error> {
 }
 
 /// A definition captured by the `tags` query.
+/// A definition captured by the `tags` query. `@parent` names the enclosing
+/// type of a definition written outside it, such as a Go method's receiver or
+/// the type of a Rust `impl` block.
 struct Definition<'tree> {
     node: Node<'tree>,
     name: Node<'tree>,
     kind: String,
+    parent: Option<Node<'tree>>,
 }
 
 /// Extracts the symbols of one file.
@@ -104,24 +108,31 @@ fn definitions<'tree>(
     let mut matches = cursor.matches(query, root, content.as_bytes());
     let mut found = Vec::new();
     while let Some(m) = matches.next() {
-        let mut name = None;
+        // One match may name several symbols, as `const a, b = 1, 2` does.
+        let mut declared = Vec::new();
         let mut definition = None;
+        let mut parent = None;
         for capture in m.captures() {
             let capture_name = names[capture.index as usize];
             if capture_name == "name" {
-                name = Some(capture.node);
+                declared.push(capture.node);
+            } else if capture_name == "parent" {
+                parent = Some(capture.node);
             } else if let Some(kind) = capture_name.strip_prefix("definition.") {
                 definition = Some((capture.node, kind));
             }
         }
-        if let (Some(name), Some((node, kind))) = (name, definition)
+        if let Some((node, kind)) = definition
             && let Some(kind) = descriptor.symbol_kind(kind)
         {
-            found.push(Definition {
-                node,
-                name,
-                kind: kind.to_owned(),
-            });
+            for name in declared {
+                found.push(Definition {
+                    node,
+                    name,
+                    kind: kind.to_owned(),
+                    parent,
+                });
+            }
         }
     }
     found.sort_by_key(|d| {
@@ -162,13 +173,16 @@ fn symbols(
         let name = text(content, definition.name);
         let parent_index = open.last().copied();
         let parent = parent_index.map(|p| &rows[p]);
-        let qualified_name = match parent {
-            Some(parent) => format!(
-                "{}{}{name}",
-                parent.qualified_name, descriptor.symbols.separator
-            ),
-            None => name.to_owned(),
-        };
+        let separator = &descriptor.symbols.separator;
+        let qualified_name = [
+            parent.map(|p| p.qualified_name.clone()),
+            definition.parent.map(|p| text(content, p).to_owned()),
+            Some(name.to_owned()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join(separator);
         let signature = signature(descriptor, content, definition);
         let symbol_id = symbol_id::format(
             &descriptor.id_prefix,
@@ -218,7 +232,36 @@ fn header_end(descriptor: &LanguageDescriptor, definition: &Definition<'_>) -> u
     };
     body_start(definition.node)
         .or_else(|| declarator(definition).and_then(body_start))
+        .or_else(|| body_token(descriptor, definition))
         .unwrap_or(definition.node.end_byte())
+}
+
+/// The first body-opening token after the name, anywhere in the definition.
+fn body_token(descriptor: &LanguageDescriptor, definition: &Definition<'_>) -> Option<usize> {
+    let tokens = &descriptor.symbols.body_tokens;
+    if tokens.is_empty() {
+        return None;
+    }
+    let after = definition.name.end_byte();
+    let mut cursor = definition.node.walk();
+    let mut found = None;
+    'walk: loop {
+        let node = cursor.node();
+        if node.start_byte() >= after && !node.is_named() && tokens.iter().any(|t| t == node.kind())
+        {
+            found = Some(node.start_byte());
+            break;
+        }
+        if node.end_byte() > after && cursor.goto_first_child() {
+            continue;
+        }
+        while !cursor.goto_next_sibling() {
+            if !cursor.goto_parent() {
+                break 'walk;
+            }
+        }
+    }
+    found
 }
 
 /// The node declaring the name when the definition declares several, such as

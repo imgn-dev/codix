@@ -7,5 +7,9 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[dependencies]
+codix-core.workspace = true
+codix-provider.workspace = true
+
 [lints]
 workspace = true

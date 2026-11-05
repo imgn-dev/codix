@@ -5,6 +5,8 @@ mod render;
 
 // Providers register themselves at link time; naming each enabled one here is
 // what links it in.
+#[cfg(feature = "lang-go")]
+use codix_lang_go as _;
 #[cfg(feature = "lang-java")]
 use codix_lang_java as _;
 #[cfg(feature = "vcs-git")]
@@ -23,6 +25,7 @@ use std::process::ExitCode;
 use clap::error::ErrorKind;
 use clap::{Args, Parser, Subcommand};
 use codix_core::Error;
+use codix_core::capabilities::{CapabilitiesOp, CapabilitiesRequest};
 use codix_core::config::{ConfigOp, ConfigRequest};
 use codix_core::debug::{DebugEcho, DebugEchoRequest};
 use codix_core::error::exit;
@@ -57,6 +60,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// What this build supports: each language's tier and the compiled-in providers.
+    Capabilities,
     /// Read or edit codix.toml and .codix/config.toml, like `git config`.
     Config(ConfigArgs),
     /// Echo synthetic results, to exercise output rendering.
@@ -311,6 +316,7 @@ fn main() -> ExitCode {
         ..output
     };
     let code = match cli.command {
+        Command::Capabilities => run(&output, &CapabilitiesOp, &ctx, Ok(CapabilitiesRequest {})),
         Command::Config(args) => {
             let (request, show_origin) = args.request();
             let output = Output {
@@ -339,11 +345,12 @@ mod tests {
 
     #[test]
     fn compiled_in_providers_match_enabled_features() {
-        let expected: Vec<(ProviderKind, &str)> = [
+        let mut expected: Vec<(ProviderKind, &str)> = [
             (
                 cfg!(feature = "lang-java"),
                 (ProviderKind::Language, "java"),
             ),
+            (cfg!(feature = "lang-go"), (ProviderKind::Language, "go")),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
             (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),
@@ -351,7 +358,28 @@ mod tests {
         .into_iter()
         .filter_map(|(enabled, provider)| enabled.then_some(provider))
         .collect();
+        expected.sort_unstable();
         assert_eq!(registry().names(), expected);
+    }
+
+    #[test]
+    fn compiled_in_languages_with_a_grammar_are_tier_1() {
+        use codix_core::capabilities::{Tier, capabilities};
+        for language in capabilities().languages {
+            let compiled = registry()
+                .languages
+                .iter()
+                .find(|d| d.name == language.name);
+            let expected = match compiled {
+                Some(d) if !d.search_only && registry().grammars.contains_key(&d.name) => {
+                    Tier::Symbols
+                }
+                Some(_) => Tier::Search,
+                None if language.name == "text" => Tier::Search,
+                None => Tier::NotInBuild,
+            };
+            assert_eq!(language.tier, expected, "{}", language.name);
+        }
     }
 
     #[test]
