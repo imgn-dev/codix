@@ -153,10 +153,29 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
+name = "codix-build-gradle"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+ "tempfile",
+]
+
+[[package]]
+name = "codix-build-maven"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+ "roxmltree",
+ "tempfile",
+]
+
+[[package]]
 name = "codix-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "codix-build-gradle",
+ "codix-build-maven",
  "codix-core",
  "codix-lang-c",
  "codix-lang-cpp",
@@ -191,6 +210,8 @@ name = "codix-core"
 version = "0.1.0"
 dependencies = [
  "blake3",
+ "codix-build-gradle",
+ "codix-build-maven",
  "codix-lang-java",
  "codix-provider",
  "codix-vcs-git",
@@ -748,6 +769,15 @@ name = "regex-syntax"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
+
+[[package]]
+name = "roxmltree"
+version = "0.21.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9da7f59328b09405b181fee1018925fad50f157afb43c0c0f5c522c256dd5907"
+dependencies = [
+ "memchr",
+]
 
 [[package]]
 name = "rsqlite-vfs"

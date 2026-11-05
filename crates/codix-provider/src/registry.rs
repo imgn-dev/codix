@@ -17,6 +17,8 @@ pub struct ProviderEntry {
     pub descriptor: &'static str,
     /// A language pack's grammar, if it parses.
     pub grammar: Option<Grammar>,
+    /// A build system's logic.
+    pub resolver: Option<&'static dyn crate::BuildResolver>,
 }
 
 /// A compiled-in tree-sitter grammar and the pack's queries for it.
@@ -47,6 +49,8 @@ pub struct Registry {
     pub vcs: Vec<VcsDescriptor>,
     /// Grammars of language packs, by language name.
     pub grammars: std::collections::BTreeMap<String, Grammar>,
+    /// Resolvers of build systems, by build system name.
+    pub resolvers: std::collections::BTreeMap<String, &'static dyn crate::BuildResolver>,
 }
 
 impl Registry {
@@ -105,7 +109,12 @@ pub fn registry() -> &'static Registry {
                     }
                     registry.languages.push(d);
                 }
-                Descriptor::Build(d) => registry.builds.push(d),
+                Descriptor::Build(d) => {
+                    if let Some(resolver) = entry.resolver {
+                        registry.resolvers.insert(d.name.clone(), resolver);
+                    }
+                    registry.builds.push(d);
+                }
                 Descriptor::Vcs(d) => registry.vcs.push(d),
             }
         }

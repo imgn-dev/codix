@@ -13,6 +13,8 @@ repository = "https://github.com/imgn-dev/codix"
 # `linux-tmpfs`: a tmpfs is local; without it sysinfo leaves tmpfs mounts out.
 blake3 = "1.8.7"
 clap = { version = "4.6.7", features = ["derive"] }
+codix-build-gradle = { path = "crates/codix-build-gradle" }
+codix-build-maven = { path = "crates/codix-build-maven" }
 codix-core = { path = "crates/codix-core" }
 codix-lang-c = { path = "crates/codix-lang-c" }
 codix-lang-cpp = { path = "crates/codix-lang-cpp" }
@@ -41,6 +43,7 @@ globset = "0.4.21"
 ignore = "0.4.34"
 inventory = "0.3.25"
 rayon = "1.12.0"
+roxmltree = "0.21.2"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

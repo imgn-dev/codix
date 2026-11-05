@@ -21,6 +21,8 @@ toml_edit.workspace = true
 tree-sitter.workspace = true
 
 [dev-dependencies]
+codix-build-gradle.workspace = true
+codix-build-maven.workspace = true
 codix-lang-java.workspace = true
 codix-vcs-git.workspace = true
 codix-vcs-hg.workspace = true

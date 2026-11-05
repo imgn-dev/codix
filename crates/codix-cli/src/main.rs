@@ -5,6 +5,10 @@ mod render;
 
 // Providers register themselves at link time; naming each enabled one here is
 // what links it in.
+#[cfg(feature = "build-gradle")]
+use codix_build_gradle as _;
+#[cfg(feature = "build-maven")]
+use codix_build_maven as _;
 #[cfg(feature = "lang-c")]
 use codix_lang_c as _;
 #[cfg(feature = "lang-cpp")]
@@ -436,6 +440,14 @@ mod tests {
                 (ProviderKind::Language, "markdown"),
             ),
             (cfg!(feature = "lang-sql"), (ProviderKind::Language, "sql")),
+            (
+                cfg!(feature = "build-gradle"),
+                (ProviderKind::Build, "gradle"),
+            ),
+            (
+                cfg!(feature = "build-maven"),
+                (ProviderKind::Build, "maven"),
+            ),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
             (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),
@@ -491,6 +503,13 @@ mod tests {
             .filter(|l| *l != "text")
             .collect();
         assert_eq!(compiled, known);
+    }
+
+    #[cfg(feature = "full")]
+    #[test]
+    fn full_build_has_every_known_build_system() {
+        let compiled: Vec<&str> = registry().builds.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(compiled, known::BUILDS);
     }
 
     #[cfg(feature = "full")]

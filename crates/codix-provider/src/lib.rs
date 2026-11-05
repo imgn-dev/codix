@@ -6,10 +6,12 @@
 //! by the crate's build script ([`check_descriptor`]), so a malformed
 //! descriptor fails the build rather than a run.
 
+pub mod build;
 pub mod descriptor;
 pub mod known;
 mod registry;
 
+pub use build::{BuildModel, BuildResolver, Module, Unsupported};
 pub use descriptor::{
     BuildDescriptor, Descriptor, Detect, IgnoreStrategy, LanguageDescriptor, ProviderKind,
     VcsDescriptor,
@@ -22,7 +24,8 @@ pub use inventory;
 /// Registers a provider: `register!(Vcs, "git", "descriptor.toml")`, with
 /// paths relative to the calling crate's manifest directory. A language pack
 /// that parses adds its grammar and `tags` query:
-/// `register!(Language, "java", "descriptor.toml", tree_sitter_java::LANGUAGE, "queries/tags.scm")`.
+/// `register!(Language, "java", "descriptor.toml", tree_sitter_java::LANGUAGE, "queries/tags.scm")`;
+/// a build system adds its resolver: `register!(Build, "maven", "descriptor.toml", &Maven)`.
 #[macro_export]
 macro_rules! register {
     ($kind:ident, $name:literal, $path:literal) => {
@@ -32,6 +35,18 @@ macro_rules! register {
                 name: $name,
                 descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
                 grammar: None,
+                resolver: None,
+            }
+        }
+    };
+    (Build, $name:literal, $path:literal, $resolver:expr) => {
+        $crate::inventory::submit! {
+            $crate::ProviderEntry {
+                kind: $crate::ProviderKind::Build,
+                name: $name,
+                descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
+                grammar: None,
+                resolver: Some($resolver),
             }
         }
     };
@@ -45,6 +60,7 @@ macro_rules! register {
                     language: $language,
                     tags: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $tags)),
                 }),
+                resolver: None,
             }
         }
     };

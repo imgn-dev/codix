@@ -19,7 +19,7 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Schema migrations, in order. Migration `n` (1-based) moves the database
 /// from version `n - 1` to `n`; later phases append to this list.
-const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2];
+const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3];
 
 const MIGRATION_1: &str = "
 CREATE TABLE files (
@@ -88,6 +88,26 @@ END;
 
 /// Symbol lookup by qualified name, for commands naming a symbol by name.
 const MIGRATION_2: &str = "CREATE INDEX symbols_by_qualified_name ON symbols(qualified_name);";
+
+/// Modules and build constructs from build files. Lists are stored one item
+/// per line.
+const MIGRATION_3: &str = "
+CREATE TABLE modules (
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    build TEXT NOT NULL,
+    root TEXT NOT NULL,
+    source_roots TEXT NOT NULL,
+    test_roots TEXT NOT NULL,
+    parent TEXT,
+    notes TEXT NOT NULL
+);
+CREATE TABLE build_issues (
+    file TEXT NOT NULL,
+    line INTEGER NOT NULL,
+    construct TEXT NOT NULL
+);
+";
 
 /// How a file is held in the index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -343,6 +363,17 @@ impl Store {
         tx.commit().map_err(|e| sql_error(&path, &e))
     }
 
+    /// Replaces the stored modules and build issues.
+    pub fn replace_build(&mut self, model: &codix_provider::BuildModel) -> Result<(), Error> {
+        let path = self.path.clone();
+        let tx = self
+            .conn
+            .transaction_with_behavior(TransactionBehavior::Immediate)
+            .map_err(|e| sql_error(&path, &e))?;
+        write_build(&tx, model).map_err(|e| sql_error(&path, &e))?;
+        tx.commit().map_err(|e| sql_error(&path, &e))
+    }
+
     /// Marks files pending, so the next scan reparses them; returns how many
     /// were indexed.
     pub fn mark_pending(&mut self, paths: &[String]) -> Result<usize, Error> {
@@ -451,6 +482,36 @@ fn write_dirs(tx: &Transaction<'_>, dirs: &[(String, [u8; 32])]) -> rusqlite::Re
     Ok(())
 }
 
+fn write_build(tx: &Transaction<'_>, model: &codix_provider::BuildModel) -> rusqlite::Result<()> {
+    tx.execute("DELETE FROM modules", [])?;
+    tx.execute("DELETE FROM build_issues", [])?;
+    let mut insert = tx.prepare_cached(
+        "INSERT INTO modules (name, build, root, source_roots, test_roots, parent, notes)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    )?;
+    for m in &model.modules {
+        insert.execute(params![
+            m.name,
+            m.build,
+            m.root,
+            m.source_roots.join("\n"),
+            m.test_roots.join("\n"),
+            m.parent,
+            m.notes.join("\n"),
+        ])?;
+    }
+    let mut insert =
+        tx.prepare_cached("INSERT INTO build_issues (file, line, construct) VALUES (?1, ?2, ?3)")?;
+    for issue in &model.unsupported {
+        insert.execute(params![issue.file, issue.line, issue.construct])?;
+    }
+    Ok(())
+}
+
+fn lines(text: &str) -> Vec<String> {
+    text.lines().map(str::to_owned).collect()
+}
+
 /// A consistent read view of the index.
 #[derive(Debug)]
 pub struct Snapshot<'a> {
@@ -557,6 +618,46 @@ impl Snapshot<'_> {
         })
         .and_then(Iterator::collect)
         .map_err(|e| self.err(&e))
+    }
+
+    /// The stored modules and build issues.
+    pub fn build(&self) -> Result<codix_provider::BuildModel, Error> {
+        let mut stmt = self
+            .tx
+            .prepare("SELECT name, build, root, source_roots, test_roots, parent, notes FROM modules ORDER BY id")
+            .map_err(|e| self.err(&e))?;
+        let modules = stmt
+            .query_map([], |r| {
+                Ok(codix_provider::Module {
+                    name: r.get(0)?,
+                    build: r.get(1)?,
+                    root: r.get(2)?,
+                    source_roots: lines(&r.get::<_, String>(3)?),
+                    test_roots: lines(&r.get::<_, String>(4)?),
+                    parent: r.get(5)?,
+                    notes: lines(&r.get::<_, String>(6)?),
+                })
+            })
+            .and_then(Iterator::collect)
+            .map_err(|e| self.err(&e))?;
+        let mut stmt = self
+            .tx
+            .prepare("SELECT file, line, construct FROM build_issues ORDER BY file, line")
+            .map_err(|e| self.err(&e))?;
+        let unsupported = stmt
+            .query_map([], |r| {
+                Ok(codix_provider::Unsupported {
+                    file: r.get(0)?,
+                    line: r.get(1)?,
+                    construct: r.get(2)?,
+                })
+            })
+            .and_then(Iterator::collect)
+            .map_err(|e| self.err(&e))?;
+        Ok(codix_provider::BuildModel {
+            modules,
+            unsupported,
+        })
     }
 
     /// Every symbol of `path`, in source order.

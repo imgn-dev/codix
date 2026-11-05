@@ -1,6 +1,7 @@
 //! The codix engine: operation layer, index store, scanner, parser pool,
 //! resolver framework and edit engine.
 
+pub mod build;
 pub mod capabilities;
 pub mod config;
 pub mod debug;

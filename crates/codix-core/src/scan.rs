@@ -199,6 +199,7 @@ pub fn scan(
     .into_iter()
     .collect();
     store.commit_scan(&updates, &deleted, Some(&dirs))?;
+    store.replace_build(&crate::build::discover(project, config))?;
     report.errors.sort();
     Ok(report)
 }

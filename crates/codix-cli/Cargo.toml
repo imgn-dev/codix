@@ -14,9 +14,10 @@ path = "src/main.rs"
 
 # Features are strictly additive: each one only adds a provider.
 [features]
-default = ["lang-go", "lang-java", "vcs-git"]
-full = ["default", "all-langs", "all-vcs"]
+default = ["build-gradle", "build-maven", "lang-go", "lang-java", "vcs-git"]
+full = ["default", "all-builds", "all-langs", "all-vcs"]
 minimal = []
+all-builds = ["build-gradle", "build-maven"]
 all-langs = ["lang-c", "lang-cpp", "lang-csharp", "lang-go", "lang-java", "lang-javascript", "lang-json", "lang-kotlin", "lang-markdown", "lang-php", "lang-python", "lang-ruby", "lang-rust", "lang-sql", "lang-toml", "lang-typescript", "lang-xml", "lang-yaml"]
 lang-go = ["dep:codix-lang-go"]
 lang-typescript = ["dep:codix-lang-typescript"]
@@ -35,6 +36,8 @@ lang-toml = ["dep:codix-lang-toml"]
 lang-xml = ["dep:codix-lang-xml"]
 lang-markdown = ["dep:codix-lang-markdown"]
 lang-sql = ["dep:codix-lang-sql"]
+build-gradle = ["dep:codix-build-gradle"]
+build-maven = ["dep:codix-build-maven"]
 all-vcs = ["vcs-git", "vcs-hg", "vcs-svn"]
 lang-java = ["dep:codix-lang-java"]
 vcs-git = ["dep:codix-vcs-git"]
@@ -43,6 +46,8 @@ vcs-svn = ["dep:codix-vcs-svn"]
 
 [dependencies]
 clap.workspace = true
+codix-build-gradle = { workspace = true, optional = true }
+codix-build-maven = { workspace = true, optional = true }
 codix-core.workspace = true
 codix-lang-java = { workspace = true, optional = true }
 codix-lang-go = { workspace = true, optional = true }

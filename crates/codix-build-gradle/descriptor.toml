@@ -1,0 +1,2 @@
+name = "gradle"
+detect = ["settings.gradle", "settings.gradle.kts", "build.gradle", "build.gradle.kts"]

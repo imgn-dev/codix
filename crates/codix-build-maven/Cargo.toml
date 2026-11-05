@@ -1,0 +1,22 @@
+[package]
+name = "codix-build-maven"
+description = "Maven support for codix: modules and source roots, read from build files"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+codix-provider.workspace = true
+roxmltree.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[build-dependencies]
+codix-provider.workspace = true
+
+[lints]
+workspace = true
