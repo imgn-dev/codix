@@ -1,0 +1,20 @@
+3:9 macro MAX_ITEMS | #define MAX_ITEMS
+4:9 macro SQUARE | #define SQUARE(x)
+6:12 variable count | static int count
+7:13 variable names | const char *names[MAX_ITEMS]
+9:8 struct node | struct node
+10:9 field node.value | int value
+11:18 field node.next | struct node *next
+12:10 field node.label | char label[16]
+17:3 type_alias point | typedef struct point
+16:12 field point.x | double x, y
+16:15 field point.y | double x, y
+19:22 type_alias node_ptr | typedef struct node *node_ptr
+21:6 enum color | enum color
+21:14 enum_member color.RED | RED
+21:19 enum_member color.GREEN | GREEN
+23:7 struct bits | union bits
+23:18 field bits.i | int i
+23:27 field bits.f | float f
+27:21 function push | static struct node *push(struct node *head, int value)
+34:5 function length | int length(const struct node *head)

@@ -95,7 +95,33 @@ pub fn extract(
     for (row, parent) in rows.iter_mut().zip(parents) {
         row.parent = parent.map(|p| ids[p].clone());
     }
-    Ok(rows)
+    Ok(collapse_duplicates(rows))
+}
+
+/// One symbol per ID: a C prototype and its definition in the same file are
+/// the same symbol, kept as the larger of the two.
+fn collapse_duplicates(rows: Vec<SymbolRow>) -> Vec<SymbolRow> {
+    let size = |row: &SymbolRow| row.range.end.byte - row.range.start.byte;
+    let mut kept: HashMap<String, usize> = HashMap::new();
+    let mut out: Vec<SymbolRow> = Vec::with_capacity(rows.len());
+    for row in rows {
+        match kept.get(&row.symbol_id) {
+            Some(&i) if size(&out[i]) >= size(&row) => {}
+            Some(&i) => out[i] = row,
+            None => {
+                kept.insert(row.symbol_id.clone(), out.len());
+                out.push(row);
+            }
+        }
+    }
+    out.sort_by_key(|row| {
+        (
+            row.range.start.byte,
+            std::cmp::Reverse(row.range.end.byte),
+            row.name_range.start.byte,
+        )
+    });
+    out
 }
 
 fn definitions<'tree>(
@@ -255,6 +281,34 @@ fn header_end(descriptor: &LanguageDescriptor, definition: &Definition<'_>) -> u
         .unwrap_or(definition.node.end_byte())
 }
 
+/// The first body-opening token before the name, when the name follows the
+/// body, as in a C `typedef`.
+fn body_token_before_name(
+    descriptor: &LanguageDescriptor,
+    definition: &Definition<'_>,
+) -> Option<usize> {
+    let tokens = &descriptor.symbols.body_tokens;
+    let name_start = definition.name.start_byte();
+    let mut cursor = definition.node.walk();
+    loop {
+        let node = cursor.node();
+        if node.start_byte() >= name_start {
+            return None;
+        }
+        if !node.is_named() && tokens.iter().any(|t| t == node.kind()) {
+            return Some(node.start_byte());
+        }
+        if cursor.goto_first_child() {
+            continue;
+        }
+        while !cursor.goto_next_sibling() {
+            if !cursor.goto_parent() {
+                return None;
+            }
+        }
+    }
+}
+
 /// The first body-opening token after the name, anywhere in the definition.
 fn body_token(descriptor: &LanguageDescriptor, definition: &Definition<'_>) -> Option<usize> {
     let tokens = &descriptor.symbols.body_tokens;
@@ -301,6 +355,19 @@ fn signature(
 ) -> Option<String> {
     let node = definition.node;
     let end = header_end(descriptor, definition);
+    // `typedef struct { … } Name;`: the body comes before the name, so the
+    // signature is the text before the body followed by the name.
+    if end == node.end_byte()
+        && let Some(token) = body_token_before_name(descriptor, definition)
+    {
+        let before = content.get(node.start_byte()..token)?;
+        let collapsed = format!(
+            "{} {}",
+            before.split_whitespace().collect::<Vec<_>>().join(" "),
+            text(content, definition.name)
+        );
+        return Some(collapsed);
+    }
     let raw = match declarator(definition) {
         Some(own) => {
             let mut cursor = node.walk();

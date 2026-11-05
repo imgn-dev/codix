@@ -1,0 +1,13 @@
+name = "c"
+version = 1
+id_prefix = "c"
+
+[detect]
+extensions = ["c"]
+modelines = ["c"]
+
+[symbols]
+separator = "."
+body_fields = ["body", "value"]
+# Anonymous structs in a typedef come before the name.
+body_tokens = ["{"]

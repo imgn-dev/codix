@@ -5,6 +5,8 @@ mod render;
 
 // Providers register themselves at link time; naming each enabled one here is
 // what links it in.
+#[cfg(feature = "lang-c")]
+use codix_lang_c as _;
 #[cfg(feature = "lang-go")]
 use codix_lang_go as _;
 #[cfg(feature = "lang-java")]
@@ -385,6 +387,7 @@ mod tests {
                 cfg!(feature = "lang-rust"),
                 (ProviderKind::Language, "rust"),
             ),
+            (cfg!(feature = "lang-c"), (ProviderKind::Language, "c")),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
             (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),

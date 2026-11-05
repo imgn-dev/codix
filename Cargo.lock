@@ -158,6 +158,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "codix-core",
+ "codix-lang-c",
  "codix-lang-go",
  "codix-lang-java",
  "codix-lang-javascript",
@@ -195,6 +196,15 @@ dependencies = [
  "tempfile",
  "toml_edit",
  "tree-sitter",
+]
+
+[[package]]
+name = "codix-lang-c"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+ "codix-testkit",
+ "tree-sitter-c",
 ]
 
 [[package]]
@@ -908,6 +918,16 @@ dependencies = [
  "regex",
  "serde_json",
  "streaming-iterator",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-c"
+version = "0.24.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a9b2eb57a55fed6b00812912e730b7a275cf4fe98bfd6a5d76263d4438371728"
+dependencies = [
+ "cc",
  "tree-sitter-language",
 ]
 

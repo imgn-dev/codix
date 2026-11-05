@@ -1,0 +1,22 @@
+[package]
+name = "codix-lang-c"
+description = "C language pack for codix"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+codix-provider.workspace = true
+tree-sitter-c.workspace = true
+
+[dev-dependencies]
+codix-testkit.workspace = true
+
+[build-dependencies]
+codix-provider.workspace = true
+
+[lints]
+workspace = true
