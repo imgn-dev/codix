@@ -219,6 +219,7 @@ dependencies = [
  "globset",
  "ignore",
  "rayon",
+ "regex",
  "rusqlite",
  "serde",
  "serde_json",
@@ -409,6 +410,7 @@ version = "0.1.0"
 dependencies = [
  "codix-core",
  "codix-provider",
+ "tempfile",
 ]
 
 [[package]]

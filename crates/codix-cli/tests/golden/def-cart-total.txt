@@ -1,0 +1,2 @@
+src/billing/Cart.java:4:10  method  Cart.total  long total()
+java:src/billing/Cart.java::Cart.total#bda5

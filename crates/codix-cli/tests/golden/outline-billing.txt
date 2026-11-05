@@ -1,0 +1,8 @@
+billing/Cart.java
+  3:7  class  class Cart
+    4:10  method  long total()
+billing/Invoice.java
+  3:14  class  public class Invoice
+    4:18  field  private long total
+    6:17  method  public long total()
+    10:10  method  long total(long discount)

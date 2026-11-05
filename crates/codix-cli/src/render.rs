@@ -5,11 +5,15 @@ use std::io::{self, Write};
 use codix_core::Error;
 use codix_core::capabilities::{Capabilities, Tier};
 use codix_core::config::{ConfigResponse, Setting};
-use codix_core::debug::EchoItem;
 use codix_core::indexing::{InitResponse, StatusResponse};
 use codix_core::op::Warning;
 use codix_core::page::{Location, Paged};
+use codix_core::query::{
+    DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse, ShowResponse,
+    SymbolResult,
+};
 use codix_core::scan::ScanReport;
+use codix_core::store::MatchMode;
 use codix_provider::ProviderKind;
 use serde::Serialize;
 
@@ -47,13 +51,132 @@ pub(crate) trait Row {
     fn columns(&self) -> Vec<String>;
 }
 
-impl Row for EchoItem {
+impl Row for SymbolResult {
     fn location(&self) -> &Location {
         &self.location
     }
 
     fn columns(&self) -> Vec<String> {
-        vec![self.kind.clone(), self.name.clone()]
+        let mut columns = vec![self.kind.clone(), self.qualified_name.clone()];
+        columns.extend(self.signature.clone());
+        columns
+    }
+}
+
+impl Row for GrepMatch {
+    fn location(&self) -> &Location {
+        &self.location
+    }
+
+    fn columns(&self) -> Vec<String> {
+        vec![
+            self.enclosing.clone().unwrap_or_else(|| "-".to_owned()),
+            self.text.trim().to_owned(),
+        ]
+    }
+}
+
+const STALE: &str = "note: another codix process holds the write lock; results may be stale";
+
+impl TextRender for FindResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        self.results.render_text(w, style)?;
+        if self.results.total > 0 && self.mode != MatchMode::Exact {
+            let mode = match self.mode {
+                MatchMode::Exact => "exact",
+                MatchMode::Prefix => "prefix",
+                MatchMode::Fuzzy => "fuzzy",
+                MatchMode::Glob => "glob",
+            };
+            writeln!(w, "matched by {mode}")?;
+        }
+        stale(w, self.possibly_stale)
+    }
+}
+
+fn stale(w: &mut dyn Write, possibly_stale: bool) -> io::Result<()> {
+    if possibly_stale {
+        writeln!(w, "{STALE}")?;
+    }
+    Ok(())
+}
+
+impl TextRender for DefResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        let d = &self.definition;
+        let mut line = format!(
+            "{}  {}  {}",
+            style.paint("36", &location(&d.location)),
+            d.kind,
+            d.qualified_name
+        );
+        if let Some(signature) = &d.signature {
+            line.push_str(COLUMN_GAP);
+            line.push_str(signature);
+        }
+        writeln!(w, "{line}")?;
+        writeln!(w, "{}", d.symbol_id)?;
+        stale(w, self.possibly_stale)
+    }
+}
+
+fn location(l: &Location) -> String {
+    format!("{}:{}:{}", l.path, l.line, l.column)
+}
+
+impl TextRender for OutlineResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        fn node(w: &mut dyn Write, n: &OutlineNode, depth: usize) -> io::Result<()> {
+            let s = &n.symbol;
+            let signature = s.signature.as_deref().unwrap_or(&s.name);
+            writeln!(
+                w,
+                "{}{}:{}  {}  {signature}",
+                "  ".repeat(depth + 1),
+                s.location.line,
+                s.location.column,
+                s.kind
+            )?;
+            n.children
+                .iter()
+                .try_for_each(|child| node(w, child, depth + 1))
+        }
+        for file in &self.files {
+            writeln!(w, "{}", style.paint("36", &file.path))?;
+            for n in &file.symbols {
+                node(w, n, 0)?;
+            }
+        }
+        if self.files.is_empty() {
+            writeln!(w, "no symbols")?;
+        }
+        stale(w, self.possibly_stale)
+    }
+}
+
+impl TextRender for ShowResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        let s = &self.symbol;
+        writeln!(
+            w,
+            "{}  {}  {}",
+            style.paint("36", &location(&s.location)),
+            s.kind,
+            s.qualified_name
+        )?;
+        let last = self.first_line as usize + self.lines.len();
+        let width = last.saturating_sub(1).to_string().len();
+        for (i, line) in self.lines.iter().enumerate() {
+            writeln!(w, "{:>width$} | {line}", self.first_line as usize + i)?;
+        }
+        stale(w, self.possibly_stale)
+    }
+}
+
+impl TextRender for GrepResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        self.matches.render_text(w, style)?;
+        stale(w, self.possibly_stale)
     }
 }
 
@@ -425,18 +548,19 @@ mod tests {
 
     use super::*;
 
-    fn page(n: u32) -> Paged<EchoItem> {
+    fn page(n: u32) -> Paged<GrepMatch> {
         Paged {
             items: (1..=n)
-                .map(|i| EchoItem {
+                .map(|i| GrepMatch {
                     location: Location {
                         path: "src/a.rs".to_owned(),
                         root_path: FileId::from_canonical("src/a.rs"),
                         line: i,
                         column: 1,
                     },
-                    kind: "def".to_owned(),
-                    name: format!("f{i}"),
+                    text: format!("f{i}"),
+                    enclosing: Some("def".to_owned()),
+                    enclosing_kind: None,
                 })
                 .collect(),
             total: n as usize,
@@ -444,7 +568,7 @@ mod tests {
         }
     }
 
-    fn text(page: &Paged<EchoItem>, color: bool) -> String {
+    fn text(page: &Paged<GrepMatch>, color: bool) -> String {
         let mut out = Vec::new();
         page.render_text(
             &mut out,
@@ -468,6 +592,33 @@ mod tests {
         let out = text(&page(10), false);
         assert!(out.contains("src/a.rs:9:1   def  f9\n"));
         assert!(out.contains("src/a.rs:10:1  def  f10\n"));
+    }
+
+    #[test]
+    fn internal_errors_render_in_both_formats() {
+        let error = Error::Internal {
+            message: "sample internal error".to_owned(),
+        };
+        assert_eq!(error.exit_code(), 5);
+        let mut text = Vec::new();
+        text_error(
+            &mut text,
+            &error,
+            Style {
+                color: false,
+                show_origin: false,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(text).unwrap(),
+            "error[internal]: sample internal error\nhint: this is a bug in codix; please report it\n"
+        );
+        let mut json = Vec::new();
+        json_error(&mut json, &error, &[]).unwrap();
+        let value: serde_json::Value = serde_json::from_slice(&json).unwrap();
+        assert_eq!(value["error"]["code"], "internal");
+        assert_eq!(value["schema_version"], 1);
     }
 
     #[test]

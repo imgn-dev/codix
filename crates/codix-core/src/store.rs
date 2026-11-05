@@ -230,6 +230,8 @@ pub struct SymbolRow {
 pub struct SymbolHit {
     /// Root-relative path of the defining file.
     pub path: String,
+    /// Language of the defining file.
+    pub language: String,
     /// The symbol.
     pub symbol: SymbolRow,
 }
@@ -522,7 +524,7 @@ pub struct Snapshot<'a> {
 const SYMBOL_COLUMNS: &str = "f.path, s.symbol_id, s.name, s.kind, s.qualified_name, s.parent,
     s.start_line, s.start_column, s.start_byte, s.end_line, s.end_column, s.end_byte,
     s.name_line, s.name_column, s.name_start_byte, s.name_end_byte,
-    s.signature, s.visibility, s.confidence";
+    s.signature, s.visibility, s.confidence, f.language";
 
 fn symbol_hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<SymbolHit> {
     let name_line: u32 = row.get(12)?;
@@ -531,6 +533,7 @@ fn symbol_hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<SymbolHit> {
     let name_len = u32::try_from(name.chars().count()).unwrap_or(u32::MAX);
     Ok(SymbolHit {
         path: row.get(0)?,
+        language: row.get(19)?,
         symbol: SymbolRow {
             symbol_id: row.get(1)?,
             name,

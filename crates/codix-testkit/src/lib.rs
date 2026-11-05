@@ -1,6 +1,8 @@
 //! Test support shared by the codix crates: corpus runner, fixture projects
 //! and golden-output helpers.
 
+pub mod fixture;
+
 use std::fs;
 use std::path::Path;
 use std::process::Command;

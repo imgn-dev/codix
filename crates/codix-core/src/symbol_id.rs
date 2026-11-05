@@ -164,6 +164,18 @@ pub fn resolve(
     cwd: &Path,
     input: &str,
 ) -> Result<SymbolHit, Error> {
+    resolve_where(snapshot, project, cwd, input, &|_| true)
+}
+
+/// Like [`resolve`], among the symbols `keep` accepts: `--kind` and `--path`
+/// narrowing an ambiguous name.
+pub fn resolve_where(
+    snapshot: &Snapshot<'_>,
+    project: &Project,
+    cwd: &Path,
+    input: &str,
+    keep: &dyn Fn(&SymbolHit) -> bool,
+) -> Result<SymbolHit, Error> {
     let matches = match SymbolRef::parse(input)? {
         SymbolRef::Id {
             prefix,
@@ -186,7 +198,7 @@ pub fn resolve(
         }
         SymbolRef::Name(name) => snapshot.symbols_named(&name)?,
     };
-    one(input, matches)
+    one(input, matches.into_iter().filter(|hit| keep(hit)).collect())
 }
 
 /// The deepest symbol whose range holds the position: the one defined there.

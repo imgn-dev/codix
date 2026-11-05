@@ -63,12 +63,16 @@ use clap::{Args, Parser, Subcommand};
 use codix_core::Error;
 use codix_core::capabilities::{CapabilitiesOp, CapabilitiesRequest};
 use codix_core::config::{ConfigOp, ConfigRequest};
-use codix_core::debug::{DebugEcho, DebugEchoRequest};
 use codix_core::error::exit;
 use codix_core::indexing::{IndexOp, IndexRequest, InitOp, InitRequest, StatusOp, StatusRequest};
 use codix_core::op::{Context, Operation, Outcome, Warning};
 use codix_core::page::{DEFAULT_LIMIT, Page};
 use codix_core::project::ScopeRequest;
+use codix_core::query::{
+    DefOp, DefRequest, FindOp, FindRequest, GrepOp, GrepRequest, OutlineOp, OutlineRequest, ShowOp,
+    ShowRequest,
+};
+use codix_core::store::MatchMode;
 use render::{Style, TextRender};
 
 /// Headless code index for LLM agents.
@@ -111,9 +115,32 @@ enum Command {
     Capabilities,
     /// Read or edit codix.toml and .codix/config.toml, like `git config`.
     Config(ConfigArgs),
-    /// Echo synthetic results, to exercise output rendering.
-    #[command(name = "debug-echo", hide = true)]
-    DebugEcho(DebugEchoArgs),
+    /// Find symbols by name: exact, then prefix, then fuzzy, unless a mode is given.
+    Find(FindArgs),
+    /// Where a symbol is defined, by ID, path part, `file:line:col` or name.
+    Def {
+        /// Symbol ID, its path part, `file:line:col`, or a name.
+        symbol: String,
+        #[command(flatten)]
+        narrow: NarrowArgs,
+    },
+    /// The symbol tree of a file or directory, signatures only.
+    Outline {
+        /// File or directory.
+        path: String,
+    },
+    /// A symbol's source.
+    Show {
+        /// Symbol ID, its path part, `file:line:col`, or a name.
+        symbol: String,
+        #[command(flatten)]
+        narrow: NarrowArgs,
+        /// Lines shown before and after the symbol.
+        #[arg(long, default_value_t = 0, value_name = "N")]
+        context: usize,
+    },
+    /// Search indexed files with a regular expression; each match names its enclosing symbol.
+    Grep(GrepArgs),
 }
 
 #[derive(Args)]
@@ -160,16 +187,90 @@ impl ConfigArgs {
     }
 }
 
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum ModeArg {
+    Exact,
+    Prefix,
+    Fuzzy,
+    Glob,
+}
+
+impl From<ModeArg> for MatchMode {
+    fn from(mode: ModeArg) -> Self {
+        match mode {
+            ModeArg::Exact => Self::Exact,
+            ModeArg::Prefix => Self::Prefix,
+            ModeArg::Fuzzy => Self::Fuzzy,
+            ModeArg::Glob => Self::Glob,
+        }
+    }
+}
+
 #[derive(Args)]
-struct DebugEchoArgs {
-    /// Number of results.
-    count: usize,
-    /// File to sort results around.
-    #[arg(long)]
-    anchor: Option<String>,
-    /// Fail with this error code.
-    #[arg(long)]
-    fail: Option<String>,
+#[group(id = "mode", multiple = false)]
+struct ModeArgs {
+    /// The name equals the query.
+    #[arg(long, num_args = 0, default_missing_value = "exact")]
+    exact: Option<ModeArg>,
+    /// The name starts with the query, ignoring case.
+    #[arg(long, num_args = 0, default_missing_value = "prefix")]
+    prefix: Option<ModeArg>,
+    /// The name is within a few edits of the query, ignoring case.
+    #[arg(long, num_args = 0, default_missing_value = "fuzzy")]
+    fuzzy: Option<ModeArg>,
+    /// The qualified name matches a glob, such as `Invoice.*`.
+    #[arg(long, num_args = 0, default_missing_value = "glob")]
+    glob: Option<ModeArg>,
+}
+
+impl ModeArgs {
+    fn mode(&self) -> Option<MatchMode> {
+        self.exact
+            .or(self.prefix)
+            .or(self.fuzzy)
+            .or(self.glob)
+            .map(MatchMode::from)
+    }
+}
+
+#[derive(Args)]
+struct FindArgs {
+    /// Name to look for.
+    query: String,
+    #[command(flatten)]
+    mode: ModeArgs,
+    /// Keep symbols of this kind, such as method; repeatable.
+    #[arg(long = "kind", value_name = "KIND")]
+    kinds: Vec<String>,
+    /// Keep symbols of this language; repeatable.
+    #[arg(long = "lang", value_name = "LANGUAGE")]
+    languages: Vec<String>,
+    #[command(flatten)]
+    scope: ScopeArgs,
+    #[command(flatten)]
+    page: PageArgs,
+}
+
+/// Narrowing an ambiguous name.
+#[derive(Args)]
+struct NarrowArgs {
+    /// Consider symbols of this kind only; repeatable.
+    #[arg(long = "kind", value_name = "KIND")]
+    kinds: Vec<String>,
+    #[command(flatten)]
+    scope: ScopeArgs,
+}
+
+#[derive(Args)]
+struct GrepArgs {
+    /// Regular expression, matched line by line.
+    pattern: String,
+    /// Search files of this language; repeatable.
+    #[arg(long = "lang", value_name = "LANGUAGE")]
+    languages: Vec<String>,
+    /// Keep matches inside a symbol of this kind; repeatable.
+    #[arg(long = "kind", value_name = "KIND")]
+    kinds: Vec<String>,
     #[command(flatten)]
     scope: ScopeArgs,
     #[command(flatten)]
@@ -392,15 +493,48 @@ fn main() -> ExitCode {
             };
             run(&output, &ConfigOp, &ctx, Ok(request))
         }
-        Command::DebugEcho(args) => {
-            let request = args.page.page().map(|page| DebugEchoRequest {
-                count: args.count,
-                anchor: args.anchor,
-                fail: args.fail,
+        Command::Find(args) => {
+            let request = args.page.page().map(|page| FindRequest {
+                query: args.query,
+                mode: args.mode.mode(),
+                kinds: args.kinds,
+                languages: args.languages,
                 scope: args.scope.request(),
                 page,
             });
-            run(&output, &DebugEcho, &ctx, request)
+            run(&output, &FindOp, &ctx, request)
+        }
+        Command::Def { symbol, narrow } => {
+            let request = DefRequest {
+                symbol,
+                kinds: narrow.kinds,
+                scope: narrow.scope.request(),
+            };
+            run(&output, &DefOp, &ctx, Ok(request))
+        }
+        Command::Outline { path } => run(&output, &OutlineOp, &ctx, Ok(OutlineRequest { path })),
+        Command::Show {
+            symbol,
+            narrow,
+            context,
+        } => {
+            let request = ShowRequest {
+                symbol,
+                kinds: narrow.kinds,
+                scope: narrow.scope.request(),
+                context,
+            };
+            run(&output, &ShowOp, &ctx, Ok(request))
+        }
+        Command::Grep(args) => {
+            let request = args.page.page().map(|page| GrepRequest {
+                pattern: args.pattern,
+                languages: args.languages,
+                kinds: args.kinds,
+                scope: args.scope.request(),
+                page,
+            });
+            run(&output, &GrepOp, &ctx, request)
         }
     };
     ExitCode::from(code)

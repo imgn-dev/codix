@@ -1,166 +1,149 @@
-//! Every error class: exit code, text rendering on stderr, JSON on stdout.
+//! Every error class a command can reach: exit code, text on stderr, JSON on
+//! stdout. `internal` has no command to reach it; its rendering is covered by
+//! unit tests.
 
-use codix_testkit::{run, run_in};
+use codix_testkit::fixture::files_only;
 use serde_json::Value;
 
 const CODIX: &str = env!("CARGO_BIN_EXE_codix");
 
-/// Runs `args` in an empty temporary directory, outside any project. `{CWD}` in
-/// `text` stands for that directory.
-fn check(args: &[&str], code: &str, exit: i32, text: &str) {
-    let dir = tempfile::tempdir().expect("test setup");
-    let cwd = std::fs::canonicalize(dir.path()).expect("test setup");
-    let text = text.replace("{CWD}", &cwd.display().to_string());
-    let text = text.as_str();
-    let run = |args: &[&str]| run_in(&cwd, CODIX, args);
-    let out = run(args);
+fn codix(root: &std::path::Path, cwd: &std::path::Path, args: &[&str]) -> codix_testkit::Run {
+    codix_testkit::fixture::codix_in(CODIX, root, cwd, args)
+}
+
+fn indexed(files: &[(&str, &str)]) -> (tempfile::TempDir, std::path::PathBuf) {
+    codix_testkit::fixture::indexed(CODIX, files)
+}
+
+/// Runs `args` in `cwd` and checks the error in both renderings; `<cwd>` in
+/// `text` stands for the canonical cwd.
+fn check(
+    root: &std::path::Path,
+    cwd: &std::path::Path,
+    args: &[&str],
+    code: &str,
+    exit: i32,
+    text: &str,
+) {
+    let out = codix(root, cwd, args);
+    let text = text.replace("<cwd>", &cwd.display().to_string());
     assert_eq!(out.code, Some(exit), "{code}: {}", out.stderr);
     assert_eq!(out.stdout, "", "{code}");
     assert_eq!(out.stderr, text, "{code}");
 
     let mut json_args = args.to_vec();
     json_args.push("--json");
-    let out = run(&json_args);
+    let out = codix(root, cwd, &json_args);
     assert_eq!(out.code, Some(exit), "{code} --json");
     assert_eq!(out.stderr, "", "{code} --json");
     let value: Value = serde_json::from_str(&out.stdout).expect("one JSON document");
     assert_eq!(value["schema_version"], 1);
     assert_eq!(value["error"]["code"], code);
     let first = text.lines().next().expect("error line");
-    let cause = first.split_once("]: ").expect("error[code]: cause").1;
-    assert_eq!(value["error"]["cause"], cause);
+    // JSON escapes the root's backslashes on Windows, so the root is replaced
+    // once the string is parsed.
+    let cause = value["error"]["cause"]
+        .as_str()
+        .expect("cause")
+        .replace(&root.display().to_string(), "<root>");
+    assert_eq!(
+        cause,
+        first.split_once("]: ").expect("error[code]: cause").1
+    );
     let hint = text
         .lines()
         .last()
-        .and_then(|line| line.strip_prefix("hint: "))
+        .and_then(|l| l.strip_prefix("hint: "))
         .expect("hint line");
     assert_eq!(value["error"]["hint"], hint);
 }
 
-fn fail(code: &str, exit: i32, text: &str) {
-    check(&["debug-echo", "1", "--fail", code], code, exit, text);
-}
-
 #[test]
 fn no_project() {
-    fail(
-        "no_project",
-        6,
-        "error[no_project]: no codix project in {CWD} or any parent directory\n\
-         hint: run `codix init` at the project root\n",
-    );
-}
-
-#[test]
-fn scope_outside_a_project_is_no_project() {
+    let (_guard, root) = files_only(&[]);
     check(
-        &["debug-echo", "1", "--here"],
+        &root,
+        &root,
+        &["find", "x"],
         "no_project",
         6,
-        "error[no_project]: no codix project in {CWD} or any parent directory\n\
+        "error[no_project]: no codix project in <root> or any parent directory\n\
          hint: run `codix init` at the project root\n",
     );
 }
 
 #[test]
 fn not_indexed() {
-    fail(
+    let (_guard, root) = files_only(&[("codix.toml", "")]);
+    check(
+        &root,
+        &root,
+        &["find", "x"],
         "not_indexed",
         6,
-        "error[not_indexed]: the project at /work/project is not indexed\n\
+        "error[not_indexed]: the project at <root> is not indexed\n\
          hint: run `codix init` at the project root\n",
     );
 }
 
 #[test]
-fn ambiguous_symbol_lists_candidates() {
-    fail(
-        "ambiguous_symbol",
-        3,
-        "error[ambiguous_symbol]: \"total\" matches 2 symbols\n  \
-         py:src/billing/invoice.py::Invoice.total#a3f9\n  \
-         py:src/billing/cart.py::Cart.total#71c2\n\
-         hint: pass a full symbol ID, or narrow with --kind or --path\n",
-    );
-    let out = run(
-        CODIX,
-        &["debug-echo", "1", "--fail", "ambiguous_symbol", "--json"],
-    );
-    let value: Value = serde_json::from_str(&out.stdout).unwrap();
-    assert_eq!(
-        value["error"]["candidates"],
-        serde_json::json!([
-            "py:src/billing/invoice.py::Invoice.total#a3f9",
-            "py:src/billing/cart.py::Cart.total#71c2"
-        ])
-    );
-}
-
-#[test]
-fn unknown_symbol() {
-    fail(
-        "unknown_symbol",
-        1,
-        "error[unknown_symbol]: no symbol matches \"totl\"\n\
-         hint: check the name with `codix find`, or pass a full symbol ID\n",
-    );
-}
-
-#[test]
 fn invalid_config() {
-    fail(
+    let (_guard, root) = files_only(&[("codix.toml", "")]);
+    check(
+        &root,
+        &root,
+        &["config", "previews.expiri", "1h"],
         "invalid_config",
         2,
         "error[invalid_config]: unknown key `previews.expiri`\n\
-         hint: valid keys: previews.expiry\n",
-    );
-}
-
-#[test]
-fn not_supported_in_build() {
-    fail(
-        "not_supported_in_build",
-        2,
-        "error[not_supported_in_build]: src/Main.kt: kotlin is not supported in this build\n\
-         hint: use the full codix build, which includes every provider\n",
+         hint: valid keys: index.max_file_size, index.scan_interval, languages.overrides.\"<glob>\", sources.roots\n",
     );
 }
 
 #[test]
 fn io() {
-    fail(
-        "io",
-        5,
-        "error[io]: src/missing.rs: file not found\n\
-         hint: check that the file exists and is accessible\n",
+    let (_guard, root) = indexed(&[("README", "hi\n")]);
+    let out = codix(&root, &root, &["outline", "missing.rs"]);
+    assert_eq!(out.code, Some(5));
+    // The cause ends with the operating system's message.
+    assert!(
+        out.stderr.starts_with("error[io]: missing.rs: "),
+        "{}",
+        out.stderr
     );
-}
-
-#[test]
-fn internal() {
-    fail(
-        "internal",
-        5,
-        "error[internal]: sample internal error\n\
-         hint: this is a bug in codix; please report it\n",
+    assert!(
+        out.stderr
+            .ends_with("\nhint: check that the file exists and is accessible\n"),
+        "{}",
+        out.stderr
     );
+    let json: Value =
+        serde_json::from_str(&codix(&root, &root, &["outline", "missing.rs", "--json"]).stdout)
+            .unwrap();
+    assert_eq!(json["error"]["code"], "io");
 }
 
 #[test]
 fn usage_from_a_bad_flag() {
+    let (_guard, root) = files_only(&[]);
     check(
-        &["debug-echo", "1", "--bogus"],
+        &root,
+        &root,
+        &["find", "x", "--bogus"],
         "usage",
         2,
         "error[usage]: unexpected argument '--bogus' found\n\
-         hint: usage: codix debug-echo <COUNT>; see --help\n",
+         hint: usage: codix find <QUERY>; see --help\n",
     );
 }
 
 #[test]
 fn usage_from_a_zero_limit() {
+    let (_guard, root) = indexed(&[("README", "hi\n")]);
     check(
-        &["debug-echo", "1", "--limit", "0"],
+        &root,
+        &root,
+        &["find", "x", "--limit", "0"],
         "usage",
         2,
         "error[usage]: --limit must be at least 1\n\
@@ -169,15 +152,13 @@ fn usage_from_a_zero_limit() {
 }
 
 #[test]
-fn usage_names_codix_whatever_the_binary_is_called() {
-    let dir = std::env::temp_dir().join(format!("codix-renamed-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let renamed = dir.join(format!("renamed-codix{}", std::env::consts::EXE_SUFFIX));
-    std::fs::copy(CODIX, &renamed).unwrap();
-    let out = run(renamed.to_str().unwrap(), &["debug-echo", "1", "--bogus"]);
-    std::fs::remove_dir_all(&dir).unwrap();
+fn usage_from_a_bad_regex() {
+    let (_guard, root) = indexed(&[("README", "hi\n")]);
+    let out = codix(&root, &root, &["grep", "a("]);
+    assert_eq!(out.code, Some(2));
     assert!(
-        out.stderr.contains("usage: codix debug-echo"),
+        out.stderr
+            .starts_with("error[usage]: invalid regular expression: "),
         "{}",
         out.stderr
     );
@@ -185,11 +166,87 @@ fn usage_names_codix_whatever_the_binary_is_called() {
 
 #[test]
 fn usage_names_the_missing_argument() {
-    let dir = tempfile::tempdir().expect("temp dir");
-    let out = run_in(dir.path(), CODIX, &["config"]);
+    let (_guard, root) = files_only(&[]);
+    let out = codix(&root, &root, &["config"]);
     assert_eq!(out.code, Some(2));
     assert_eq!(
         out.stderr.lines().next(),
         Some("error[usage]: the following required arguments were not provided: <KEY>")
+    );
+}
+
+#[test]
+fn usage_names_codix_whatever_the_binary_is_called() {
+    let dir = tempfile::tempdir().unwrap();
+    let renamed = dir
+        .path()
+        .join(format!("renamed-codix{}", std::env::consts::EXE_SUFFIX));
+    std::fs::copy(CODIX, &renamed).unwrap();
+    let out = codix_testkit::run_in(
+        dir.path(),
+        renamed.to_str().unwrap(),
+        &["find", "x", "--bogus"],
+    );
+    assert!(out.stderr.contains("usage: codix find"), "{}", out.stderr);
+}
+
+#[cfg(feature = "lang-java")]
+mod with_java {
+    use super::{check, codix, indexed};
+
+    #[test]
+    fn ambiguous_symbol_lists_candidates() {
+        let (_guard, root) = indexed(&[(
+            "A.java",
+            "class A {\n  void f(int x) {}\n  void f(long x) {}\n}\n",
+        )]);
+        let out = codix(&root, &root, &["def", "f"]);
+        assert_eq!(out.code, Some(3));
+        let lines: Vec<&str> = out.stderr.lines().collect();
+        assert_eq!(lines[0], "error[ambiguous_symbol]: \"f\" matches 2 symbols");
+        assert!(
+            lines[1].starts_with("  java:A.java::A.f#")
+                && lines[2].starts_with("  java:A.java::A.f#")
+        );
+        assert_eq!(
+            lines[3],
+            "hint: pass a full symbol ID, or narrow with --kind or --path"
+        );
+
+        let json: serde_json::Value =
+            serde_json::from_str(&codix(&root, &root, &["def", "f", "--json"]).stdout).unwrap();
+        assert_eq!(
+            json["error"]["candidates"].as_array().map(Vec::len),
+            Some(2)
+        );
+    }
+
+    #[test]
+    fn unknown_symbol() {
+        let (_guard, root) = indexed(&[("A.java", "class A {}\n")]);
+        check(
+            &root,
+            &root,
+            &["def", "totl"],
+            "unknown_symbol",
+            1,
+            "error[unknown_symbol]: no symbol matches \"totl\"\n\
+             hint: check the name with `codix find`, or pass a full symbol ID\n",
+        );
+    }
+}
+
+#[cfg(not(feature = "lang-kotlin"))]
+#[test]
+fn not_supported_in_build() {
+    let (_guard, root) = indexed(&[("src/Main.kt", "fun main() {}\n")]);
+    check(
+        &root,
+        &root,
+        &["outline", "src/Main.kt"],
+        "not_supported_in_build",
+        2,
+        "error[not_supported_in_build]: src/Main.kt: kotlin is not supported in this build\n\
+         hint: use the full codix build, which includes every provider\n",
     );
 }

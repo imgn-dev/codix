@@ -1,0 +1,2 @@
+Box.java:9:10  method  Box.m7  void m7()
+1 result

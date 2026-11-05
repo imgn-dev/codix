@@ -1,0 +1,4 @@
+src/billing/Cart.java:4:10      method  Cart.total     long total()
+src/billing/Invoice.java:6:17   method  Invoice.total  public long total()
+src/billing/Invoice.java:10:10  method  Invoice.total  long total(long discount)
+3 results

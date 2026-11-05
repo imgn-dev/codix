@@ -1,0 +1,4 @@
+src/billing/Cart.java:4:10  method  Cart.total
+3 | class Cart {
+4 |     long total() { return 0; }
+5 | }

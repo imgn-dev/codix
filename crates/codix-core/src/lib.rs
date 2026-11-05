@@ -4,7 +4,6 @@
 pub mod build;
 pub mod capabilities;
 pub mod config;
-pub mod debug;
 pub mod detect;
 pub mod error;
 pub mod indexing;
@@ -14,6 +13,7 @@ pub mod page;
 pub mod parse;
 pub mod project;
 pub mod providers;
+pub mod query;
 pub mod scan;
 pub mod store;
 pub mod symbol_id;

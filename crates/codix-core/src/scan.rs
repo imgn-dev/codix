@@ -93,12 +93,27 @@ pub struct ScanReport {
     pub errors: Vec<(String, String)>,
 }
 
-/// Scans the project and brings the index up to date.
+/// Scans the project and brings the index up to date, waiting for the write
+/// lock as long as needed.
 pub fn scan(
     project: &Project,
     config: &Config,
     indexer: &dyn Indexer,
 ) -> Result<ScanReport, Error> {
+    scan_within(project, config, indexer, None)?.ok_or_else(|| Error::Internal {
+        message: "the write lock was given up without a timeout".to_owned(),
+    })
+}
+
+/// Like [`scan`], giving up when the write lock stays busy longer than
+/// `wait`: `None` then means another process is writing and the index may be
+/// stale.
+pub fn scan_within(
+    project: &Project,
+    config: &Config,
+    indexer: &dyn Indexer,
+    wait: Option<Duration>,
+) -> Result<Option<ScanReport>, Error> {
     let start_ns = now_ns();
     let walked = walk(
         project,
@@ -112,12 +127,7 @@ pub fn scan(
     let mut store = Store::open(&project.index_path())?;
     let (manifest, stored_dirs) = {
         let snapshot = store.snapshot()?;
-        let files: HashMap<String, FileRow> = snapshot
-            .files()?
-            .into_iter()
-            .map(|row| (row.path.clone(), row))
-            .collect();
-        (files, snapshot.dirs()?)
+        (rows_by_path(snapshot.files()?), snapshot.dirs()?)
     };
 
     let current_dirs = dir_hashes(
@@ -161,37 +171,12 @@ pub fn scan(
         .collect();
     report.deleted = deleted.len();
 
-    let _lock = WriteLock::acquire(project)?;
-    recheck(project, indexer, &mut outcomes, start_ns);
-    let fresh: HashMap<String, FileRow> = {
-        let snapshot = store.snapshot()?;
-        snapshot
-            .files()?
-            .into_iter()
-            .map(|row| (row.path.clone(), row))
-            .collect()
+    let Some(_lock) = lock(project, wait)? else {
+        return Ok(None);
     };
-    let mut updates = Vec::new();
-    for outcome in outcomes {
-        match outcome {
-            Outcome::Indexed(update) => {
-                report.indexed += 1;
-                kept.push(update.file.clone());
-                push_unless_committed(&mut updates, update, &fresh);
-            }
-            Outcome::Touched(update) => {
-                report.touched += 1;
-                kept.push(update.file.clone());
-                push_unless_committed(&mut updates, update, &fresh);
-            }
-            Outcome::Pending(update) => {
-                report.pending += 1;
-                kept.push(update.file.clone());
-                updates.push(update);
-            }
-            Outcome::Failed(path, error) => report.errors.push((path, error)),
-        }
-    }
+    recheck(project, indexer, &mut outcomes, start_ns);
+    let fresh = rows_by_path(store.snapshot()?.files()?);
+    let updates = tally(outcomes, &fresh, &mut report, &mut kept);
     let dirs: Vec<(String, [u8; 32])> = dir_hashes(
         kept.iter()
             .map(|row| (row.path.as_str(), row.size, row.mtime_ns, row.inode)),
@@ -201,7 +186,100 @@ pub fn scan(
     store.commit_scan(&updates, &deleted, Some(&dirs))?;
     store.replace_build(&crate::build::discover(project, config))?;
     report.errors.sort();
-    Ok(report)
+    Ok(Some(report))
+}
+
+/// Brings only `paths` (root-relative) up to date: the files a lookup is
+/// about to answer from. Takes the write lock only when one changed; `None`
+/// when it stays busy longer than `wait`.
+pub fn rescan(
+    project: &Project,
+    indexer: &dyn Indexer,
+    paths: &[String],
+    wait: Duration,
+) -> Result<Option<ScanReport>, Error> {
+    let start_ns = now_ns();
+    let mut store = Store::open(&project.index_path())?;
+    let mut report = ScanReport::default();
+    let mut candidates: Vec<(WalkedFile, Option<FileRow>)> = Vec::new();
+    let mut deleted = Vec::new();
+    {
+        let snapshot = store.snapshot()?;
+        for path in paths {
+            let row = snapshot.file(path)?;
+            let id = FileId::from_canonical(path.clone());
+            match (stat(project, &id), row) {
+                (Some(file), Some(row)) if is_current(&row, indexer) && same_stat(&row, &file) => {
+                    report.unchanged += 1;
+                }
+                (Some(file), row) => candidates.push((file, row)),
+                (None, Some(_)) => deleted.push(path.clone()),
+                (None, None) => {}
+            }
+        }
+    }
+    if candidates.is_empty() && deleted.is_empty() {
+        return Ok(Some(report));
+    }
+    let mut outcomes: Vec<Outcome> = candidates
+        .iter()
+        .map(|(file, row)| process(project, indexer, file, row.as_ref(), start_ns))
+        .collect();
+    let Some(_lock) = WriteLock::try_acquire_for(project, wait)? else {
+        return Ok(None);
+    };
+    recheck(project, indexer, &mut outcomes, start_ns);
+    let fresh = rows_by_path(store.snapshot()?.files()?);
+    let updates = tally(outcomes, &fresh, &mut report, &mut Vec::new());
+    report.deleted = deleted.len();
+    store.commit(&updates, &deleted)?;
+    report.errors.sort();
+    Ok(Some(report))
+}
+
+fn lock(project: &Project, wait: Option<Duration>) -> Result<Option<WriteLock>, Error> {
+    match wait {
+        None => WriteLock::acquire(project).map(Some),
+        Some(wait) => WriteLock::try_acquire_for(project, wait),
+    }
+}
+
+fn rows_by_path(rows: Vec<FileRow>) -> HashMap<String, FileRow> {
+    rows.into_iter()
+        .map(|row| (row.path.clone(), row))
+        .collect()
+}
+
+/// Counts the outcomes into `report`, records the rows kept, and returns the
+/// updates to commit.
+fn tally(
+    outcomes: Vec<Outcome>,
+    fresh: &HashMap<String, FileRow>,
+    report: &mut ScanReport,
+    kept: &mut Vec<FileRow>,
+) -> Vec<FileUpdate> {
+    let mut updates = Vec::new();
+    for outcome in outcomes {
+        match outcome {
+            Outcome::Indexed(update) => {
+                report.indexed += 1;
+                kept.push(update.file.clone());
+                push_unless_committed(&mut updates, update, fresh);
+            }
+            Outcome::Touched(update) => {
+                report.touched += 1;
+                kept.push(update.file.clone());
+                push_unless_committed(&mut updates, update, fresh);
+            }
+            Outcome::Pending(update) => {
+                report.pending += 1;
+                kept.push(update.file.clone());
+                updates.push(update);
+            }
+            Outcome::Failed(path, error) => report.errors.push((path, error)),
+        }
+    }
+    updates
 }
 
 /// Another process may have committed the same change while this one parsed;
