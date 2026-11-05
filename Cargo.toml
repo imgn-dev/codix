@@ -18,6 +18,7 @@ codix-vcs-git = { path = "crates/codix-vcs-git" }
 codix-vcs-hg = { path = "crates/codix-vcs-hg" }
 codix-vcs-svn = { path = "crates/codix-vcs-svn" }
 globset = "0.4.21"
+ignore = "0.4.34"
 inventory = "0.3.25"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
