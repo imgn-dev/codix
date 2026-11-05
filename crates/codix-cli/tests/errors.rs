@@ -219,7 +219,8 @@ mod with_java {
             "A.java",
             "class A {\n  void f(int x) {}\n  void f(long x) {}\n}\n",
         )]);
-        let out = codix(&root, &root, &["def", "f"]);
+        // `def` answers every overload; `show` has to know which body to print.
+        let out = codix(&root, &root, &["show", "f"]);
         assert_eq!(out.code, Some(3));
         let lines: Vec<&str> = out.stderr.lines().collect();
         assert_eq!(lines[0], "error[ambiguous_symbol]: \"f\" matches 2 symbols");
@@ -233,7 +234,7 @@ mod with_java {
         );
 
         let json: serde_json::Value =
-            serde_json::from_str(&codix(&root, &root, &["def", "f", "--json"]).stdout).unwrap();
+            serde_json::from_str(&codix(&root, &root, &["show", "f", "--json"]).stdout).unwrap();
         assert_eq!(
             json["error"]["candidates"].as_array().map(Vec::len),
             Some(2)

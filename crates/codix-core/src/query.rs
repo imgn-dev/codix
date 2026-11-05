@@ -17,7 +17,7 @@ use crate::parse::PackIndexer;
 use crate::project::{FileId, Project, ScopeRequest};
 use crate::scan::{rescan, scan_within};
 use crate::store::{FileStatus, MatchMode, NameQuery, Snapshot, Store, SymbolHit};
-use crate::symbol_id::resolve_where;
+use crate::symbol_id::{resolve_overloads_where, resolve_where};
 
 /// Longest line text shown with a `grep` match, in characters.
 const MAX_LINE: usize = 200;
@@ -223,8 +223,11 @@ pub struct DefRequest {
 /// What [`DefOp`] answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DefResponse {
-    /// The definition.
+    /// The definition; for overloads, the first one in its file.
     pub definition: SymbolResult,
+    /// The other overloads of the same name in the same file.
+    #[serde(default)]
+    pub overloads: Vec<SymbolResult>,
     /// See [`FindResponse::possibly_stale`].
     pub possibly_stale: bool,
 }
@@ -243,16 +246,22 @@ impl Operation for DefOp {
     fn run(&self, ctx: &Context, request: DefRequest) -> Result<DefResponse, Error> {
         let (project, config) = indexed(ctx)?;
         let scope = ctx.scope(&request.scope)?;
-        let (hit, possibly_stale) = lookup(ctx, project, &config, |snapshot| {
-            let hit = resolve_where(snapshot, project, ctx.cwd(), &request.symbol, &|hit| {
-                (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
-                    && scope.contains(&FileId::from_canonical(hit.path.as_str()))
-            })?;
-            let path = hit.path.clone();
-            Ok((hit, vec![path]))
+        let (hits, possibly_stale) = lookup(ctx, project, &config, |snapshot| {
+            let hits =
+                resolve_overloads_where(snapshot, project, ctx.cwd(), &request.symbol, &|hit| {
+                    (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
+                        && scope.contains(&FileId::from_canonical(hit.path.as_str()))
+                })?;
+            let paths = distinct(hits.iter().map(|h| h.path.clone()));
+            Ok((hits, paths))
+        })?;
+        let mut results = hits.into_iter().map(|hit| SymbolResult::new(ctx, hit));
+        let definition = results.next().ok_or_else(|| Error::Internal {
+            message: "a lookup answered no symbol".to_owned(),
         })?;
         Ok(DefResponse {
-            definition: SymbolResult::new(ctx, hit),
+            definition,
+            overloads: results.collect(),
             possibly_stale,
         })
     }

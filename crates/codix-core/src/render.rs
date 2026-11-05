@@ -139,19 +139,23 @@ fn stale(w: &mut dyn Write, possibly_stale: bool) -> io::Result<()> {
 
 impl TextRender for DefResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
-        let d = &self.definition;
-        let mut line = format!(
-            "{}  {}  {}",
-            style.paint("36", &location(&d.location)),
-            d.kind,
-            d.qualified_name
-        );
-        if let Some(signature) = &d.signature {
-            line.push_str(COLUMN_GAP);
-            line.push_str(signature);
+        for d in std::iter::once(&self.definition).chain(&self.overloads) {
+            let mut line = format!(
+                "{}  {}  {}",
+                style.paint("36", &location(&d.location)),
+                d.kind,
+                d.qualified_name
+            );
+            if let Some(signature) = &d.signature {
+                line.push_str(COLUMN_GAP);
+                line.push_str(signature);
+            }
+            writeln!(w, "{line}")?;
+            writeln!(w, "{}", d.symbol_id)?;
         }
-        writeln!(w, "{line}")?;
-        writeln!(w, "{}", d.symbol_id)?;
+        if !self.overloads.is_empty() {
+            writeln!(w, "{} overloads", self.overloads.len() + 1)?;
+        }
         stale(w, self.possibly_stale)
     }
 }

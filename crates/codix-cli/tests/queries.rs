@@ -112,6 +112,75 @@ fn def_narrows_an_ambiguous_name() {
 }
 
 #[test]
+fn def_lists_every_overload_of_a_name() {
+    let (_guard, root) = indexed(BILLING);
+    let out = codix(&root, &root, &["def", "Invoice.total", "--kind", "method"]);
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
+    let lines: Vec<&str> = out.stdout.lines().collect();
+    assert_eq!(lines.len(), 5, "{}", out.stdout);
+    assert!(
+        lines[0].starts_with(
+            "src/billing/Invoice.java:6:17  method  Invoice.total  public long total()"
+        ),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        lines[2].starts_with(
+            "src/billing/Invoice.java:10:10  method  Invoice.total  long total(long discount)"
+        ),
+        "{}",
+        out.stdout
+    );
+    assert_eq!(lines[4], "2 overloads");
+
+    let json: Value = serde_json::from_str(
+        &codix(
+            &root,
+            &root,
+            &["def", "Invoice.total", "--kind", "method", "--json"],
+        )
+        .stdout,
+    )
+    .expect("JSON");
+    assert_eq!(json["result"]["definition"]["line"], 6);
+    assert_eq!(json["result"]["overloads"][0]["line"], 10);
+    // The field of the same name is another symbol, not an overload.
+    let all = codix(&root, &root, &["def", "Invoice.total"]);
+    assert_eq!(all.code, Some(3), "{}", all.stdout);
+}
+
+#[test]
+fn a_type_is_found_rather_than_its_own_constructors() {
+    let (_guard, root) = indexed(&[(
+        "src/Box.java",
+        "class Box {\n    Box() {}\n    Box(int size) {}\n}\n",
+    )]);
+    let def = codix(&root, &root, &["def", "Box"]);
+    assert_eq!(def.code, Some(0), "{}", def.stderr);
+    assert!(
+        def.stdout.starts_with("src/Box.java:1:7  class  Box"),
+        "{}",
+        def.stdout
+    );
+    let show = codix(&root, &root, &["show", "Box"]);
+    assert_eq!(show.code, Some(0), "{}", show.stderr);
+    assert!(show.stdout.contains("Box(int size) {}"), "{}", show.stdout);
+}
+
+#[test]
+fn show_still_asks_which_overload() {
+    let (_guard, root) = indexed(BILLING);
+    let out = codix(&root, &root, &["show", "Invoice.total", "--kind", "method"]);
+    assert_eq!(out.code, Some(3), "{}", out.stdout);
+    assert!(
+        out.stderr.starts_with("error[ambiguous_symbol]"),
+        "{}",
+        out.stderr
+    );
+}
+
+#[test]
 fn outline_of_a_directory() {
     check("src", &["outline", "billing"], "outline-billing");
 }
