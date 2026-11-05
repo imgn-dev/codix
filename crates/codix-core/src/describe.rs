@@ -160,7 +160,7 @@ pub const COMMANDS: &[Description] = &[
         name: "def",
         summary: "Show where a symbol is defined.",
         when: "To go from a name, a symbol ID or a `file:line:col` to its definition.",
-        returns: "The definition's location, signature and ID; the candidates when the name is ambiguous.",
+        returns: "The definition's location, signature and ID; every overload when the name has several in one file; the candidates when it is ambiguous.",
         tier: Some(Tier::Symbols),
         example: "codix def Invoice.total",
     },

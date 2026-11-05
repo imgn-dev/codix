@@ -176,6 +176,65 @@ pub fn resolve_where(
     input: &str,
     keep: &dyn Fn(&SymbolHit) -> bool,
 ) -> Result<SymbolHit, Error> {
+    one(input, candidates(snapshot, project, cwd, input, keep)?)
+}
+
+/// Like [`resolve_where`], answering every overload when the matches are
+/// overloads of one name in one file, first one first.
+pub fn resolve_overloads_where(
+    snapshot: &Snapshot<'_>,
+    project: &Project,
+    cwd: &Path,
+    input: &str,
+    keep: &dyn Fn(&SymbolHit) -> bool,
+) -> Result<Vec<SymbolHit>, Error> {
+    let mut matches = candidates(snapshot, project, cwd, input, keep)?;
+    if matches.len() > 1 && overloads(&matches) {
+        matches.sort_by_key(|hit| hit.symbol.range.start.byte);
+        return Ok(matches);
+    }
+    one(input, matches).map(|hit| vec![hit])
+}
+
+/// Whether every match is a method, function or constructor of the same kind,
+/// with the same qualified name, in the same file.
+fn overloads(matches: &[SymbolHit]) -> bool {
+    let first = &matches[0];
+    matches!(
+        first.symbol.kind.as_str(),
+        "method" | "function" | "constructor"
+    ) && matches.iter().all(|hit| {
+        hit.path == first.path
+            && hit.symbol.kind == first.symbol.kind
+            && hit.symbol.qualified_name == first.symbol.qualified_name
+    })
+}
+
+/// A type and its own constructors share its name; the name means the type.
+fn prefer_types(matches: Vec<SymbolHit>) -> Vec<SymbolHit> {
+    let (constructors, others): (Vec<&SymbolHit>, Vec<&SymbolHit>) = matches
+        .iter()
+        .partition(|hit| hit.symbol.kind == "constructor");
+    match others.as_slice() {
+        [ty] if !constructors.is_empty()
+            && constructors
+                .iter()
+                .all(|c| c.symbol.parent.as_deref() == Some(ty.symbol.symbol_id.as_str())) =>
+        {
+            vec![(*ty).clone()]
+        }
+        _ => matches,
+    }
+}
+
+/// Every symbol `input` names that `keep` accepts.
+fn candidates(
+    snapshot: &Snapshot<'_>,
+    project: &Project,
+    cwd: &Path,
+    input: &str,
+    keep: &dyn Fn(&SymbolHit) -> bool,
+) -> Result<Vec<SymbolHit>, Error> {
     let matches = match SymbolRef::parse(input)? {
         SymbolRef::Id {
             prefix,
@@ -198,7 +257,9 @@ pub fn resolve_where(
         }
         SymbolRef::Name(name) => snapshot.symbols_named(&name)?,
     };
-    one(input, matches.into_iter().filter(|hit| keep(hit)).collect())
+    Ok(prefer_types(
+        matches.into_iter().filter(|hit| keep(hit)).collect(),
+    ))
 }
 
 /// The deepest symbol whose range holds the position: the one defined there.

@@ -79,7 +79,15 @@
   "properties": {
     "definition": {
       "$ref": "#/$defs/SymbolResult",
-      "description": "The definition."
+      "description": "The definition; for overloads, the first one in its file."
+    },
+    "overloads": {
+      "default": [],
+      "description": "The other overloads of the same name in the same file.",
+      "items": {
+        "$ref": "#/$defs/SymbolResult"
+      },
+      "type": "array"
     },
     "possibly_stale": {
       "description": "See [`FindResponse::possibly_stale`].",

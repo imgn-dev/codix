@@ -85,7 +85,7 @@ codix find Invoice --kind class
 Show where a symbol is defined.
 
 - **When:** To go from a name, a symbol ID or a `file:line:col` to its definition.
-- **Returns:** The definition's location, signature and ID; the candidates when the name is ambiguous.
+- **Returns:** The definition's location, signature and ID; every overload when the name has several in one file; the candidates when it is ambiguous.
 - **Needs:** tier 1 (symbols)
 
 ```
