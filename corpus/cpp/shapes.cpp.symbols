@@ -1,0 +1,26 @@
+3:9 macro PI | #define PI
+5:11 namespace geo | namespace geo
+7:8 struct geo::Point | struct Point
+8:12 field geo::Point::x | double x, y
+8:15 field geo::Point::y | double x, y
+11:7 class geo::Shape | class Shape
+13:5 constructor geo::Shape::Shape | Shape()
+14:13 method geo::Shape::~Shape | virtual ~Shape()
+15:20 method geo::Shape::area | virtual double area() const
+16:10 method geo::Shape::operator== | bool operator==(const Shape &other) const
+19:9 field geo::Shape::id_ | int id_
+22:7 class geo::Circle | class Circle : public Shape
+24:14 constructor geo::Circle::Circle | explicit Circle(double r)
+25:12 method geo::Circle::area | double area() const override
+28:12 field geo::Circle::r_ | double r_
+31:7 type_alias geo::Shapes | using Shapes = std::vector<Shape *>
+33:12 enum geo::Kind | enum class Kind
+33:19 enum_member geo::Kind::Circle | Circle
+33:27 enum_member geo::Kind::Square | Square
+36:7 class geo::Box | class Box
+38:7 method geo::Box::get | T get() const
+41:8 function geo::total | double total(const Shapes &shapes)
+45:13 constructor geo::Shape::Shape | geo::Shape::Shape() : id_(0)
+47:18 method geo::Shape::operator== | bool geo::Shape::operator==(const Shape &other) const
+50:16 method geo::Box::get | T geo::Box<T>::get() const
+52:13 method geo::total | double geo::total(const Shapes &shapes)

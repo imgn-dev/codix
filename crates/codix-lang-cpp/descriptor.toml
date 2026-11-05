@@ -1,0 +1,14 @@
+name = "cpp"
+version = 1
+id_prefix = "cpp"
+
+[detect]
+extensions = ["cpp", "cc", "cxx", "c++", "hpp", "hh", "hxx"]
+modelines = ["cpp", "c++"]
+
+[symbols]
+separator = "::"
+body_fields = ["body", "value", "default_value"]
+# Anonymous structs in a typedef come before the name.
+body_tokens = ["{"]
+# C++ visibility is set by `public:` sections, not on each member.

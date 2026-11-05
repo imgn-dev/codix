@@ -17,7 +17,7 @@ path = "src/main.rs"
 default = ["lang-go", "lang-java", "vcs-git"]
 full = ["default", "all-langs", "all-vcs"]
 minimal = []
-all-langs = ["lang-c", "lang-go", "lang-java", "lang-javascript", "lang-kotlin", "lang-python", "lang-rust", "lang-typescript"]
+all-langs = ["lang-c", "lang-cpp", "lang-go", "lang-java", "lang-javascript", "lang-kotlin", "lang-python", "lang-rust", "lang-typescript"]
 lang-go = ["dep:codix-lang-go"]
 lang-typescript = ["dep:codix-lang-typescript"]
 lang-python = ["dep:codix-lang-python"]
@@ -25,6 +25,7 @@ lang-kotlin = ["dep:codix-lang-kotlin"]
 lang-javascript = ["dep:codix-lang-javascript"]
 lang-rust = ["dep:codix-lang-rust"]
 lang-c = ["dep:codix-lang-c"]
+lang-cpp = ["dep:codix-lang-cpp"]
 all-vcs = ["vcs-git", "vcs-hg", "vcs-svn"]
 lang-java = ["dep:codix-lang-java"]
 vcs-git = ["dep:codix-vcs-git"]
@@ -42,6 +43,7 @@ codix-lang-kotlin = { workspace = true, optional = true }
 codix-lang-javascript = { workspace = true, optional = true }
 codix-lang-rust = { workspace = true, optional = true }
 codix-lang-c = { workspace = true, optional = true }
+codix-lang-cpp = { workspace = true, optional = true }
 codix-provider.workspace = true
 codix-vcs-git = { workspace = true, optional = true }
 codix-vcs-hg = { workspace = true, optional = true }

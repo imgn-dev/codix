@@ -49,13 +49,15 @@ fn tags_query(name: &str, grammar: &Grammar) -> Result<Arc<Query>, Error> {
 
 /// A definition captured by the `tags` query.
 /// A definition captured by the `tags` query. `@parent` names the enclosing
-/// type of a definition written outside it, such as a Go method's receiver or
-/// the type of a Rust `impl` block.
+/// type of a definition written outside it, such as a Go method's receiver,
+/// the type of a Rust `impl` block, or the scopes of a C++ `geo::Shape::area`.
 struct Definition<'tree> {
     node: Node<'tree>,
     name: Node<'tree>,
     kind: String,
-    parent: Option<Node<'tree>>,
+    /// `@parent` captures, outermost first, such as `geo` and `Shape` in
+    /// `geo::Shape::area`.
+    parents: Vec<Node<'tree>>,
     pattern: usize,
 }
 
@@ -138,13 +140,13 @@ fn definitions<'tree>(
         // One match may name several symbols, as `const a, b = 1, 2` does.
         let mut declared = Vec::new();
         let mut definition = None;
-        let mut parent = None;
+        let mut parents = Vec::new();
         for capture in m.captures() {
             let capture_name = names[capture.index as usize];
             if capture_name == "name" {
                 declared.push(capture.node);
             } else if capture_name == "parent" {
-                parent = Some(capture.node);
+                parents.push(capture.node);
             } else if let Some(kind) = capture_name.strip_prefix("definition.") {
                 definition = Some((capture.node, kind));
             }
@@ -157,7 +159,7 @@ fn definitions<'tree>(
                     node,
                     name,
                     kind: kind.to_owned(),
-                    parent,
+                    parents: parents.clone(),
                     pattern: m.pattern_index,
                 });
             }
@@ -208,7 +210,14 @@ fn symbols(
         let separator = &descriptor.symbols.separator;
         let qualified_name = [
             parent.map(|p| p.qualified_name.clone()),
-            definition.parent.map(|p| text(content, p).to_owned()),
+            (!definition.parents.is_empty()).then(|| {
+                definition
+                    .parents
+                    .iter()
+                    .map(|p| text(content, *p))
+                    .collect::<Vec<_>>()
+                    .join(separator)
+            }),
             Some(name.to_owned()),
         ]
         .into_iter()

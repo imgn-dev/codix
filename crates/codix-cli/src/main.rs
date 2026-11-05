@@ -7,6 +7,8 @@ mod render;
 // what links it in.
 #[cfg(feature = "lang-c")]
 use codix_lang_c as _;
+#[cfg(feature = "lang-cpp")]
+use codix_lang_cpp as _;
 #[cfg(feature = "lang-go")]
 use codix_lang_go as _;
 #[cfg(feature = "lang-java")]
@@ -388,6 +390,7 @@ mod tests {
                 (ProviderKind::Language, "rust"),
             ),
             (cfg!(feature = "lang-c"), (ProviderKind::Language, "c")),
+            (cfg!(feature = "lang-cpp"), (ProviderKind::Language, "cpp")),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
             (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),
