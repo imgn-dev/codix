@@ -1,0 +1,4 @@
+1:11 interface Props | interface Props
+2:3 property Props.label | label: string
+5:17 function Button | function Button({ label }: Props)
+9:14 function Small | Small

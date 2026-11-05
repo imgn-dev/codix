@@ -1,0 +1,23 @@
+1:14 constant VERSION | VERSION
+2:7 constant handlers | handlers
+5:18 interface Shape | interface Shape
+6:12 property Shape.name | readonly name: string
+7:3 method Shape.area | area(): number
+10:6 type_alias Handler | type Handler
+12:6 enum Color | enum Color
+13:3 enum_member Color.Red | Red
+14:3 enum_member Color.Green | Green
+17:11 namespace Geometry | namespace Geometry
+18:19 function Geometry.origin | function origin(): Point
+23:23 class Base | abstract class Base implements Shape
+24:12 method Base.area | abstract area(): number
+25:7 method Base.name | get name(): string
+28:14 class Point | class Point extends Base
+29:18 field Point.count [private] | private static count
+30:19 field Point.x [public] | public readonly x: number
+32:3 constructor Point.constructor | constructor(x: number, protected y: number)
+37:3 method Point.area | area(): number
+41:3 field Point.move | move
+46:17 function distance | function distance(a: Point, b: Point): number
+50:7 function add | add
+52:18 function external | function external(x: number): string

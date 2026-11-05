@@ -12,7 +12,7 @@ index.scan_interval
 
 languages.overrides."<glob>"
   Language of the files matching each glob, overriding detection.
-  type: language, one of: c, cpp, csharp, go, java, javascript, json, kotlin, markdown, php, python, ruby, rust, sql, text, toml, typescript, xml, yaml
+  type: language, one of: c, cpp, csharp, go, java, javascript, json, kotlin, markdown, php, python, ruby, rust, sql, text, toml, tsx, typescript, xml, yaml
   default: none
   file: codix.toml
 

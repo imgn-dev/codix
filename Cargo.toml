@@ -16,6 +16,7 @@ clap = { version = "4.6.7", features = ["derive"] }
 codix-core = { path = "crates/codix-core" }
 codix-lang-go = { path = "crates/codix-lang-go" }
 codix-lang-java = { path = "crates/codix-lang-java" }
+codix-lang-typescript = { path = "crates/codix-lang-typescript" }
 codix-provider = { path = "crates/codix-provider" }
 codix-testkit = { path = "crates/codix-testkit" }
 codix-vcs-git = { path = "crates/codix-vcs-git" }
@@ -37,6 +38,7 @@ tree-sitter = "0.27.1"
 tree-sitter-go = "0.25.0"
 tree-sitter-java = "0.23.5"
 tree-sitter-language = "0.1.9"
+tree-sitter-typescript = "0.23.2"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

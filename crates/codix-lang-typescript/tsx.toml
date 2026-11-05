@@ -1,0 +1,15 @@
+name = "tsx"
+version = 1
+id_prefix = "ts"
+
+[detect]
+extensions = ["tsx"]
+modelines = ["typescriptreact", "tsx"]
+
+[symbols]
+separator = "."
+body_fields = ["body", "value"]
+
+[symbols.visibility]
+node = "accessibility_modifier"
+values = ["public", "protected", "private"]

@@ -9,6 +9,8 @@ mod render;
 use codix_lang_go as _;
 #[cfg(feature = "lang-java")]
 use codix_lang_java as _;
+#[cfg(feature = "lang-typescript")]
+use codix_lang_typescript as _;
 #[cfg(feature = "vcs-git")]
 use codix_vcs_git as _;
 #[cfg(feature = "vcs-hg")]
@@ -351,6 +353,14 @@ mod tests {
                 (ProviderKind::Language, "java"),
             ),
             (cfg!(feature = "lang-go"), (ProviderKind::Language, "go")),
+            (
+                cfg!(feature = "lang-typescript"),
+                (ProviderKind::Language, "typescript"),
+            ),
+            (
+                cfg!(feature = "lang-typescript"),
+                (ProviderKind::Language, "tsx"),
+            ),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
             (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),

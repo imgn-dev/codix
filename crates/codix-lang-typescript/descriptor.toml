@@ -1,0 +1,16 @@
+name = "typescript"
+version = 1
+id_prefix = "ts"
+
+[detect]
+extensions = ["ts", "mts", "cts"]
+shebangs = ["deno", "ts-node", "tsx", "bun"]
+modelines = ["typescript", "ts"]
+
+[symbols]
+separator = "."
+body_fields = ["body", "value"]
+
+[symbols.visibility]
+node = "accessibility_modifier"
+values = ["public", "protected", "private"]
