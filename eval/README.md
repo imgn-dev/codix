@@ -31,5 +31,11 @@ It writes `results/<version>.json`, raw transcripts to `target/eval/`, and the
 table below.
 
 <!-- results -->
-No results yet.
+Results of codix 0.1.0 (`eval/results/0.1.0.json`):
+
+| Model | Answered | Tool calls | Misused commands | Guessed flags | Grep fallbacks | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| haiku | 20/20 | 42 | 1 | 0 | 0 | $0.03 |
+| opus | 20/20 | 27 | 1 | 0 | 0 | $0.84 |
+| sonnet | 20/20 | 27 | 0 | 1 | 0 | $0.42 |
 <!-- /results -->
