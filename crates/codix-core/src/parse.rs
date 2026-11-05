@@ -56,6 +56,7 @@ struct Definition<'tree> {
     name: Node<'tree>,
     kind: String,
     parent: Option<Node<'tree>>,
+    pattern: usize,
 }
 
 /// Extracts the symbols of one file.
@@ -131,15 +132,20 @@ fn definitions<'tree>(
                     name,
                     kind: kind.to_owned(),
                     parent,
+                    pattern: m.pattern_index,
                 });
             }
         }
     }
+    // When several patterns capture the same definition, the one written last
+    // in the query wins: packs follow upstream's general patterns with more
+    // specific ones, such as a function inside a class being a method.
     found.sort_by_key(|d| {
         (
             d.node.start_byte(),
             std::cmp::Reverse(d.node.end_byte()),
             d.name.start_byte(),
+            std::cmp::Reverse(d.pattern),
         )
     });
     found.dedup_by_key(|d| (d.node.id(), d.name.id()));

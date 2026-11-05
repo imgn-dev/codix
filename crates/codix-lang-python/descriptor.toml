@@ -1,0 +1,14 @@
+name = "python"
+version = 1
+id_prefix = "py"
+
+[detect]
+extensions = ["py", "pyi", "pyw"]
+shebangs = ["python", "python3", "python2", "pypy", "pypy3"]
+modelines = ["python"]
+
+[symbols]
+separator = "."
+# `right`: an assignment's value is to a variable what a body is to a function.
+body_fields = ["body", "right"]
+# Python marks privacy by naming convention only.

@@ -1,0 +1,13 @@
+4:1 constant MAX_LINES | MAX_LINES
+5:1 variable default_currency | default_currency
+8:7 class Invoice | class Invoice
+9:5 field Invoice.count | count: int
+10:5 field Invoice.tax_rate | tax_rate
+12:9 constructor Invoice.__init__ | def __init__(self, lines)
+16:9 method Invoice.total | def total(self) -> int
+17:13 function Invoice.total.add | def add(a, b)
+22:9 method Invoice.empty | def empty() -> "Invoice"
+25:11 class Invoice.Line | class Line
+26:13 method Invoice.Line.amount | def amount(self)
+30:5 function build_report | def build_report(invoice: Invoice, *, verbose=False) -> str
+34:11 function fetch | async def fetch(url)
