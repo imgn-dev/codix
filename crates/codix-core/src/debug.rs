@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use crate::Error;
 use crate::op::{Context, Operation};
 use crate::page::{Location, Page, Paged, Ranked, sort_results};
+use crate::project::{FileId, ScopeRequest};
 
 /// The `debug-echo` operation.
 pub struct DebugEcho;
@@ -22,6 +23,9 @@ pub struct DebugEchoRequest {
     pub anchor: Option<String>,
     /// Error code to fail with instead of answering.
     pub fail: Option<String>,
+    /// Directories to limit results to.
+    #[serde(default)]
+    pub scope: ScopeRequest,
     /// Page to return.
     pub page: Page,
 }
@@ -57,20 +61,22 @@ impl Operation for DebugEcho {
         if let Some(code) = &request.fail {
             return Err(sample_error(ctx, code));
         }
-        let mut items: Vec<EchoItem> = (0..request.count).map(item).collect();
+        let scope = ctx.scope(&request.scope)?;
+        let mut items: Vec<EchoItem> = (0..request.count)
+            .map(|i| item(ctx, i))
+            .filter(|item| scope.contains(&item.location.root_path))
+            .collect();
         sort_results(&mut items, request.anchor.as_deref());
         Ok(request.page.apply(items))
     }
 }
 
-fn item(i: usize) -> EchoItem {
+fn item(ctx: &Context, i: usize) -> EchoItem {
     let n = u32::try_from(i).unwrap_or(u32::MAX);
+    let dir = if i % 4 == 3 { "tests" } else { "src" };
+    let file = FileId::from_canonical(format!("{dir}/file{}.rs", i % 4));
     EchoItem {
-        location: Location {
-            path: format!("src/file{}.rs", i % 4),
-            line: 10 + n,
-            column: 1 + n % 5,
-        },
+        location: ctx.location(&file, 10 + n, 1 + n % 5),
         kind: if i.is_multiple_of(7) { "def" } else { "call" }.to_owned(),
         name: format!("item{i}"),
     }

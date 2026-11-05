@@ -187,6 +187,8 @@ pub(crate) fn text_error(w: &mut dyn Write, error: &Error, style: Style) -> io::
 
 #[cfg(test)]
 mod tests {
+    use codix_core::project::FileId;
+
     use super::*;
 
     fn page(n: u32) -> Paged<EchoItem> {
@@ -195,6 +197,7 @@ mod tests {
                 .map(|i| EchoItem {
                     location: Location {
                         path: "src/a.rs".to_owned(),
+                        root_path: FileId::from_canonical("src/a.rs"),
                         line: i,
                         column: 1,
                     },

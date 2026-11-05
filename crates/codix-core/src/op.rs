@@ -1,12 +1,15 @@
 //! The operation layer: one typed request and response per command, shared by
 //! every frontend so they cannot behave differently.
 
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
+use crate::page::Location;
+use crate::project::{FileId, Project, Scope, ScopeRequest};
 
 /// A command of the operation layer.
 pub trait Operation {
@@ -27,21 +30,62 @@ pub trait Outcome {
     fn has_results(&self) -> bool;
 }
 
-/// What every operation runs against.
+/// What every operation runs against: the cwd and, when one was found, the
+/// project.
 #[derive(Debug, Clone)]
 pub struct Context {
     cwd: PathBuf,
+    project: Option<Project>,
 }
 
 impl Context {
-    /// A context for a command run from `cwd`.
-    pub fn new(cwd: PathBuf) -> Self {
-        Self { cwd }
+    /// Discovers the project for a command run from `cwd`, or opens the one at
+    /// `root` (`--root`, relative to `cwd`) without searching.
+    pub fn discover(cwd: &Path, root: Option<&Path>) -> Result<Self, Error> {
+        let cwd = fs::canonicalize(cwd).map_err(|source| Error::Io {
+            path: cwd.to_path_buf(),
+            source,
+        })?;
+        let project = match root {
+            Some(root) => Some(Project::at(&cwd.join(root))?),
+            None => Project::discover(&cwd)?,
+        };
+        Ok(Self { cwd, project })
     }
 
-    /// The directory the command runs from.
+    /// The canonical directory the command runs from.
     pub fn cwd(&self) -> &Path {
         &self.cwd
+    }
+
+    /// The project, or `no_project`.
+    pub fn project(&self) -> Result<&Project, Error> {
+        self.project.as_ref().ok_or_else(|| Error::NoProject {
+            start: self.cwd.clone(),
+        })
+    }
+
+    /// A location for `file`, with its path as shown from the cwd.
+    pub fn location(&self, file: &FileId, line: u32, column: u32) -> Location {
+        let path = match &self.project {
+            Some(project) => project.display(&self.cwd, file),
+            None => file.as_str().to_owned(),
+        };
+        Location {
+            path,
+            root_path: file.clone(),
+            line,
+            column,
+        }
+    }
+
+    /// Resolves `--here` and `--path`; without a project, only an empty request
+    /// is valid.
+    pub fn scope(&self, request: &ScopeRequest) -> Result<Scope, Error> {
+        if !request.here && request.paths.is_empty() {
+            return Ok(Scope::default());
+        }
+        Scope::resolve(self.project()?, &self.cwd, request)
     }
 }
 

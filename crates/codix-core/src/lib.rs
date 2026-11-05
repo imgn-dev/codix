@@ -5,5 +5,6 @@ pub mod debug;
 pub mod error;
 pub mod op;
 pub mod page;
+pub mod project;
 
 pub use error::Error;

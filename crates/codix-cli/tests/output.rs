@@ -1,8 +1,14 @@
 //! Text and JSON rendering of a stub operation, with paging and exit codes.
 
-use codix_testkit::{assert_golden, run};
+use codix_testkit::{Run, assert_golden, run_in};
 
 const CODIX: &str = env!("CARGO_BIN_EXE_codix");
+
+/// Runs in an empty temporary directory, outside any project.
+fn run(_: &str, args: &[&str]) -> Run {
+    let dir = tempfile::tempdir().expect("test setup");
+    run_in(dir.path(), CODIX, args)
+}
 
 fn golden(name: &str) -> String {
     format!("{}/tests/golden/{name}", env!("CARGO_MANIFEST_DIR"))
@@ -45,19 +51,19 @@ fn offset_returns_the_next_page() {
 
 #[test]
 fn definitions_then_anchor_file_then_position() {
-    let out = run(CODIX, &["debug-echo", "8", "--anchor", "src/file3.rs"]);
+    let out = run(CODIX, &["debug-echo", "8", "--anchor", "tests/file3.rs"]);
     let locations: Vec<&str> = out
         .stdout
         .lines()
         .filter_map(|line| line.split_whitespace().next())
-        .filter(|cell| cell.starts_with("src/"))
+        .filter(|cell| cell.contains(".rs:"))
         .collect();
     assert_eq!(
         locations,
         [
-            "src/file3.rs:17:3",
+            "tests/file3.rs:17:3",
             "src/file0.rs:10:1",
-            "src/file3.rs:13:4",
+            "tests/file3.rs:13:4",
             "src/file0.rs:14:5",
             "src/file1.rs:11:2",
             "src/file1.rs:15:1",

@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::op::Outcome;
+use crate::project::FileId;
 
 /// Default number of results per page.
 pub const DEFAULT_LIMIT: usize = 50;
@@ -85,11 +86,14 @@ impl<T> Outcome for Paged<T> {
     }
 }
 
-/// A position in a file: root-relative path, 1-based line and column.
+/// A position in a file: its path as shown from the cwd, its root-relative
+/// identity, and a 1-based line and column.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Location {
-    /// Root-relative path with `/` separators.
+    /// Path relative to the cwd, with `/` separators.
     pub path: String,
+    /// Root-relative path.
+    pub root_path: FileId,
     /// 1-based line.
     pub line: u32,
     /// 1-based column, in Unicode scalar values.
@@ -111,12 +115,12 @@ pub fn sort_results<T: Ranked>(results: &mut [T], anchor: Option<&str>) {
 }
 
 fn compare<T: Ranked>(a: &T, b: &T, anchor: Option<&str>) -> Ordering {
-    let in_anchor = |r: &T| anchor.is_some_and(|path| r.location().path == path);
+    let in_anchor = |r: &T| anchor.is_some_and(|path| r.location().root_path.as_str() == path);
     let (la, lb) = (a.location(), b.location());
     b.is_definition()
         .cmp(&a.is_definition())
         .then_with(|| in_anchor(b).cmp(&in_anchor(a)))
-        .then_with(|| la.path.cmp(&lb.path))
+        .then_with(|| la.root_path.cmp(&lb.root_path))
         .then_with(|| la.line.cmp(&lb.line))
         .then_with(|| la.column.cmp(&lb.column))
 }
@@ -141,6 +145,7 @@ mod tests {
             definition,
             Location {
                 path: path.to_owned(),
+                root_path: FileId::from_canonical(path),
                 line,
                 column,
             },

@@ -6,6 +6,7 @@ mod render;
 use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Write};
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 use clap::error::ErrorKind;
@@ -15,6 +16,7 @@ use codix_core::debug::{DebugEcho, DebugEchoRequest};
 use codix_core::error::exit;
 use codix_core::op::{Context, Operation, Outcome};
 use codix_core::page::{DEFAULT_LIMIT, Page};
+use codix_core::project::ScopeRequest;
 use render::{Style, TextRender};
 
 /// Headless code index for LLM agents.
@@ -32,6 +34,10 @@ struct Cli {
     /// Print JSON instead of text.
     #[arg(long, global = true)]
     json: bool,
+
+    /// Use the project at this directory instead of searching upward.
+    #[arg(long, global = true, value_name = "PATH")]
+    root: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Command,
@@ -55,7 +61,28 @@ struct DebugEchoArgs {
     #[arg(long)]
     fail: Option<String>,
     #[command(flatten)]
+    scope: ScopeArgs,
+    #[command(flatten)]
     page: PageArgs,
+}
+
+#[derive(Args)]
+struct ScopeArgs {
+    /// Limit results to the current directory's subtree.
+    #[arg(long)]
+    here: bool,
+    /// Limit results to this subtree; repeatable.
+    #[arg(long, value_name = "DIR")]
+    path: Vec<String>,
+}
+
+impl ScopeArgs {
+    fn request(self) -> ScopeRequest {
+        ScopeRequest {
+            here: self.here,
+            paths: self.path,
+        }
+    }
 }
 
 #[derive(Args)]
@@ -182,14 +209,15 @@ fn main() -> ExitCode {
         }
     };
     let output = Output::detect(cli.json);
-    let ctx = match env::current_dir() {
-        Ok(cwd) => Context::new(cwd),
-        Err(source) => {
-            return ExitCode::from(output.error(&Error::Io {
-                path: ".".into(),
-                source,
-            }));
-        }
+    let ctx = match env::current_dir()
+        .map_err(|source| Error::Io {
+            path: ".".into(),
+            source,
+        })
+        .and_then(|cwd| Context::discover(&cwd, cli.root.as_deref()))
+    {
+        Ok(ctx) => ctx,
+        Err(error) => return ExitCode::from(output.error(&error)),
     };
     let code = match cli.command {
         Command::DebugEcho(args) => {
@@ -197,6 +225,7 @@ fn main() -> ExitCode {
                 count: args.count,
                 anchor: args.anchor,
                 fail: args.fail,
+                scope: args.scope.request(),
                 page,
             });
             run(&output, &DebugEcho, &ctx, request)

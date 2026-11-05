@@ -1,19 +1,26 @@
 //! Every error class: exit code, text rendering on stderr, JSON on stdout.
 
-use codix_testkit::run;
+use codix_testkit::{run, run_in};
 use serde_json::Value;
 
 const CODIX: &str = env!("CARGO_BIN_EXE_codix");
 
+/// Runs `args` in an empty temporary directory, outside any project. `{CWD}` in
+/// `text` stands for that directory.
 fn check(args: &[&str], code: &str, exit: i32, text: &str) {
-    let out = run(CODIX, args);
+    let dir = tempfile::tempdir().expect("test setup");
+    let cwd = std::fs::canonicalize(dir.path()).expect("test setup");
+    let text = text.replace("{CWD}", &cwd.display().to_string());
+    let text = text.as_str();
+    let run = |args: &[&str]| run_in(&cwd, CODIX, args);
+    let out = run(args);
     assert_eq!(out.code, Some(exit), "{code}: {}", out.stderr);
     assert_eq!(out.stdout, "", "{code}");
     assert_eq!(out.stderr, text, "{code}");
 
     let mut json_args = args.to_vec();
     json_args.push("--json");
-    let out = run(CODIX, &json_args);
+    let out = run(&json_args);
     assert_eq!(out.code, Some(exit), "{code} --json");
     assert_eq!(out.stderr, "", "{code} --json");
     let value: Value = serde_json::from_str(&out.stdout).expect("one JSON document");
@@ -36,15 +43,22 @@ fn fail(code: &str, exit: i32, text: &str) {
 
 #[test]
 fn no_project() {
-    let cwd = std::env::current_dir().unwrap();
     fail(
         "no_project",
         6,
-        &format!(
-            "error[no_project]: no codix project in {} or any parent directory\n\
-             hint: run `codix init` at the project root\n",
-            cwd.display()
-        ),
+        "error[no_project]: no codix project in {CWD} or any parent directory\n\
+         hint: run `codix init` at the project root\n",
+    );
+}
+
+#[test]
+fn scope_outside_a_project_is_no_project() {
+    check(
+        &["debug-echo", "1", "--here"],
+        "no_project",
+        6,
+        "error[no_project]: no codix project in {CWD} or any parent directory\n\
+         hint: run `codix init` at the project root\n",
     );
 }
 
