@@ -15,6 +15,8 @@ use codix_lang_javascript as _;
 use codix_lang_kotlin as _;
 #[cfg(feature = "lang-python")]
 use codix_lang_python as _;
+#[cfg(feature = "lang-rust")]
+use codix_lang_rust as _;
 #[cfg(feature = "lang-typescript")]
 use codix_lang_typescript as _;
 #[cfg(feature = "vcs-git")]
@@ -378,6 +380,10 @@ mod tests {
             (
                 cfg!(feature = "lang-javascript"),
                 (ProviderKind::Language, "javascript"),
+            ),
+            (
+                cfg!(feature = "lang-rust"),
+                (ProviderKind::Language, "rust"),
             ),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),

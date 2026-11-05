@@ -1,0 +1,17 @@
+name = "rust"
+version = 1
+id_prefix = "rs"
+
+[detect]
+extensions = ["rs"]
+modelines = ["rust"]
+
+[symbols]
+separator = "::"
+body_fields = ["body", "value"]
+# `macro_rules!` has no body field.
+body_tokens = ["{"]
+
+[symbols.visibility]
+node = "visibility_modifier"
+values = ["pub"]

@@ -1,0 +1,27 @@
+3:11 constant ORIGIN [pub] | pub const ORIGIN: Point
+4:12 variable COUNT | static mut COUNT: u32
+6:10 type_alias Coord [pub] | pub type Coord = f64
+9:12 struct Point [pub] | pub struct Point
+10:9 field Point::x [pub] | pub x: Coord
+11:5 field Point::y | y: Coord
+14:17 enum Shape [pub] | pub(crate) enum Shape
+15:5 enum_member Shape::Circle | Circle
+15:14 field Shape::Circle::radius | radius: f64
+16:5 enum_member Shape::Square | Square
+17:5 enum_member Shape::Empty | Empty
+20:11 trait Area [pub] | pub trait Area
+21:10 type_alias Area::Output | type Output
+22:8 method Area::area | fn area(&self) -> f64
+23:8 method Area::describe | fn describe(&self) -> String
+29:15 constant Point::UNIT [pub] | pub const UNIT: f64
+31:12 method Point::new [pub] | pub fn new(x: Coord, y: Coord) -> Self
+37:10 type_alias Shape::Output | type Output = f64
+38:8 method Shape::area | fn area(&self) -> f64
+44:8 method Wrapper::get | fn get(&self) -> &T
+49:9 module units [pub] | pub mod units
+50:12 function units::meters [pub] | pub fn meters(value: f64) -> f64
+54:18 macro units::square | macro_rules! square
+61:11 struct Bits [pub] | pub union Bits
+62:5 field Bits::int | int: u32
+63:5 field Bits::float | float: f32
+66:4 function distance | fn distance(a: &Point, b: &Point) -> f64
