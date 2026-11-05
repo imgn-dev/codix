@@ -14,3 +14,4 @@ workspace = true
 inventory.workspace = true
 serde.workspace = true
 toml.workspace = true
+tree-sitter-language.workspace = true

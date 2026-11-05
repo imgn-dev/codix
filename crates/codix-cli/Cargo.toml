@@ -14,10 +14,12 @@ path = "src/main.rs"
 
 # Features are strictly additive: each one only adds a provider.
 [features]
-default = ["vcs-git"]
-full = ["default", "all-vcs"]
+default = ["lang-java", "vcs-git"]
+full = ["default", "all-langs", "all-vcs"]
 minimal = []
+all-langs = ["lang-java"]
 all-vcs = ["vcs-git", "vcs-hg", "vcs-svn"]
+lang-java = ["dep:codix-lang-java"]
 vcs-git = ["dep:codix-vcs-git"]
 vcs-hg = ["dep:codix-vcs-hg"]
 vcs-svn = ["dep:codix-vcs-svn"]
@@ -25,6 +27,7 @@ vcs-svn = ["dep:codix-vcs-svn"]
 [dependencies]
 clap.workspace = true
 codix-core.workspace = true
+codix-lang-java = { workspace = true, optional = true }
 codix-provider.workspace = true
 codix-vcs-git = { workspace = true, optional = true }
 codix-vcs-hg = { workspace = true, optional = true }

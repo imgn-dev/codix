@@ -75,3 +75,33 @@ pub fn run_in(cwd: &Path, binary: &str, args: &[&str]) -> Run {
         stderr: String::from_utf8(output.stderr).expect("stderr is UTF-8"),
     }
 }
+
+/// Checks every source file of a corpus directory against its expectation,
+/// `<file>.symbols`, holding what `extract` returns for it, one line each.
+/// With `CODIX_BLESS=1`, rewrites the expectations instead.
+///
+/// # Panics
+///
+/// When a file differs from its expectation, or the directory has no source
+/// files.
+pub fn check_corpus(dir: impl AsRef<Path>, extract: impl Fn(&str, &str) -> Vec<String>) {
+    let dir = dir.as_ref();
+    let mut sources: Vec<_> = fs::read_dir(dir)
+        .unwrap_or_else(|e| panic!("cannot read corpus {}: {e}", dir.display()))
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| path.is_file() && path.extension().is_none_or(|e| e != "symbols"))
+        .collect();
+    sources.sort();
+    assert!(!sources.is_empty(), "corpus {} is empty", dir.display());
+    for source in sources {
+        let name = source
+            .file_name()
+            .and_then(|n| n.to_str())
+            .expect("UTF-8 file name");
+        let content = fs::read_to_string(&source).expect("read corpus source");
+        let mut actual = extract(name, &content).join("\n");
+        actual.push('\n');
+        assert_golden(dir.join(format!("{name}.symbols")), &actual);
+    }
+}

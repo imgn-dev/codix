@@ -1,0 +1,17 @@
+5:14 class Invoice [public] | public class Invoice
+6:30 field Invoice.lines [private] | private final List<Line> lines
+7:16 field Invoice.count | static int count
+7:27 field Invoice.total | static int total
+9:12 constructor Invoice.Invoice [public] | public Invoice(List<Line> lines)
+13:17 method Invoice.total [public] | public long total()
+17:10 method Invoice.total | long total(long discount)
+21:28 class Invoice.Line [protected] | protected static class Line
+22:22 field Invoice.Line.amount [private] | private long amount
+24:14 method Invoice.Line.amount | long amount()
+29:10 enum Invoice.Status | enum Status
+30:9 enum_member Invoice.Status.DRAFT | DRAFT
+30:16 enum_member Invoice.Status.SENT | SENT("sent")
+32:20 method Invoice.Status.SENT.label | @Override String label()
+35:9 constructor Invoice.Status.Status | Status()
+36:9 constructor Invoice.Status.Status | Status(String code)
+37:16 method Invoice.Status.label | String label()

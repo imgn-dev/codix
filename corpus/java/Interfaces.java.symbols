@@ -1,0 +1,9 @@
+1:18 interface Repository [public] | public interface Repository<T>
+2:9 constant Repository.PAGE_SIZE | int PAGE_SIZE
+4:7 method Repository.find | T find(String id)
+6:21 method Repository.all | default List<T> all()
+11:12 interface Audited | @interface Audited
+12:12 method Audited.value | String value() default
+15:8 class Point | record Point(int x, int y)
+16:5 constructor Point.Point | Point
+20:18 method Point.origin | static Point origin()

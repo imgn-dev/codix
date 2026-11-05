@@ -15,6 +15,23 @@ pub struct ProviderEntry {
     pub name: &'static str,
     /// Descriptor TOML, validated by the provider's build script.
     pub descriptor: &'static str,
+    /// A language pack's grammar, if it parses.
+    pub grammar: Option<Grammar>,
+}
+
+/// A compiled-in tree-sitter grammar and the pack's queries for it.
+#[derive(Clone, Copy)]
+pub struct Grammar {
+    /// The grammar.
+    pub language: tree_sitter_language::LanguageFn,
+    /// The pack's `tags` query.
+    pub tags: &'static str,
+}
+
+impl std::fmt::Debug for Grammar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Grammar").finish_non_exhaustive()
+    }
 }
 
 inventory::collect!(ProviderEntry);
@@ -28,6 +45,8 @@ pub struct Registry {
     pub builds: Vec<BuildDescriptor>,
     /// Version control systems.
     pub vcs: Vec<VcsDescriptor>,
+    /// Grammars of language packs, by language name.
+    pub grammars: std::collections::BTreeMap<String, Grammar>,
 }
 
 impl Registry {
@@ -80,7 +99,12 @@ pub fn registry() -> &'static Registry {
                 )
             });
             match descriptor {
-                Descriptor::Language(d) => registry.languages.push(d),
+                Descriptor::Language(d) => {
+                    if let Some(grammar) = entry.grammar {
+                        registry.grammars.insert(d.name.clone(), grammar);
+                    }
+                    registry.languages.push(d);
+                }
                 Descriptor::Build(d) => registry.builds.push(d),
                 Descriptor::Vcs(d) => registry.vcs.push(d),
             }

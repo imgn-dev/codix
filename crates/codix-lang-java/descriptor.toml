@@ -1,0 +1,19 @@
+name = "java"
+version = 1
+id_prefix = "java"
+
+[detect]
+extensions = ["java"]
+modelines = ["java"]
+
+[symbols]
+separator = "."
+# `value`: a field's initializer is to a field what a body is to a method.
+body_fields = ["body", "value"]
+
+[symbols.kinds]
+record = "class"
+
+[symbols.visibility]
+node = "modifiers"
+values = ["public", "protected", "private"]

@@ -35,9 +35,90 @@ pub struct LanguageDescriptor {
     pub name: String,
     /// Pack version; part of the parser version stored per file.
     pub version: u32,
+    /// Prefix of the language's symbol IDs, such as `py` in
+    /// `py:src/billing/invoice.py::Invoice.total#a3f9`.
+    pub id_prefix: String,
     /// How files of the language are recognized.
     #[serde(default)]
     pub detect: Detect,
+    /// How definitions become symbols; packs without a grammar have none.
+    #[serde(default)]
+    pub symbols: Symbols,
+}
+
+/// The kinds every language maps its definitions onto.
+pub const SYMBOL_KINDS: &[&str] = &[
+    "module",
+    "namespace",
+    "class",
+    "struct",
+    "interface",
+    "trait",
+    "enum",
+    "enum_member",
+    "function",
+    "method",
+    "constructor",
+    "field",
+    "property",
+    "constant",
+    "variable",
+    "type_alias",
+    "macro",
+];
+
+/// How a pack's `tags` query captures become symbols.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Symbols {
+    /// Between a parent's and a child's name in qualified names.
+    #[serde(default = "default_separator")]
+    pub separator: String,
+    /// Fields holding a definition's body; its signature is the text before.
+    #[serde(default)]
+    pub body_fields: Vec<String>,
+    /// `@definition.<kind>` capture kinds mapped onto [`SYMBOL_KINDS`]; a kind
+    /// already in the vocabulary maps to itself.
+    #[serde(default)]
+    pub kinds: std::collections::BTreeMap<String, String>,
+    /// Where visibility is written, if the language has it.
+    pub visibility: Option<Visibility>,
+}
+
+impl Default for Symbols {
+    fn default() -> Self {
+        Self {
+            separator: default_separator(),
+            body_fields: Vec::new(),
+            kinds: std::collections::BTreeMap::new(),
+            visibility: None,
+        }
+    }
+}
+
+fn default_separator() -> String {
+    ".".to_owned()
+}
+
+/// Visibility: the first of `values` among the words of a definition's child
+/// node of type `node`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Visibility {
+    /// Node type holding modifiers, such as `modifiers`.
+    pub node: String,
+    /// Visibility keywords, such as `public`.
+    pub values: Vec<String>,
+}
+
+impl LanguageDescriptor {
+    /// The vocabulary kind of a `@definition.<kind>` capture.
+    pub fn symbol_kind(&self, capture_kind: &str) -> Option<&str> {
+        match self.symbols.kinds.get(capture_kind) {
+            Some(kind) => Some(kind),
+            None => SYMBOL_KINDS.iter().find(|k| **k == capture_kind).copied(),
+        }
+    }
 }
 
 /// Detection rules of a language. Content heuristics for ambiguous
@@ -120,13 +201,27 @@ pub enum Descriptor {
 }
 
 impl Descriptor {
-    /// Parses descriptor TOML of the given kind.
-    pub fn parse(kind: ProviderKind, text: &str) -> Result<Self, toml::de::Error> {
-        Ok(match kind {
-            ProviderKind::Language => Self::Language(toml::from_str(text)?),
-            ProviderKind::Build => Self::Build(toml::from_str(text)?),
-            ProviderKind::Vcs => Self::Vcs(toml::from_str(text)?),
-        })
+    /// Parses descriptor TOML of the given kind, and checks what the schema
+    /// cannot express.
+    pub fn parse(kind: ProviderKind, text: &str) -> Result<Self, String> {
+        let descriptor = match kind {
+            ProviderKind::Language => {
+                Self::Language(toml::from_str(text).map_err(|e| e.to_string())?)
+            }
+            ProviderKind::Build => Self::Build(toml::from_str(text).map_err(|e| e.to_string())?),
+            ProviderKind::Vcs => Self::Vcs(toml::from_str(text).map_err(|e| e.to_string())?),
+        };
+        if let Self::Language(language) = &descriptor {
+            for (capture, kind) in &language.symbols.kinds {
+                if !SYMBOL_KINDS.contains(&kind.as_str()) {
+                    return Err(format!(
+                        "symbols.kinds.{capture} = \"{kind}\" is not one of: {}",
+                        SYMBOL_KINDS.join(", ")
+                    ));
+                }
+            }
+        }
+        Ok(descriptor)
     }
 
     /// The provider name the descriptor declares.
@@ -169,8 +264,34 @@ mod tests {
 
     #[test]
     fn unknown_fields_are_refused() {
-        let text = "name = \"java\"\nversion = 1\nextensionz = [\"java\"]\n";
+        let text = "name = \"java\"\nversion = 1\nid_prefix = \"java\"\nextensionz = [\"java\"]\n";
         let error = Descriptor::parse(ProviderKind::Language, text).unwrap_err();
-        assert!(error.to_string().contains("extensionz"), "{error}");
+        assert!(error.contains("extensionz"), "{error}");
+    }
+}
+
+#[cfg(test)]
+mod symbol_tests {
+    use super::*;
+
+    #[test]
+    fn kinds_outside_the_vocabulary_are_refused() {
+        let text =
+            "name = \"x\"\nversion = 1\nid_prefix = \"x\"\n[symbols.kinds]\nclass = \"klass\"\n";
+        let error = Descriptor::parse(ProviderKind::Language, text).unwrap_err();
+        assert!(error.contains("klass"), "{error}");
+    }
+
+    #[test]
+    fn vocabulary_kinds_map_to_themselves() {
+        let text =
+            "name = \"x\"\nversion = 1\nid_prefix = \"x\"\n[symbols.kinds]\nrecord = \"class\"\n";
+        let Descriptor::Language(d) = Descriptor::parse(ProviderKind::Language, text).unwrap()
+        else {
+            panic!("not a language");
+        };
+        assert_eq!(d.symbol_kind("record"), Some("class"));
+        assert_eq!(d.symbol_kind("method"), Some("method"));
+        assert_eq!(d.symbol_kind("call"), None);
     }
 }

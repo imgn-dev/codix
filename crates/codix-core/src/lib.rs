@@ -8,10 +8,12 @@ pub mod error;
 pub mod lock;
 pub mod op;
 pub mod page;
+pub mod parse;
 pub mod project;
 pub mod providers;
 pub mod scan;
 pub mod store;
+pub mod symbol_id;
 pub mod vcs;
 pub mod walk;
 

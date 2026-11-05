@@ -1,5 +1,6 @@
 name = "alpha"
 version = 1
+id_prefix = "a"
 
 [detect]
 extensions = ["a"]

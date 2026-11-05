@@ -1,5 +1,6 @@
 name = "beta"
 version = 1
+id_prefix = "b"
 
 [detect]
 extensions = ["b"]

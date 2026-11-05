@@ -1,0 +1,4 @@
+1:7 class Broken | class Broken
+2:10 method Broken.fine | void fine()
+4:10 method Broken.broken (low) | void broken(
+8:10 method Broken.after | void after()

@@ -15,8 +15,10 @@ ignore.workspace = true
 rayon.workspace = true
 rusqlite.workspace = true
 serde.workspace = true
+streaming-iterator.workspace = true
 sysinfo.workspace = true
 toml_edit.workspace = true
+tree-sitter.workspace = true
 
 [dev-dependencies]
 codix-vcs-git.workspace = true

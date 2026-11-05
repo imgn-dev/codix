@@ -5,6 +5,8 @@ mod render;
 
 // Providers register themselves at link time; naming each enabled one here is
 // what links it in.
+#[cfg(feature = "lang-java")]
+use codix_lang_java as _;
 #[cfg(feature = "vcs-git")]
 use codix_vcs_git as _;
 #[cfg(feature = "vcs-hg")]
@@ -338,6 +340,10 @@ mod tests {
     #[test]
     fn compiled_in_providers_match_enabled_features() {
         let expected: Vec<(ProviderKind, &str)> = [
+            (
+                cfg!(feature = "lang-java"),
+                (ProviderKind::Language, "java"),
+            ),
             (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
             (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
             (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),

@@ -14,13 +14,15 @@ pub use descriptor::{
     BuildDescriptor, Descriptor, Detect, IgnoreStrategy, LanguageDescriptor, ProviderKind,
     VcsDescriptor,
 };
-pub use registry::{ProviderEntry, Registry, registry};
+pub use registry::{Grammar, ProviderEntry, Registry, registry};
 
 #[doc(hidden)]
 pub use inventory;
 
-/// Registers a provider: `register!(Vcs, "git", "descriptor.toml")`, with the
-/// descriptor path relative to the calling crate's manifest directory.
+/// Registers a provider: `register!(Vcs, "git", "descriptor.toml")`, with
+/// paths relative to the calling crate's manifest directory. A language pack
+/// that parses adds its grammar and `tags` query:
+/// `register!(Language, "java", "descriptor.toml", tree_sitter_java::LANGUAGE, "queries/tags.scm")`.
 #[macro_export]
 macro_rules! register {
     ($kind:ident, $name:literal, $path:literal) => {
@@ -29,6 +31,20 @@ macro_rules! register {
                 kind: $crate::ProviderKind::$kind,
                 name: $name,
                 descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
+                grammar: None,
+            }
+        }
+    };
+    (Language, $name:literal, $path:literal, $language:expr, $tags:literal) => {
+        $crate::inventory::submit! {
+            $crate::ProviderEntry {
+                kind: $crate::ProviderKind::Language,
+                name: $name,
+                descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
+                grammar: Some($crate::Grammar {
+                    language: $language,
+                    tags: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $tags)),
+                }),
             }
         }
     };
