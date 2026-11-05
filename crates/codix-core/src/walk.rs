@@ -183,7 +183,7 @@ fn visit(project: &Project, entry: Result<DirEntry, ignore::Error>, max_file_siz
         // Links are not descended: a link to a directory inside the root
         // reaches files the walk visits anyway, and one outside is not
         // followed. A link to a file inside the root names that file.
-        let Ok(target) = std::fs::canonicalize(path) else {
+        let Ok(target) = crate::project::canonicalize(path) else {
             return Visit::Error(shown, "broken symlink".to_owned());
         };
         let Some(id) = project.id_of(&target) else {

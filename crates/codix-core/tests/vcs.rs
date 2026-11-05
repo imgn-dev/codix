@@ -16,7 +16,7 @@ codix_provider::register!(Vcs, "jujutsu", "tests/fixtures/jujutsu.toml");
 
 fn temp() -> (TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("temp dir");
-    let path = fs::canonicalize(dir.path()).expect("canonical temp dir");
+    let path = codix_core::project::canonicalize(dir.path()).expect("canonical temp dir");
     (dir, path)
 }
 

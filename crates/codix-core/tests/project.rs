@@ -11,7 +11,7 @@ use tempfile::TempDir;
 /// hold where the temp directory is behind a symlink (`/var` on macOS).
 fn temp() -> (TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("test setup");
-    let path = fs::canonicalize(dir.path()).expect("test setup");
+    let path = codix_core::project::canonicalize(dir.path()).expect("test setup");
     (dir, path)
 }
 
@@ -135,7 +135,7 @@ fn symlinks_leaving_the_root_are_refused() {
     std::os::unix::fs::symlink(base.join("secret.rs"), root.join("link.rs")).unwrap();
     assert_eq!(p.file_id(&root, "link.rs").unwrap_err().code(), "usage");
     assert_eq!(
-        p.id_of(&fs::canonicalize(root.join("link.rs")).unwrap()),
+        p.id_of(&codix_core::project::canonicalize(root.join("link.rs")).unwrap()),
         None
     );
 }
@@ -239,4 +239,19 @@ fn here_and_path_scopes() {
     assert!(both.contains(&in_src));
     assert!(both.contains(&in_tests));
     assert!(!both.contains(&FileId::from_canonical("src/other.rs")));
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_paths_have_no_verbatim_prefix() {
+    let dir = tempfile::tempdir().unwrap();
+    fs::create_dir(dir.path().join(".codix")).unwrap();
+    let ctx = Context::discover(dir.path(), None).unwrap();
+    for shown in [ctx.cwd(), ctx.project().unwrap().root()] {
+        assert!(
+            !shown.display().to_string().starts_with(r"\\?\"),
+            "{}",
+            shown.display()
+        );
+    }
 }

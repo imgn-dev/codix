@@ -80,7 +80,7 @@ fn overloads_have_distinct_ids() {
 
 fn project() -> (tempfile::TempDir, PathBuf, Project) {
     let dir = tempfile::tempdir().expect("temp dir");
-    let root = fs::canonicalize(dir.path()).expect("canonical temp dir");
+    let root = codix_core::project::canonicalize(dir.path()).expect("canonical temp dir");
     fs::create_dir_all(root.join(".codix")).expect("create .codix");
     fs::create_dir_all(root.join("src/billing")).expect("create src");
     fs::write(

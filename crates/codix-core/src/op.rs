@@ -1,7 +1,6 @@
 //! The operation layer: one typed request and response per command, shared by
 //! every frontend so they cannot behave differently.
 
-use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde::de::DeserializeOwned;
@@ -45,7 +44,7 @@ impl Context {
     /// Discovers the project for a command run from `cwd`, or opens the one at
     /// `root` (`--root`, relative to `cwd`) without searching.
     pub fn discover(cwd: &Path, root: Option<&Path>) -> Result<Self, Error> {
-        let cwd = fs::canonicalize(cwd).map_err(|source| Error::Io {
+        let cwd = crate::project::canonicalize(cwd).map_err(|source| Error::Io {
             path: cwd.to_path_buf(),
             source,
         })?;

@@ -14,7 +14,7 @@ use codix_build_maven as _;
 
 fn project(files: &[(&str, &str)]) -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("temp dir");
-    let root = fs::canonicalize(dir.path()).expect("canonical temp dir");
+    let root = codix_core::project::canonicalize(dir.path()).expect("canonical temp dir");
     fs::create_dir_all(root.join(".codix")).expect("create .codix");
     for (path, content) in files {
         let path = root.join(path);

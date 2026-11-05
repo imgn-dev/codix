@@ -21,7 +21,7 @@ max_file_size = \"4MB\" # measured
 
 fn project(shared: Option<&str>) -> (TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("temp dir");
-    let root = fs::canonicalize(dir.path()).expect("canonical temp dir");
+    let root = codix_core::project::canonicalize(dir.path()).expect("canonical temp dir");
     fs::create_dir_all(root.join(".codix")).expect("create .codix");
     if let Some(shared) = shared {
         fs::write(root.join("codix.toml"), shared).expect("write codix.toml");

@@ -14,7 +14,7 @@ use codix_lang_java as _;
 #[test]
 fn scanning_indexes_java_files_and_keeps_others_for_search() {
     let dir = tempfile::tempdir().unwrap();
-    let root = fs::canonicalize(dir.path()).unwrap();
+    let root = codix_core::project::canonicalize(dir.path()).unwrap();
     fs::create_dir_all(root.join(".codix")).unwrap();
     fs::create_dir_all(root.join("src")).unwrap();
     fs::write(

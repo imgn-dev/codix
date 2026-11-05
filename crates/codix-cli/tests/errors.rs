@@ -250,3 +250,12 @@ fn not_supported_in_build() {
          hint: use the full codix build, which includes every provider\n",
     );
 }
+
+#[cfg(windows)]
+#[test]
+fn windows_paths_in_messages_have_no_verbatim_prefix() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = codix_testkit::run_in(dir.path(), CODIX, &["find", "x"]);
+    assert_eq!(out.code, Some(6));
+    assert!(!out.stderr.contains(r"\\?\"), "{}", out.stderr);
+}

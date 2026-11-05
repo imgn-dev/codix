@@ -15,7 +15,7 @@ const LIMIT: u64 = 2 << 20;
 
 fn temp() -> (TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("temp dir");
-    let path = fs::canonicalize(dir.path()).expect("canonical temp dir");
+    let path = codix_core::project::canonicalize(dir.path()).expect("canonical temp dir");
     fs::create_dir_all(path.join(".codix")).expect("create .codix");
     (dir, path)
 }

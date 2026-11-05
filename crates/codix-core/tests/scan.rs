@@ -80,7 +80,7 @@ impl Indexer for LineIndexer {
 
 fn temp() -> (TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("temp dir");
-    let root = fs::canonicalize(dir.path()).expect("canonical temp dir");
+    let root = codix_core::project::canonicalize(dir.path()).expect("canonical temp dir");
     fs::create_dir(root.join(".codix")).expect("create .codix");
     (dir, root)
 }

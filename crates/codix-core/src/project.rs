@@ -123,7 +123,7 @@ impl Project {
         };
         let mut last_error = None;
         for candidate in candidates {
-            match fs::canonicalize(&candidate) {
+            match canonicalize(&candidate) {
                 Ok(path) => return self.id_of_canonical(&path, input),
                 Err(e) if e.kind() == io::ErrorKind::NotFound => last_error = Some(e),
                 Err(source) => {
@@ -187,8 +187,58 @@ impl Project {
     }
 }
 
+/// [`fs::canonicalize`], returning an ordinary path where Windows would give a
+/// verbatim one: `C:\x` rather than `\\?\C:\x`, and `\\server\share`
+/// rather than `\\?\UNC\server\share`. Every canonical path codix shows or
+/// compares comes from here, so they all have the same form.
+pub fn canonicalize(path: impl AsRef<Path>) -> io::Result<PathBuf> {
+    let canonical = fs::canonicalize(path)?;
+    if cfg!(windows)
+        && let Some(ordinary) = canonical.to_str().and_then(without_verbatim_prefix)
+    {
+        return Ok(PathBuf::from(ordinary));
+    }
+    Ok(canonical)
+}
+
+/// A Windows verbatim path written without its `\\?\` prefix, when that
+/// means the same path: the result must not exceed the classic length limit,
+/// and no component may be one Windows rewrites in ordinary paths (a trailing
+/// dot or space, a device name such as `NUL`) or contain a character only
+/// verbatim paths allow.
+pub fn without_verbatim_prefix(path: &str) -> Option<String> {
+    const MAX_PATH: usize = 260;
+    const DEVICES: &[&str] = &["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"];
+    let (ordinary, rest) = if let Some(rest) = path.strip_prefix(r"\\?\UNC\") {
+        (format!(r"\\{rest}"), rest)
+    } else {
+        let rest = path.strip_prefix(r"\\?\")?;
+        let drive = rest.as_bytes();
+        if drive.len() < 3
+            || !drive[0].is_ascii_alphabetic()
+            || drive[1] != b':'
+            || drive[2] != b'\\'
+        {
+            return None;
+        }
+        (rest.to_owned(), &rest[3..])
+    };
+    let sound = |part: &str| {
+        let stem = part.split('.').next().unwrap_or(part).to_ascii_uppercase();
+        let device = DEVICES.contains(&stem.as_str())
+            || (stem.len() == 4
+                && (stem.starts_with("COM") || stem.starts_with("LPT"))
+                && stem.as_bytes()[3].is_ascii_digit());
+        !part.ends_with(['.', ' '])
+            && !device
+            && !part.contains(['/', '<', '>', ':', '"', '|', '?', '*'])
+    };
+    let parts_sound = rest.split('\\').filter(|p| !p.is_empty()).all(sound);
+    (ordinary.len() < MAX_PATH && parts_sound).then_some(ordinary)
+}
+
 fn canonical(path: &Path) -> Result<PathBuf, Error> {
-    fs::canonicalize(path).map_err(|source| Error::Io {
+    canonicalize(path).map_err(|source| Error::Io {
         path: path.to_path_buf(),
         source,
     })
@@ -329,6 +379,28 @@ mod tests {
         assert!(id.is_within(&FileId::from_canonical("src/main.rs")));
         assert!(!id.is_within(&FileId::from_canonical("sr")));
         assert!(!id.is_within(&FileId::from_canonical("src/main")));
+    }
+
+    #[test]
+    fn verbatim_prefixes_are_dropped_when_safe() {
+        let ordinary = |p: &str| without_verbatim_prefix(p);
+        assert_eq!(
+            ordinary(r"\\?\C:\work\shop").as_deref(),
+            Some(r"C:\work\shop")
+        );
+        assert_eq!(ordinary(r"\\?\C:\").as_deref(), Some(r"C:\"));
+        assert_eq!(
+            ordinary(r"\\?\UNC\server\share\x").as_deref(),
+            Some(r"\\server\share\x")
+        );
+        assert_eq!(ordinary(r"C:\work"), None, "not verbatim");
+        assert_eq!(ordinary(r"\\?\Volume{0b2c}\x"), None, "no drive letter");
+        assert_eq!(ordinary(r"\\?\C:\work\trailing."), None);
+        assert_eq!(ordinary(r"\\?\C:\work\NUL.txt"), None);
+        assert_eq!(ordinary(r"\\?\C:\work\com1"), None);
+        assert_eq!(ordinary(r"\\?\C:\a?b"), None);
+        let long = format!(r"\\?\C:\{}", "x".repeat(300));
+        assert_eq!(ordinary(&long), None, "over the length limit");
     }
 
     #[test]

@@ -12,7 +12,7 @@ const CODIX: &str = env!("CARGO_BIN_EXE_codix");
 
 fn project(files: &[(&str, &str)]) -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("temp dir");
-    let root = fs::canonicalize(dir.path()).expect("canonical temp dir");
+    let root = codix_core::project::canonicalize(dir.path()).expect("canonical temp dir");
     for (path, content) in files {
         let path = root.join(path);
         fs::create_dir_all(path.parent().expect("parent")).expect("create dirs");

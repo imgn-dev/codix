@@ -24,7 +24,7 @@ pub fn indexed(codix: &str, files: &[(&str, &str)]) -> (tempfile::TempDir, PathB
 /// When the directory or a file cannot be created.
 pub fn files_only(files: &[(&str, &str)]) -> (tempfile::TempDir, PathBuf) {
     let dir = tempfile::tempdir().expect("temp dir");
-    let root = fs::canonicalize(dir.path()).expect("canonical temp dir");
+    let root = codix_core::project::canonicalize(dir.path()).expect("canonical temp dir");
     for (path, content) in files {
         write(&root, path, content);
     }
