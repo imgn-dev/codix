@@ -12,14 +12,23 @@ publish = false
 name = "codix"
 path = "src/main.rs"
 
+# Features are strictly additive: each one only adds a provider.
 [features]
-default = []
-full = ["default"]
+default = ["vcs-git"]
+full = ["default", "all-vcs"]
 minimal = []
+all-vcs = ["vcs-git", "vcs-hg", "vcs-svn"]
+vcs-git = ["dep:codix-vcs-git"]
+vcs-hg = ["dep:codix-vcs-hg"]
+vcs-svn = ["dep:codix-vcs-svn"]
 
 [dependencies]
 clap.workspace = true
 codix-core.workspace = true
+codix-provider.workspace = true
+codix-vcs-git = { workspace = true, optional = true }
+codix-vcs-hg = { workspace = true, optional = true }
+codix-vcs-svn = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 

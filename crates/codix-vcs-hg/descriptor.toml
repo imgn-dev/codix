@@ -1,0 +1,8 @@
+name = "mercurial"
+detect = [".hg"]
+skip_dirs = [".hg"]
+# .hgignore uses its own syntax, so it is not honored; .codixignore is.
+
+[ignore]
+strategy = "hint"
+hint = "add `^\\.codix/` to .hgignore"

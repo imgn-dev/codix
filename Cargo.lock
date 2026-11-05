@@ -129,7 +129,11 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "codix-core",
+ "codix-provider",
  "codix-testkit",
+ "codix-vcs-git",
+ "codix-vcs-hg",
+ "codix-vcs-svn",
  "serde",
  "serde_json",
  "tempfile",
@@ -140,6 +144,8 @@ name = "codix-core"
 version = "0.1.0"
 dependencies = [
  "codix-provider",
+ "codix-vcs-git",
+ "codix-vcs-hg",
  "globset",
  "serde",
  "serde_json",
@@ -159,6 +165,27 @@ dependencies = [
 [[package]]
 name = "codix-testkit"
 version = "0.1.0"
+
+[[package]]
+name = "codix-vcs-git"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+]
+
+[[package]]
+name = "codix-vcs-hg"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+]
+
+[[package]]
+name = "codix-vcs-svn"
+version = "0.1.0"
+dependencies = [
+ "codix-provider",
+]
 
 [[package]]
 name = "colorchoice"

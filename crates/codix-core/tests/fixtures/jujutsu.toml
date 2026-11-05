@@ -1,0 +1,6 @@
+name = "jujutsu"
+detect = [".jj"]
+skip_dirs = [".jj"]
+
+[ignore]
+strategy = "none"

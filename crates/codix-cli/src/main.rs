@@ -3,6 +3,15 @@
 
 mod render;
 
+// Providers register themselves at link time; naming each enabled one here is
+// what links it in.
+#[cfg(feature = "vcs-git")]
+use codix_vcs_git as _;
+#[cfg(feature = "vcs-hg")]
+use codix_vcs_hg as _;
+#[cfg(feature = "vcs-svn")]
+use codix_vcs_svn as _;
+
 use std::env;
 use std::ffi::OsString;
 use std::io::{self, IsTerminal, Write};
@@ -302,4 +311,39 @@ fn main() -> ExitCode {
         }
     };
     ExitCode::from(code)
+}
+
+#[cfg(test)]
+mod tests {
+    use codix_provider::{ProviderKind, known, registry};
+
+    #[test]
+    fn compiled_in_providers_match_enabled_features() {
+        let expected: Vec<(ProviderKind, &str)> = [
+            (cfg!(feature = "vcs-git"), (ProviderKind::Vcs, "git")),
+            (cfg!(feature = "vcs-hg"), (ProviderKind::Vcs, "mercurial")),
+            (cfg!(feature = "vcs-svn"), (ProviderKind::Vcs, "subversion")),
+        ]
+        .into_iter()
+        .filter_map(|(enabled, provider)| enabled.then_some(provider))
+        .collect();
+        assert_eq!(registry().names(), expected);
+    }
+
+    #[test]
+    fn every_compiled_in_provider_is_known() {
+        for (kind, name) in registry().names() {
+            assert!(
+                known::is_known(kind, name),
+                "{kind} provider {name} is missing from known"
+            );
+        }
+    }
+
+    #[cfg(feature = "full")]
+    #[test]
+    fn full_build_has_every_known_vcs() {
+        let compiled: Vec<&str> = registry().vcs.iter().map(|d| d.name.as_str()).collect();
+        assert_eq!(compiled, known::VCS);
+    }
 }

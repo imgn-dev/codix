@@ -32,7 +32,7 @@ pub const LANGUAGES: &[&str] = &[
 pub const BUILDS: &[&str] = &["gradle", "maven"];
 
 /// Version control system names.
-pub const VCS: &[&str] = &["git", "hg", "svn"];
+pub const VCS: &[&str] = &["git", "mercurial", "subversion"];
 
 /// Whether codix knows a provider of this kind and name, compiled in or not.
 pub fn is_known(kind: ProviderKind, name: &str) -> bool {

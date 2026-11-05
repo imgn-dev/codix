@@ -29,5 +29,9 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      # The published presets other than the default; registry tests check
+      # each one links exactly its providers.
+      - run: cargo test -p codix-cli --no-default-features --features minimal
+      - run: cargo test -p codix-cli --features full
       # Each feature alone, which covers the presets and every provider feature.
       - run: cargo hack --each-feature --no-dev-deps check

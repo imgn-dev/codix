@@ -1,0 +1,7 @@
+name = "subversion"
+detect = [".svn"]
+skip_dirs = [".svn"]
+
+[ignore]
+strategy = "hint"
+hint = "run `svn propset svn:ignore .codix .` at the project root"

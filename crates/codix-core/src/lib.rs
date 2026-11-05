@@ -8,5 +8,6 @@ pub mod op;
 pub mod page;
 pub mod project;
 pub mod providers;
+pub mod vcs;
 
 pub use error::Error;

@@ -1,0 +1,18 @@
+[package]
+name = "codix-vcs-git"
+description = "git support for codix: detection, skipped directories and ignore strategy"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+codix-provider.workspace = true
+
+[build-dependencies]
+codix-provider.workspace = true
+
+[lints]
+workspace = true

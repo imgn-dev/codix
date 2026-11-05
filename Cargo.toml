@@ -14,6 +14,9 @@ clap = { version = "4.6.7", features = ["derive"] }
 codix-core = { path = "crates/codix-core" }
 codix-provider = { path = "crates/codix-provider" }
 codix-testkit = { path = "crates/codix-testkit" }
+codix-vcs-git = { path = "crates/codix-vcs-git" }
+codix-vcs-hg = { path = "crates/codix-vcs-hg" }
+codix-vcs-svn = { path = "crates/codix-vcs-svn" }
 globset = "0.4.21"
 inventory = "0.3.25"
 serde = { version = "1.0.229", features = ["derive"] }

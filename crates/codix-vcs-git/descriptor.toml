@@ -1,0 +1,10 @@
+name = "git"
+# A directory in a plain clone; a file in worktrees and submodules.
+detect = [".git"]
+skip_dirs = [".git"]
+honor_ignore_files = [".gitignore"]
+
+[ignore]
+strategy = "nested-file"
+file = ".gitignore"
+content = "*\n"

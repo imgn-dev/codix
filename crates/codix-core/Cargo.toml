@@ -14,6 +14,8 @@ serde.workspace = true
 toml_edit.workspace = true
 
 [dev-dependencies]
+codix-vcs-git.workspace = true
+codix-vcs-hg.workspace = true
 tempfile.workspace = true
 serde_json.workspace = true
 
