@@ -41,7 +41,9 @@ pub struct WalkedFile {
 }
 
 /// Why a file was left out of the walk.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum Skip {
     /// Over `index.max_file_size`.
@@ -275,7 +277,7 @@ pub fn inode(_: &Metadata) -> u64 {
 }
 
 /// How a file's content is indexed.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ContentClass {
     /// Parsed and indexed for symbols.

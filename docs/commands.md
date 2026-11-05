@@ -139,6 +139,17 @@ Run this project's daemon in the foreground, logging to stderr, until interrupte
 codix watch
 ```
 
+## `codix mcp`
+
+Serve codix's commands as MCP tools on stdin and stdout.
+
+- **When:** To give an agent codix as tools: add `codix mcp` as an MCP server. Each call can name its directory, so one server covers several projects.
+- **Returns:** MCP tool results: the text the CLI prints, and its JSON as structured content.
+
+```
+codix mcp
+```
+
 ## `codix daemon`
 
 Start, stop or list per-project daemons, which keep the index open and current.

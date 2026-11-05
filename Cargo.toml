@@ -17,6 +17,7 @@ codix-build-gradle = { path = "crates/codix-build-gradle" }
 codix-build-maven = { path = "crates/codix-build-maven" }
 codix-core = { path = "crates/codix-core" }
 codix-daemon = { path = "crates/codix-daemon" }
+codix-mcp = { path = "crates/codix-mcp" }
 codix-lang-c = { path = "crates/codix-lang-c" }
 codix-lang-cpp = { path = "crates/codix-lang-cpp" }
 codix-lang-csharp = { path = "crates/codix-lang-csharp" }
@@ -46,9 +47,11 @@ interprocess = "2.4.7"
 inventory = "0.3.25"
 notify = "8.2.1"
 rayon = "1.12.0"
+rmcp = { version = "3.9.0", default-features = false, features = ["server", "transport-io"] }
 roxmltree = "0.21.2"
 regex = "1.13.1"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
+schemars = "1.2.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 streaming-iterator = "0.1.9"
@@ -56,6 +59,7 @@ sysinfo = { version = "0.40.1", default-features = false, features = ["disk", "l
 tempfile = "3.27.0"
 toml = "1.2.0"
 toml_edit = "0.25.18"
+tokio = { version = "1.54.1", features = ["rt", "io-std"] }
 tree-sitter = "0.27.1"
 tree-sitter-c = "0.24.2"
 tree-sitter-c-sharp = "0.23.5"

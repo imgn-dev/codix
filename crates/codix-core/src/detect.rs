@@ -15,7 +15,7 @@ pub const TEXT: &str = "text";
 const MODELINE_LINES: usize = 5;
 
 /// Which step of the chain decided.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Step {
     /// `languages.overrides` in `codix.toml`.

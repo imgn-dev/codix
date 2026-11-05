@@ -16,7 +16,7 @@ const FUZZY_CANDIDATES: usize = 500;
 const TRIGRAM: usize = 3;
 
 /// How a name query matches.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum MatchMode {
     /// The name equals the query.

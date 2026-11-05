@@ -50,6 +50,7 @@ codix-build-gradle = { workspace = true, optional = true }
 codix-build-maven = { workspace = true, optional = true }
 codix-core.workspace = true
 codix-daemon.workspace = true
+codix-mcp.workspace = true
 codix-lang-java = { workspace = true, optional = true }
 codix-lang-go = { workspace = true, optional = true }
 codix-lang-typescript = { workspace = true, optional = true }

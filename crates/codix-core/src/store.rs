@@ -111,7 +111,7 @@ CREATE TABLE build_issues (
 ";
 
 /// How a file is held in the index.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum FileStatus {
     /// Parsed; its symbols are in the index.
@@ -172,7 +172,7 @@ pub struct FileRow {
 
 /// A position: 1-based line, 1-based column in Unicode scalar values, and
 /// byte offset from the start of the file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Point {
     /// 1-based line.
     pub line: u32,
@@ -183,7 +183,7 @@ pub struct Point {
 }
 
 /// A range between two points, end exclusive.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Span {
     /// First position.
     pub start: Point,
@@ -192,7 +192,7 @@ pub struct Span {
 }
 
 /// How much to trust a symbol.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Confidence {
     /// Parsed cleanly.
@@ -202,7 +202,7 @@ pub enum Confidence {
 }
 
 /// One `symbols` row: a definition.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SymbolRow {
     /// Stable symbol ID.
     pub symbol_id: String,

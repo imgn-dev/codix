@@ -1,0 +1,21 @@
+[package]
+name = "codix-mcp"
+description = "codix as an MCP server: the operations as tools, routed to each project's daemon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+codix-core.workspace = true
+codix-daemon.workspace = true
+rmcp = { workspace = true }
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true }
+
+[lints]
+workspace = true

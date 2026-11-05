@@ -23,16 +23,15 @@ use crate::walk::walk;
 pub struct InitOp;
 
 /// Request for [`InitOp`].
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct InitRequest {
-    /// Also write the workflow guide for agents to this file, relative to the
-    /// project root.
+    /// Also write a workflow guide for agents to this file, relative to the root.
     #[serde(default)]
     pub agent_docs: Option<PathBuf>,
 }
 
 /// What `init` did.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct InitResponse {
     /// The project root.
     pub root: PathBuf,
@@ -112,9 +111,9 @@ fn write_agent_docs(path: &std::path::Path) -> Result<PathBuf, Error> {
 pub struct IndexOp;
 
 /// Request for [`IndexOp`].
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct IndexRequest {
-    /// Rebuild from nothing instead of scanning for changes.
+    /// Rebuild the index from nothing.
     #[serde(default)]
     pub full: bool,
 }
@@ -166,11 +165,11 @@ fn remove_index(project: &Project) -> Result<(), Error> {
 pub struct StatusOp;
 
 /// Request for [`StatusOp`]: nothing to choose.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct StatusRequest {}
 
 /// Files by how the index holds them.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct FileCounts {
     /// Parsed for symbols.
     pub indexed: usize,
@@ -185,7 +184,7 @@ pub struct FileCounts {
 }
 
 /// Files whose stat differs from the index, found without reading them.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Changes {
     /// Not in the index.
     pub new: Vec<String>,
@@ -196,7 +195,7 @@ pub struct Changes {
 }
 
 /// What `status` reports.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct StatusResponse {
     /// The project root.
     pub root: PathBuf,

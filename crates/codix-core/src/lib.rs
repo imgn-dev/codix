@@ -17,6 +17,7 @@ pub mod parse;
 pub mod project;
 pub mod providers;
 pub mod query;
+pub mod render;
 pub mod scan;
 pub mod store;
 pub mod symbol_id;

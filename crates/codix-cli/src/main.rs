@@ -1,8 +1,6 @@
 //! The `codix` command-line interface: parses arguments into operation
 //! requests and renders the responses. It holds no logic of its own.
 
-mod render;
-
 // Providers register themselves at link time; naming each enabled one here is
 // what links it in.
 #[cfg(feature = "build-gradle")]
@@ -75,10 +73,10 @@ use codix_core::query::{
     DefOp, DefRequest, FindOp, FindRequest, GrepOp, GrepRequest, OutlineOp, OutlineRequest, ShowOp,
     ShowRequest,
 };
+use codix_core::render::{self, Style, TextRender};
 use codix_core::store::MatchMode;
 use codix_daemon::client::{self, Route};
 use codix_daemon::{control, server};
-use render::{Style, TextRender};
 
 /// Headless code index for LLM agents.
 #[derive(Parser)]
@@ -151,6 +149,7 @@ enum Command {
     Watch,
     #[command(subcommand)]
     Daemon(DaemonCommand),
+    Mcp,
 }
 
 #[derive(Subcommand)]
@@ -653,6 +652,16 @@ fn main() -> ExitCode {
         }
         Command::Daemon(command) => daemon(&output, &ctx, command),
         Command::Watch => daemon(&output, &ctx, DaemonCommand::Run { log: None }),
+        Command::Mcp => match env::current_exe()
+            .map_err(|source| Error::Io {
+                path: "codix".into(),
+                source,
+            })
+            .and_then(|exe| codix_mcp::serve(ctx.cwd().to_path_buf(), exe))
+        {
+            Ok(()) => exit::SUCCESS,
+            Err(error) => output.error(&error),
+        },
         Command::Grep(args) => {
             let request = args.page.page().map(|page| GrepRequest {
                 pattern: args.pattern,
@@ -669,6 +678,63 @@ fn main() -> ExitCode {
 
 #[cfg(test)]
 mod tests {
+    /// Each tool takes its command's flags, under the same names and with the
+    /// same help, so an agent can move between the CLI and MCP.
+    #[test]
+    fn every_tool_takes_its_commands_flags_with_the_same_help() {
+        use std::collections::BTreeMap;
+
+        let trimmed = |text: &str| text.trim().trim_end_matches('.').to_owned();
+        let cli = super::Cli::command();
+        let tools = codix_mcp::tools();
+        let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
+        assert_eq!(names, codix_core::dispatch::OPERATIONS);
+        for tool in &tools {
+            let name = tool.name.as_ref();
+            let details = codix_core::describe::describe(name)
+                .map(codix_core::describe::Description::details);
+            assert_eq!(tool.description.as_deref(), details.as_deref(), "{name}");
+            // `config` takes one form per request, unlike its flags.
+            if name == "config" {
+                continue;
+            }
+            let command = cli
+                .find_subcommand(name)
+                .unwrap_or_else(|| panic!("no `{name}` command"));
+            let mut flags: BTreeMap<String, String> = command
+                .get_arguments()
+                .map(|arg| {
+                    let key = arg
+                        .get_long()
+                        .map_or_else(|| arg.get_id().to_string(), |l| l.replace('-', "_"));
+                    (
+                        key,
+                        trimmed(&arg.get_help().map(ToString::to_string).unwrap_or_default()),
+                    )
+                })
+                .collect();
+            let properties = tool.input_schema["properties"]
+                .as_object()
+                .unwrap_or_else(|| panic!("{name}: no properties"));
+            let mut inputs: BTreeMap<String, String> = properties
+                .iter()
+                .filter(|(key, _)| key.as_str() != "cwd")
+                .map(|(key, schema)| {
+                    let help = schema["description"].as_str().unwrap_or_default();
+                    (key.clone(), trimmed(help))
+                })
+                .collect();
+            // One `mode` property stands for the four mode flags.
+            if name == "find" {
+                for mode in ["exact", "prefix", "fuzzy", "glob"] {
+                    assert!(flags.remove(mode).is_some(), "find --{mode}");
+                }
+                assert!(inputs.remove("mode").is_some(), "find mode");
+            }
+            assert_eq!(inputs, flags, "{name}");
+        }
+    }
+
     #[test]
     fn every_command_has_a_description_and_every_description_a_command() {
         fn visit(command: &clap::Command, path: &str, seen: &mut Vec<String>) {

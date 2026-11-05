@@ -75,7 +75,7 @@ impl Indexer for TextIndexer {
 }
 
 /// What a scan did.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScanReport {
     /// Files parsed: new, changed, or with a new parser version.
     pub indexed: usize,

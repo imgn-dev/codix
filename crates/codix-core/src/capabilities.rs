@@ -13,7 +13,7 @@ use crate::op::{Context, Operation, Outcome};
 use crate::store::{FileStatus, Store};
 
 /// How deep support for a language goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Tier {
     /// Tier 1: definitions, outlines, name search, textual references.
@@ -25,7 +25,7 @@ pub enum Tier {
 }
 
 /// One language's support.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LanguageSupport {
     /// Language name.
     pub name: String,
@@ -34,7 +34,7 @@ pub struct LanguageSupport {
 }
 
 /// One compiled-in provider.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Provider {
     /// Provider kind.
     pub kind: ProviderKind,
@@ -46,11 +46,11 @@ pub struct Provider {
 pub struct CapabilitiesOp;
 
 /// Request for [`CapabilitiesOp`]: nothing to choose.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CapabilitiesRequest {}
 
 /// A command, with the language support it needs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct CommandSupport {
     /// Command name.
     pub name: String,
@@ -59,7 +59,7 @@ pub struct CommandSupport {
 }
 
 /// A language present in the project.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ProjectLanguage {
     /// Language name.
     pub name: String,
@@ -70,7 +70,7 @@ pub struct ProjectLanguage {
 }
 
 /// What the index of the current project holds.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ProjectSupport {
     /// The project root.
     pub root: PathBuf,
@@ -85,7 +85,7 @@ pub struct ProjectSupport {
 }
 
 /// What this build supports.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Capabilities {
     /// Every command, as `--help` lists them.
     pub commands: Vec<CommandSupport>,
@@ -196,11 +196,11 @@ pub fn capabilities() -> Capabilities {
 pub struct LanguagesOp;
 
 /// Request for [`LanguagesOp`]: nothing to choose.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LanguagesRequest {}
 
 /// One language and the files it covers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LanguageInfo {
     /// Language name.
     pub name: String,
@@ -213,7 +213,7 @@ pub struct LanguageInfo {
 }
 
 /// What `languages` lists.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct LanguagesResponse {
     /// Every known language, sorted by name.
     pub languages: Vec<LanguageInfo>,

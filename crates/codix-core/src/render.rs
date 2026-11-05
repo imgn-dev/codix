@@ -2,33 +2,34 @@
 
 use std::io::{self, Write};
 
-use codix_core::Error;
-use codix_core::capabilities::{Capabilities, LanguagesResponse, Tier};
-use codix_core::config::{ConfigResponse, Setting};
-use codix_core::indexing::{InitResponse, StatusResponse};
-use codix_core::op::Warning;
-use codix_core::page::{Location, Paged};
-use codix_core::query::{
-    DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse, ShowResponse,
-    SymbolResult,
-};
-use codix_core::scan::ScanReport;
-use codix_core::store::MatchMode;
-use codix_daemon::control::{ListResponse, StartResponse, StopResponse};
 use codix_provider::ProviderKind;
 use serde::Serialize;
 
+use crate::Error;
+use crate::capabilities::{Capabilities, LanguagesResponse, Tier};
+use crate::config::{ConfigResponse, Setting};
+use crate::indexing::{InitResponse, StatusResponse};
+use crate::op::Warning;
+use crate::page::{Location, Paged};
+use crate::query::{
+    DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse, ShowResponse,
+    SymbolResult,
+};
+use crate::scan::ScanReport;
+use crate::store::MatchMode;
+
 /// Version of the JSON output format; incremented on breaking changes only.
-pub(crate) const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 1;
 
 const COLUMN_GAP: &str = "  ";
 
 /// How to render to a stream.
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct Style {
-    pub(crate) color: bool,
+pub struct Style {
+    /// Whether to paint with ANSI colors, on a terminal only.
+    pub color: bool,
     /// `config --list --show-origin`.
-    pub(crate) show_origin: bool,
+    pub show_origin: bool,
 }
 
 impl Style {
@@ -42,7 +43,7 @@ impl Style {
 }
 
 /// Seconds since the Unix epoch.
-pub(crate) fn since_epoch() -> u64 {
+pub fn since_epoch() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
@@ -57,7 +58,7 @@ fn directories(count: usize) -> String {
 }
 
 /// A duration in its two largest units, such as `2h 5m`.
-pub(crate) fn elapsed(seconds: u64) -> String {
+pub fn elapsed(seconds: u64) -> String {
     let (d, h, m, s) = (
         seconds / 86_400,
         seconds / 3600 % 24,
@@ -73,13 +74,16 @@ pub(crate) fn elapsed(seconds: u64) -> String {
 }
 
 /// A response that has a text rendering.
-pub(crate) trait TextRender {
+pub trait TextRender {
+    /// Writes the response as text.
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()>;
 }
 
 /// A result shown as one line: its location, then its other columns.
-pub(crate) trait Row {
+pub trait Row {
+    /// The location shown first.
     fn location(&self) -> &Location;
+    /// The other columns.
     fn columns(&self) -> Vec<String>;
 }
 
@@ -515,64 +519,6 @@ impl TextRender for InitResponse {
     }
 }
 
-impl TextRender for StartResponse {
-    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
-        if let Some(old) = &self.replaced {
-            writeln!(
-                w,
-                "stopped the codix {} daemon (pid {}), which this codix cannot talk to",
-                old.version, old.pid
-            )?;
-        }
-        let d = &self.daemon;
-        writeln!(
-            w,
-            "daemon started for {}: pid {}, socket {}",
-            d.root.display(),
-            d.pid,
-            d.socket
-        )
-    }
-}
-
-impl TextRender for StopResponse {
-    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
-        if self.stopped.is_empty() {
-            return writeln!(w, "no daemon running");
-        }
-        for d in &self.stopped {
-            writeln!(w, "stopped daemon for {} (pid {})", d.root.display(), d.pid)?;
-        }
-        Ok(())
-    }
-}
-
-impl TextRender for ListResponse {
-    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
-        if self.daemons.is_empty() {
-            return writeln!(w, "no daemon running");
-        }
-        for listed in &self.daemons {
-            let d = &listed.daemon;
-            let stats = listed.stats.as_ref().map_or_else(String::new, |s| {
-                format!(
-                    "  {} MB  idle {}",
-                    s.memory_bytes >> 20,
-                    elapsed(s.idle_seconds)
-                )
-            });
-            writeln!(
-                w,
-                "{}  pid {}{stats}  codix {}",
-                d.root.display(),
-                d.pid,
-                d.version
-            )?;
-        }
-        writeln!(w, "{} running", self.daemons.len())
-    }
-}
-
 impl TextRender for StatusResponse {
     fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
         let f = &self.files;
@@ -687,7 +633,7 @@ struct ErrorBody<'a> {
 }
 
 /// Writes a response as one line of JSON.
-pub(crate) fn json_response<R: Serialize>(
+pub fn json_response<R: Serialize>(
     w: &mut dyn Write,
     command: &str,
     result: &R,
@@ -704,7 +650,7 @@ pub(crate) fn json_response<R: Serialize>(
 }
 
 /// Writes an error as one line of JSON.
-pub(crate) fn json_error(w: &mut dyn Write, error: &Error, warnings: &[Warning]) -> io::Result<()> {
+pub fn json_error(w: &mut dyn Write, error: &Error, warnings: &[Warning]) -> io::Result<()> {
     let envelope = ErrorEnvelope {
         schema_version: SCHEMA_VERSION,
         error: ErrorBody {
@@ -720,11 +666,7 @@ pub(crate) fn json_error(w: &mut dyn Write, error: &Error, warnings: &[Warning])
 }
 
 /// Writes each warning as `warning[code]: message`.
-pub(crate) fn text_warnings(
-    w: &mut dyn Write,
-    warnings: &[Warning],
-    style: Style,
-) -> io::Result<()> {
+pub fn text_warnings(w: &mut dyn Write, warnings: &[Warning], style: Style) -> io::Result<()> {
     for warning in warnings {
         writeln!(
             w,
@@ -738,7 +680,7 @@ pub(crate) fn text_warnings(
 }
 
 /// Writes an error as `error[code]: cause`, its candidates, and `hint: …`.
-pub(crate) fn text_error(w: &mut dyn Write, error: &Error, style: Style) -> io::Result<()> {
+pub fn text_error(w: &mut dyn Write, error: &Error, style: Style) -> io::Result<()> {
     writeln!(
         w,
         "{}[{}]: {}",
@@ -754,7 +696,7 @@ pub(crate) fn text_error(w: &mut dyn Write, error: &Error, style: Style) -> io::
 
 #[cfg(test)]
 mod tests {
-    use codix_core::project::FileId;
+    use crate::project::FileId;
 
     use super::*;
 

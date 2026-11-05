@@ -23,7 +23,7 @@ use crate::symbol_id::resolve_where;
 const MAX_LINE: usize = 200;
 
 /// A symbol in query results.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct SymbolResult {
     /// Where its name is.
     #[serde(flatten)]
@@ -113,29 +113,30 @@ fn distinct(paths: impl Iterator<Item = String>) -> Vec<String> {
 pub struct FindOp;
 
 /// Request for [`FindOp`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct FindRequest {
-    /// The name to look for.
+    /// Name to look for.
     pub query: String,
-    /// How to match; by default exact, then prefix, then fuzzy, stopping at
-    /// the first mode with results.
+    /// How to match: `exact`, `prefix` and `fuzzy` ignore case, `glob` matches
+    /// the qualified name; by default exact, then prefix, then fuzzy.
+    #[serde(default)]
     pub mode: Option<MatchMode>,
-    /// Kinds to keep, such as `method`; all when empty.
-    #[serde(default)]
+    /// Keep symbols of this kind, such as method; repeatable.
+    #[serde(default, rename = "kind")]
     pub kinds: Vec<String>,
-    /// Languages to keep; all when empty.
-    #[serde(default)]
+    /// Keep symbols of this language; repeatable.
+    #[serde(default, rename = "lang")]
     pub languages: Vec<String>,
     /// Directories to keep.
-    #[serde(default)]
+    #[serde(flatten)]
     pub scope: ScopeRequest,
     /// Page to return.
-    #[serde(default)]
+    #[serde(flatten)]
     pub page: Page,
 }
 
 /// What [`FindOp`] answers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct FindResponse {
     /// The mode that matched, or the last one tried.
     pub mode: MatchMode,
@@ -207,20 +208,20 @@ impl Operation for FindOp {
 pub struct DefOp;
 
 /// Request for [`DefOp`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DefRequest {
-    /// A symbol ID, its path part, `file:line:col`, or a name.
+    /// Symbol ID, its path part, `file:line:col`, or a name.
     pub symbol: String,
-    /// Kinds to consider, narrowing an ambiguous name; all when empty.
-    #[serde(default)]
+    /// Consider symbols of this kind only; repeatable.
+    #[serde(default, rename = "kind")]
     pub kinds: Vec<String>,
     /// Directories to consider, narrowing an ambiguous name.
-    #[serde(default)]
+    #[serde(flatten)]
     pub scope: ScopeRequest,
 }
 
 /// What [`DefOp`] answers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DefResponse {
     /// The definition.
     pub definition: SymbolResult,
@@ -261,14 +262,14 @@ impl Operation for DefOp {
 pub struct OutlineOp;
 
 /// Request for [`OutlineOp`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct OutlineRequest {
-    /// A file or directory, relative to the cwd or the root.
+    /// File or directory.
     pub path: String,
 }
 
 /// One symbol in an outline, with the symbols it contains.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct OutlineNode {
     /// The symbol.
     #[serde(flatten)]
@@ -278,7 +279,7 @@ pub struct OutlineNode {
 }
 
 /// The outline of one file.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct OutlineFile {
     /// Path relative to the cwd.
     pub path: String,
@@ -291,7 +292,7 @@ pub struct OutlineFile {
 }
 
 /// What [`OutlineOp`] answers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct OutlineResponse {
     /// Files with symbols, sorted by path.
     pub files: Vec<OutlineFile>,
@@ -399,15 +400,15 @@ fn level(ctx: &Context, parent: Option<&str>, children: &mut Children) -> Vec<Ou
 pub struct ShowOp;
 
 /// Request for [`ShowOp`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ShowRequest {
-    /// A symbol ID, its path part, `file:line:col`, or a name.
+    /// Symbol ID, its path part, `file:line:col`, or a name.
     pub symbol: String,
-    /// Kinds to consider, narrowing an ambiguous name; all when empty.
-    #[serde(default)]
+    /// Consider symbols of this kind only; repeatable.
+    #[serde(default, rename = "kind")]
     pub kinds: Vec<String>,
     /// Directories to consider, narrowing an ambiguous name.
-    #[serde(default)]
+    #[serde(flatten)]
     pub scope: ScopeRequest,
     /// Lines shown before and after the symbol.
     #[serde(default)]
@@ -415,7 +416,7 @@ pub struct ShowRequest {
 }
 
 /// What [`ShowOp`] answers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ShowResponse {
     /// The symbol.
     pub symbol: SymbolResult,
@@ -483,26 +484,26 @@ impl Operation for ShowOp {
 pub struct GrepOp;
 
 /// Request for [`GrepOp`].
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct GrepRequest {
-    /// The regular expression, matched line by line.
+    /// Regular expression, matched line by line.
     pub pattern: String,
-    /// Languages to search; all when empty.
-    #[serde(default)]
+    /// Search files of this language; repeatable.
+    #[serde(default, rename = "lang")]
     pub languages: Vec<String>,
-    /// Kinds of enclosing symbol to keep; all matches when empty.
-    #[serde(default)]
+    /// Keep matches inside a symbol of this kind; repeatable.
+    #[serde(default, rename = "kind")]
     pub kinds: Vec<String>,
     /// Directories to search.
-    #[serde(default)]
+    #[serde(flatten)]
     pub scope: ScopeRequest,
     /// Page to return.
-    #[serde(default)]
+    #[serde(flatten)]
     pub page: Page,
 }
 
 /// One match.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct GrepMatch {
     /// Where the match starts.
     #[serde(flatten)]
@@ -526,7 +527,7 @@ impl Ranked for GrepMatch {
 }
 
 /// What [`GrepOp`] answers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct GrepResponse {
     /// Matches, by path and position.
     pub matches: Paged<GrepMatch>,

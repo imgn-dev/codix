@@ -24,7 +24,9 @@ pub struct Project {
 
 /// A file or directory identity: its root-relative path with `/` separators,
 /// the case found on disk, and symlinks resolved. The root itself is `""`.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[derive(
+    Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize, schemars::JsonSchema,
+)]
 #[serde(transparent)]
 pub struct FileId(String);
 
@@ -327,13 +329,13 @@ fn relative(from: &Path, to: &Path) -> String {
 }
 
 /// Directories results are limited to: `--here` and `--path`, as given.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScopeRequest {
-    /// Limit to the current directory's subtree.
+    /// Limit results to the current directory's subtree.
     #[serde(default)]
     pub here: bool,
-    /// Limit to these subtrees; paths relative to the cwd or the root.
-    #[serde(default)]
+    /// Limit results to this subtree; repeatable.
+    #[serde(default, rename = "path")]
     pub paths: Vec<String>,
 }
 

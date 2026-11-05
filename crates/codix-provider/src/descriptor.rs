@@ -6,7 +6,19 @@ use std::fmt;
 use serde::{Deserialize, Serialize};
 
 /// The three kinds of provider.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Hash,
+    PartialOrd,
+    Ord,
+    Serialize,
+    Deserialize,
+    schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum ProviderKind {
     /// A language pack.
@@ -28,7 +40,7 @@ impl fmt::Display for ProviderKind {
 }
 
 /// A language pack.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct LanguageDescriptor {
     /// Language name, as in [`crate::known::LANGUAGES`].
@@ -72,7 +84,7 @@ pub const SYMBOL_KINDS: &[&str] = &[
 ];
 
 /// How a pack's `tags` query captures become symbols.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Symbols {
     /// Between a parent's and a child's name in qualified names.
@@ -116,7 +128,7 @@ fn default_separator() -> String {
 
 /// Visibility: the first of `values` among the words of a definition's child
 /// node of type `node`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Visibility {
     /// Node type holding modifiers, such as `modifiers`.
@@ -137,7 +149,7 @@ impl LanguageDescriptor {
 
 /// Detection rules of a language. Content heuristics for ambiguous
 /// extensions (`.h`, `.m`, `.pl`) are engine behaviors, not rules.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct Detect {
     /// Extensions without the dot, such as `java`.
@@ -155,7 +167,7 @@ pub struct Detect {
 }
 
 /// A build system.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct BuildDescriptor {
     /// Build system name.
@@ -165,7 +177,7 @@ pub struct BuildDescriptor {
 }
 
 /// A version control system.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct VcsDescriptor {
     /// System name.
@@ -184,7 +196,7 @@ pub struct VcsDescriptor {
 }
 
 /// How a version control system is kept from tracking `.codix/`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "strategy", rename_all = "kebab-case", deny_unknown_fields)]
 pub enum IgnoreStrategy {
     /// Write an ignore file inside `.codix/` that ignores the directory itself.

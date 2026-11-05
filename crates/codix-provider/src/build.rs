@@ -13,7 +13,7 @@ pub trait BuildResolver: Sync + Debug {
 }
 
 /// The modules of a build, and the constructs that could not be interpreted.
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct BuildModel {
     /// Modules, root first.
     pub modules: Vec<Module>,
@@ -22,7 +22,7 @@ pub struct BuildModel {
 }
 
 /// One module of a build.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Module {
     /// Module name, such as a Maven `artifactId` or a Gradle project path.
     pub name: String,
@@ -41,7 +41,7 @@ pub struct Module {
 }
 
 /// A build construct codix does not interpret.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Unsupported {
     /// Build file, root-relative.
     pub file: String,

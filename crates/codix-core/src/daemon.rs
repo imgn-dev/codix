@@ -26,7 +26,7 @@ pub const PROTOCOL: u32 = 1;
 
 /// A running daemon, as recorded in `.codix/daemon.json` and in the runtime
 /// registry.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DaemonRecord {
     /// The project root it serves.
     pub root: PathBuf,
@@ -43,7 +43,7 @@ pub struct DaemonRecord {
 }
 
 /// What a daemon's file watcher covers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct WatchStatus {
     /// Whether one recursive watch covers the project (macOS, Windows), rather
     /// than one watch per directory (Linux).
@@ -72,7 +72,7 @@ pub trait Watch: fmt::Debug + Send + Sync {
 }
 
 /// A running daemon, as `status` reports it.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DaemonStatus {
     /// Its record.
     #[serde(flatten)]

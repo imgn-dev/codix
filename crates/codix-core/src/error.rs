@@ -100,7 +100,7 @@ pub enum Error {
 }
 
 /// An error as it crosses the daemon socket: everything a frontend shows.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ErrorReport {
     /// Stable code.
     pub code: String,

@@ -137,7 +137,7 @@ fn parse_key<'a>(text: &str, segments: &'a [String], allow_map: bool) -> Result<
 }
 
 /// A value: one string, or a list for list keys.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(untagged)]
 pub enum Value {
     /// A size, duration or language.
@@ -218,7 +218,7 @@ fn invalid_value(key: &str, text: &str, kind: Kind) -> Error {
 }
 
 /// Where an effective value comes from.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Origin {
     /// The schema's default.
@@ -241,7 +241,7 @@ impl Origin {
 }
 
 /// One effective setting.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Setting {
     /// Dotted key.
     pub key: String,
@@ -486,7 +486,7 @@ fn has_comment(table: &Table) -> bool {
 pub struct ConfigOp;
 
 /// What `config` does.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "form", rename_all = "snake_case")]
 pub enum ConfigRequest {
     /// Print the effective value of a key.
@@ -516,7 +516,7 @@ pub enum ConfigRequest {
 }
 
 /// A key's documentation.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct KeyDescription {
     /// Dotted key; maps show a `"<glob>"` entry.
     pub key: String,
@@ -532,7 +532,7 @@ pub struct KeyDescription {
 }
 
 /// What `config` answers.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(tag = "form", rename_all = "snake_case")]
 pub enum ConfigResponse {
     /// Effective values of the key: one, or every entry of a map.

@@ -7,5 +7,6 @@ pub mod control;
 pub mod paths;
 pub mod protocol;
 pub mod registry;
+pub mod render;
 pub mod server;
 pub mod watch;

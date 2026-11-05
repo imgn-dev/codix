@@ -199,7 +199,7 @@ impl Context {
 
 /// Something the user should know about a response that does not stop it,
 /// such as an index on a network filesystem.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Warning {
     /// Stable code, such as `network_filesystem`.
     pub code: String,

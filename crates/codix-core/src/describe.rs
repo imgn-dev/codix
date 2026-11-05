@@ -197,6 +197,14 @@ pub const COMMANDS: &[Description] = &[
         example: "codix watch",
     },
     Description {
+        name: "mcp",
+        summary: "Serve codix's commands as MCP tools on stdin and stdout.",
+        when: "To give an agent codix as tools: add `codix mcp` as an MCP server. Each call can name its directory, so one server covers several projects.",
+        returns: "MCP tool results: the text the CLI prints, and its JSON as structured content.",
+        tier: None,
+        example: "codix mcp",
+    },
+    Description {
         name: "daemon",
         summary: "Start, stop or list per-project daemons, which keep the index open and current.",
         when: "For a long session in a project: queries through a daemon answer in milliseconds.",

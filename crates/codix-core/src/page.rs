@@ -12,10 +12,35 @@ use crate::project::FileId;
 pub const DEFAULT_LIMIT: usize = 50;
 
 /// Which slice of the results to return.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(try_from = "PageFields")]
 pub struct Page {
     limit: usize,
     offset: usize,
+}
+
+/// [`Page`] as requests carry it, checked on the way in.
+#[derive(Deserialize, schemars::JsonSchema)]
+struct PageFields {
+    /// Maximum number of results.
+    #[serde(default = "default_limit")]
+    #[schemars(range(min = 1))]
+    limit: usize,
+    /// Number of results to skip.
+    #[serde(default)]
+    offset: usize,
+}
+
+fn default_limit() -> usize {
+    DEFAULT_LIMIT
+}
+
+impl TryFrom<PageFields> for Page {
+    type Error = String;
+
+    fn try_from(fields: PageFields) -> Result<Self, String> {
+        Self::new(fields.limit, fields.offset).map_err(|e| e.cause())
+    }
 }
 
 impl Page {
@@ -62,7 +87,7 @@ impl Default for Page {
 }
 
 /// One page of results and the total they were taken from.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Paged<T> {
     /// The results in this page.
     pub items: Vec<T>,
@@ -88,7 +113,7 @@ impl<T> Outcome for Paged<T> {
 
 /// A position in a file: its path as shown from the cwd, its root-relative
 /// identity, and a 1-based line and column.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct Location {
     /// Path relative to the cwd, with `/` separators.
     pub path: String,
