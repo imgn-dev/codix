@@ -6,8 +6,10 @@ use codix_core::Error;
 use codix_core::capabilities::{Capabilities, Tier};
 use codix_core::config::{ConfigResponse, Setting};
 use codix_core::debug::EchoItem;
+use codix_core::indexing::{InitResponse, StatusResponse};
 use codix_core::op::Warning;
 use codix_core::page::{Location, Paged};
+use codix_core::scan::ScanReport;
 use codix_provider::ProviderKind;
 use serde::Serialize;
 
@@ -221,6 +223,106 @@ impl TextRender for Capabilities {
                 .collect();
             if !names.is_empty() {
                 writeln!(w, "  {kind:8}{COLUMN_GAP}{}", names.join(", "))?;
+            }
+        }
+        Ok(())
+    }
+}
+
+impl TextRender for ScanReport {
+    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+        writeln!(
+            w,
+            "indexed: {} parsed, {} touched, {} deleted, {} unchanged",
+            self.indexed, self.touched, self.deleted, self.unchanged
+        )?;
+        if self.pending > 0 {
+            writeln!(
+                w,
+                "{} files kept changing and are left for the next scan",
+                self.pending
+            )?;
+        }
+        for (path, error) in &self.errors {
+            writeln!(w, "error: {path}: {error}")?;
+        }
+        Ok(())
+    }
+}
+
+impl TextRender for InitResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        let verb = if self.created {
+            "initialized"
+        } else {
+            "reinitialized"
+        };
+        writeln!(w, "{verb} codix in {}", self.root.display())?;
+        if !self.vcs.is_empty() {
+            writeln!(w, "version control: {}", self.vcs.join(", "))?;
+        }
+        for hint in &self.hints {
+            writeln!(w, "hint: {hint}")?;
+        }
+        self.scan.render_text(w, style)
+    }
+}
+
+impl TextRender for StatusResponse {
+    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+        let f = &self.files;
+        writeln!(w, "project: {}", self.root.display())?;
+        writeln!(
+            w,
+            "files: {} indexed, {} search only, {} pending, {} errors, {} skipped",
+            f.indexed, f.search_only, f.pending, f.errors, f.skipped
+        )?;
+        let c = &self.changed;
+        if c.new.is_empty() && c.modified.is_empty() && c.deleted.is_empty() {
+            writeln!(w, "changed since last scan: none")?;
+        } else {
+            writeln!(
+                w,
+                "changed since last scan: {} new, {} modified, {} deleted; run `codix index`",
+                c.new.len(),
+                c.modified.len(),
+                c.deleted.len()
+            )?;
+            for (mark, paths) in [
+                ("new", &c.new),
+                ("modified", &c.modified),
+                ("deleted", &c.deleted),
+            ] {
+                for path in paths {
+                    writeln!(w, "  {mark:8}  {path}")?;
+                }
+            }
+        }
+        for path in &self.errors {
+            writeln!(w, "error: {path}")?;
+        }
+        if !self.modules.is_empty() {
+            writeln!(w, "modules:")?;
+            for m in &self.modules {
+                let root = if m.root.is_empty() {
+                    "."
+                } else {
+                    m.root.as_str()
+                };
+                writeln!(w, "  {}  {}  {root}", m.build, m.name)?;
+                writeln!(w, "    sources: {}", m.source_roots.join(", "))?;
+                if !m.test_roots.is_empty() {
+                    writeln!(w, "    tests: {}", m.test_roots.join(", "))?;
+                }
+                for note in &m.notes {
+                    writeln!(w, "    note: {note}")?;
+                }
+            }
+        }
+        if !self.build_issues.is_empty() {
+            writeln!(w, "build files codix could not interpret:")?;
+            for issue in &self.build_issues {
+                writeln!(w, "  {}:{}  {}", issue.file, issue.line, issue.construct)?;
             }
         }
         Ok(())

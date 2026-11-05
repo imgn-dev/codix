@@ -37,6 +37,7 @@ pub trait Outcome {
 pub struct Context {
     cwd: PathBuf,
     project: Option<Project>,
+    root_override: bool,
     warnings: Vec<Warning>,
 }
 
@@ -62,6 +63,7 @@ impl Context {
         Ok(Self {
             cwd,
             project,
+            root_override: root.is_some(),
             warnings,
         })
     }
@@ -74,6 +76,14 @@ impl Context {
     /// Warnings about the project, for every response.
     pub fn warnings(&self) -> &[Warning] {
         &self.warnings
+    }
+
+    /// Where `init` creates a project: the `--root` directory, or the cwd.
+    pub fn init_root(&self) -> PathBuf {
+        match &self.project {
+            Some(project) if self.root_override => project.root().to_path_buf(),
+            _ => self.cwd.clone(),
+        }
     }
 
     /// The project, or `no_project`.

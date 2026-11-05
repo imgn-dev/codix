@@ -1,0 +1,10 @@
+project: <root>
+files: <counts>
+changed since last scan: 1 new, 1 modified, 1 deleted; run `codix index`
+  new       NOTES
+  modified  README.md
+  deleted   src/main/java/Invoice.java
+modules:
+  maven  shop  .
+    sources: src/main/java
+    tests: src/test/java

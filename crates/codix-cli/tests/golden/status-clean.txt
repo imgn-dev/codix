@@ -1,0 +1,7 @@
+project: <root>
+files: <counts>
+changed since last scan: none
+modules:
+  maven  shop  .
+    sources: src/main/java
+    tests: src/test/java

@@ -65,6 +65,7 @@ use codix_core::capabilities::{CapabilitiesOp, CapabilitiesRequest};
 use codix_core::config::{ConfigOp, ConfigRequest};
 use codix_core::debug::{DebugEcho, DebugEchoRequest};
 use codix_core::error::exit;
+use codix_core::indexing::{IndexOp, IndexRequest, InitOp, InitRequest, StatusOp, StatusRequest};
 use codix_core::op::{Context, Operation, Outcome, Warning};
 use codix_core::page::{DEFAULT_LIMIT, Page};
 use codix_core::project::ScopeRequest;
@@ -96,6 +97,16 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Create a project here: .codix/, kept out of version control, then a first index.
+    Init,
+    /// Bring the index up to date with the files on disk.
+    Index {
+        /// Rebuild the index from nothing.
+        #[arg(long)]
+        full: bool,
+    },
+    /// Index state, like `git status`: files, changes since the last scan, build modules.
+    Status,
     /// What this build supports: each language's tier and the compiled-in providers.
     Capabilities,
     /// Read or edit codix.toml and .codix/config.toml, like `git config`.
@@ -229,6 +240,17 @@ impl Output {
         }
     }
 
+    /// A one-line note on stderr while a long command runs, on a terminal only.
+    fn progress(&self, what: &str) {
+        if !self.json && io::stderr().is_terminal() {
+            let mut stderr = io::stderr().lock();
+            // Overwritten by the next line; a failed write only loses the note.
+            write!(stderr, "{what}…\r")
+                .and_then(|()| stderr.flush())
+                .ok();
+        }
+    }
+
     /// In text mode, warnings go to stderr before the output.
     fn text_warnings(&self) -> io::Result<()> {
         if self.json {
@@ -352,6 +374,15 @@ fn main() -> ExitCode {
         ..output
     };
     let code = match cli.command {
+        Command::Init => {
+            output.progress("indexing");
+            run(&output, &InitOp, &ctx, Ok(InitRequest {}))
+        }
+        Command::Index { full } => {
+            output.progress("indexing");
+            run(&output, &IndexOp, &ctx, Ok(IndexRequest { full }))
+        }
+        Command::Status => run(&output, &StatusOp, &ctx, Ok(StatusRequest {})),
         Command::Capabilities => run(&output, &CapabilitiesOp, &ctx, Ok(CapabilitiesRequest {})),
         Command::Config(args) => {
             let (request, show_origin) = args.request();

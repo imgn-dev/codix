@@ -7,6 +7,7 @@ pub mod config;
 pub mod debug;
 pub mod detect;
 pub mod error;
+pub mod indexing;
 pub mod lock;
 pub mod op;
 pub mod page;
