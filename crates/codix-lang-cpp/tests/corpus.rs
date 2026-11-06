@@ -11,3 +11,8 @@ fn corpus() {
 fn scopes() {
     codix_testkit::check_language_scopes("cpp");
 }
+
+#[test]
+fn round_trips() {
+    codix_testkit::check_language_round_trips("cpp");
+}

@@ -138,6 +138,22 @@ pub(crate) fn plan(
         to_type(&file, &mut definitions);
     }
     let old_name = file.model.definitions[definitions[0]].name.clone();
+    let keyword = codix_provider::registry()
+        .languages
+        .iter()
+        .find(|d| d.name == file.language)
+        .is_some_and(|pack| pack.names.keywords.contains(&old_name));
+    if keyword {
+        // Such as a Kotlin secondary constructor, declared by its keyword.
+        return Err(refused(
+            "invalid_name",
+            format!(
+                "`{old_name}` is a {} keyword, not a name to rename",
+                file.language
+            ),
+            "rename what it belongs to instead",
+        ));
+    }
     if request.new_name == old_name {
         return Err(Error::Usage {
             cause: format!("`{old_name}` already has that name"),

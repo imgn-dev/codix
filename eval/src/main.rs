@@ -26,6 +26,7 @@ use serde::Serialize;
 
 use crate::report::{Run, summarize, table};
 use crate::score::{Arguments, defects};
+use crate::task::{Category, Task, renamed_as_expected};
 
 const MODELS: &[&str] = &["haiku", "sonnet", "opus"];
 const TABLE_START: &str = "<!-- results -->";
@@ -78,29 +79,21 @@ fn main() {
 
     let codix = build_codix();
     let repo = checkout(&root.join("target/bench-repos"), SPRING);
-    if !repo.join(".codix/index.db").is_file() {
-        let status = Command::new(&codix)
-            .arg("init")
-            .current_dir(&repo)
-            .stdout(Stdio::null())
-            .status()
-            .expect("run codix init");
-        assert!(status.success(), "codix init failed");
-    }
     let out = root.join("target/eval");
-    fs::create_dir_all(&out).expect("create target/eval");
-    let mcp_config = out.join("mcp.json");
-    fs::write(
-        &mcp_config,
-        serde_json::json!({ "mcpServers": { "codix": { "command": codix, "args": ["mcp"] } } })
-            .to_string(),
-    )
-    .expect("write the MCP configuration");
+    let mcp_config = prepare(&codix, &repo, &out);
 
+    // Rename tasks write files: the checkout is restored after each one.
+    let sources = tasks
+        .iter()
+        .any(|t| t.category == Category::Rename)
+        .then(|| Sources::read(&repo));
     let mut runs = Vec::new();
     for model in &options.models {
         for task in &tasks {
             let stream = run_claude(&options.claude, model, &task.prompt, &mcp_config, &repo);
+            let renamed = sources
+                .as_ref()
+                .map(|s| s.check_and_restore(&repo, task, &codix));
             fs::write(out.join(format!("{model}-{}.jsonl", task.id)), &stream)
                 .expect("save the transcript");
             let transcript = transcript::parse(&stream);
@@ -115,7 +108,9 @@ fn main() {
                 model: model.clone(),
                 task: task.id.clone(),
                 category: task.category,
-                success: transcript.error.is_none() && task.answered_by(&transcript.answer),
+                success: transcript.error.is_none()
+                    && task.answered_by(&transcript.answer)
+                    && renamed.is_none_or(|ok| ok),
                 turns: transcript.turns,
                 tool_calls: transcript.calls.len(),
                 input_tokens: transcript.input_tokens,
@@ -164,6 +159,94 @@ fn main() {
     update_readme(&root.join("eval/README.md"), &table(&summary), version);
     let mut stdout = std::io::stdout().lock();
     writeln!(stdout, "\n{}\nresults: {}", table(&summary), path.display()).ok();
+}
+
+/// Indexes the checkout if needed and writes the MCP configuration the
+/// runs use; its path.
+fn prepare(codix: &Path, repo: &Path, out: &Path) -> PathBuf {
+    if !repo.join(".codix/index.db").is_file() {
+        let status = Command::new(codix)
+            .arg("init")
+            .current_dir(repo)
+            .stdout(Stdio::null())
+            .status()
+            .expect("run codix init");
+        assert!(status.success(), "codix init failed");
+    }
+    fs::create_dir_all(out).expect("create target/eval");
+    let mcp_config = out.join("mcp.json");
+    fs::write(
+        &mcp_config,
+        serde_json::json!({ "mcpServers": { "codix": { "command": codix, "args": ["mcp"] } } })
+            .to_string(),
+    )
+    .expect("write the MCP configuration");
+    mcp_config
+}
+
+/// The checkout's files as they were before any rename task.
+struct Sources(std::collections::BTreeMap<PathBuf, Vec<u8>>);
+
+impl Sources {
+    fn read(repo: &Path) -> Self {
+        fn walk(dir: &Path, files: &mut std::collections::BTreeMap<PathBuf, Vec<u8>>) {
+            for entry in fs::read_dir(dir).expect("read a directory").flatten() {
+                let path = entry.path();
+                let name = entry.file_name();
+                if name == ".codix" || name == ".claude" {
+                    continue;
+                }
+                if path.is_dir() {
+                    walk(&path, files);
+                } else if let Ok(bytes) = fs::read(&path) {
+                    files.insert(path, bytes);
+                }
+            }
+        }
+        let mut files = std::collections::BTreeMap::new();
+        walk(repo, &mut files);
+        Self(files)
+    }
+
+    /// For a rename task, whether the files changed exactly as expected;
+    /// then puts every changed file back and drops pending previews.
+    fn check_and_restore(&self, repo: &Path, task: &Task, codix: &Path) -> bool {
+        let changed: Vec<(&PathBuf, &Vec<u8>, Vec<u8>)> = self
+            .0
+            .iter()
+            .filter_map(|(path, before)| {
+                let now = fs::read(path).unwrap_or_default();
+                (now != *before).then_some((path, before, now))
+            })
+            .collect();
+        let expected: BTreeSet<PathBuf> = task.renames.iter().map(|r| repo.join(&r.file)).collect();
+        let actual: BTreeSet<PathBuf> = changed.iter().map(|(p, _, _)| (*p).clone()).collect();
+        let ok = task.category != Category::Rename
+            || (expected == actual
+                && changed.iter().all(|(path, before, now)| {
+                    let renames: Vec<&task::Rename> = task
+                        .renames
+                        .iter()
+                        .filter(|r| repo.join(&r.file) == **path)
+                        .collect();
+                    renamed_as_expected(
+                        &String::from_utf8_lossy(before),
+                        &String::from_utf8_lossy(now),
+                        &renames,
+                    )
+                }));
+        for (path, before, _) in &changed {
+            fs::write(path, before).expect("restore a file");
+        }
+        Command::new(codix)
+            .args(["discard", "--all"])
+            .current_dir(repo)
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .ok();
+        ok
+    }
 }
 
 /// Runs one task, returning the stream-json transcript.

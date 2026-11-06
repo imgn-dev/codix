@@ -1,16 +1,17 @@
 # codix
 
 A headless code index for LLM agents and the people working with them:
-IDE-grade navigation from the command line, without an IDE. codix indexes any
-directory, stays current incrementally as files change, and answers structural
-questions directly: where a symbol is defined, what a file contains, where a
-name appears and inside which symbol.
+IDE-grade navigation and safe renames from the command line, without an IDE.
+codix indexes any directory, stays current incrementally as files change, and
+answers structural questions directly: where a symbol is defined, what a file
+contains, what refers to a name and inside which symbol.
 
-This is phase 2: tier 1 symbols (definitions, outlines, name search) for Java,
-Go, TypeScript, Python, Kotlin, JavaScript, Rust, C, C++, C#, PHP and Ruby, plus
-keys and headings of JSON, YAML, TOML, XML, Markdown and SQL for search; a
-per-project daemon that answers in milliseconds and watches files; and
-`codix mcp`, the same commands as tools for agents.
+This is phase 3: scopes (tier 2) for Java, Go, TypeScript, Python, Kotlin,
+JavaScript, Rust, C, C++, C#, PHP and Ruby, so references are bound to the
+definition they mean within a file, plus keys and headings of JSON, YAML, TOML,
+XML, Markdown and SQL for search; renames within a file, always applied from a
+reviewed preview, with undo; a per-project daemon that answers in milliseconds
+and watches files; and `codix mcp`, the same commands as tools for agents.
 
 ## Install
 
@@ -73,6 +74,10 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   Results carry symbol IDs, such as
   `java:src/billing/Invoice.java::Invoice.total#381c`; every command accepts an
   ID, its path part without the hash, `file:line:col`, or a name.
+- `refs` lists what refers to a symbol or a local variable, definition first:
+  `scoped` when its file's scopes bind it there, `textual` when it matches by
+  name only, in another file or through another object. `def file:line:col`
+  follows the name at that place to its definition.
 - `grep <regex>` searches the indexed files and names the symbol around each
   match; `--kind method` keeps matches inside methods.
 - `index` brings the index up to date; `status` shows what changed since, the
@@ -98,6 +103,56 @@ hint: pass a full symbol ID, or narrow with --kind or --path
 over grep, what it returns. `codix capabilities` lists what each language
 supports here, and `codix languages` how each kind of file is recognized. The
 same descriptions are in [docs/commands.md](docs/commands.md).
+
+## Changing code
+
+Edits are planned first and applied second. `rename` returns a preview with an
+ID, a summary and a diff, and writes nothing:
+
+```
+$ codix rename src/Invoice.java:12:14 net
+preview 3f9a2c41: rename variable base at src/Invoice.java:12:14 to net
+  1 file, 2 sites
+--- a/src/Invoice.java
++++ b/src/Invoice.java
+@@ -9,8 +9,8 @@
+     }
+ 
+     long withTax(long tax) {
+-        long base = total();
+-        return base + tax;
++        long net = total();
++        return net + tax;
+     }
+ 
+     long total(long discount) {
+apply with: codix apply 3f9a2c41
+
+$ codix apply 3f9a2c41
+applied 3f9a2c41: rename variable base at src/Invoice.java:12:14 to net
+  1 file, 2 sites
+    src/Invoice.java
+undo with: codix undo
+```
+
+- A rename changes the definition and the references its file's scopes bind to
+  it, and lists the other mentions of the name (comments, strings) unchanged.
+- It is refused, with a typed error and the sites, when the new name is not a
+  valid name or collides with another, when it would change what a reference
+  means (shadowing), when a site is in a syntax error, when the file is
+  generated or vendored, and when other files or other objects may refer to
+  the symbol, which codix cannot bind within one file. One condition at a time
+  can be allowed: `--allow shadowing`, `--allow overload`,
+  `--allow visibility-change`, `--allow generated`, and `--exclude-unresolved`
+  to edit only the sites codix binds. A public Java class is named after its
+  file, so renaming one is refused.
+- `apply` writes through a journal: a file changed since planning outside the
+  edited lines is rebased, and one changed inside them is refused as stale. A
+  crash mid-apply is rolled back by the next command that writes the index.
+- `undo` returns a preview reverting the latest apply, `previews` lists the
+  pending ones and `discard` drops them; they expire after `previews.expiry`.
+- A symbol's old ID keeps working after codix renames it: queries follow it to
+  the new one and say so, and edits refuse it.
 
 ## Daemon
 

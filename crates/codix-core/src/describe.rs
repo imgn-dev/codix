@@ -81,16 +81,27 @@ pub fn agent_guide() -> String {
          This project has a codix index. To find and read code, prefer these commands to grep \
          and to reading whole files:\n\n"
     );
-    for d in ["find", "def", "outline", "show", "grep"]
+    for d in ["find", "def", "refs", "outline", "show", "grep"]
         .iter()
         .filter_map(|name| describe(name))
     {
         let _ = writeln!(out, "- `{}`: {} {}", d.example, d.summary, d.when);
     }
     out.push_str(
-        "\nResults carry symbol IDs, such as `java:src/A.java::A.run#3f2a`, that `def` and \
-         `show` accept. Add `--json` for structured output. `codix help <command>` describes \
-         any command, and `codix capabilities` what each language supports.\n",
+        "\n## Changing code\n\n\
+         Rename with codix rather than by hand: it changes only what binds to the symbol, checks \
+         the change first, and writes nothing until you apply its preview.\n\n",
+    );
+    for d in ["rename", "apply", "undo"]
+        .iter()
+        .filter_map(|name| describe(name))
+    {
+        let _ = writeln!(out, "- `{}`: {} {}", d.example, d.summary, d.when);
+    }
+    out.push_str(
+        "\nResults carry symbol IDs, such as `java:src/A.java::A.run#3f2a`, that `def`, `refs`, \
+         `show` and `rename` accept. Add `--json` for structured output. `codix help <command>` \
+         describes any command, and `codix capabilities` what each language supports.\n",
     );
     out
 }

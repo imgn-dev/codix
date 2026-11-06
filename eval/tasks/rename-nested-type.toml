@@ -1,0 +1,7 @@
+category = "rename"
+prompt = """AntPathMatcher, in spring-core, has a private nested class PatternInfo. Rename it to PatternStats, constructor included, and write the change to the files."""
+[[renames]]
+file = "spring-core/src/main/java/org/springframework/util/AntPathMatcher.java"
+old = "PatternInfo"
+new = "PatternStats"
+sites = 6

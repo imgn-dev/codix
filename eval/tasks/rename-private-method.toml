@@ -1,0 +1,7 @@
+category = "rename"
+prompt = """Rename the private method changeFirstCharacterCase of spring-core's StringUtils to changeCase, and write the change to the files."""
+[[renames]]
+file = "spring-core/src/main/java/org/springframework/util/StringUtils.java"
+old = "changeFirstCharacterCase"
+new = "changeCase"
+sites = 4
