@@ -75,6 +75,7 @@ impl Indexer for LineIndexer {
             language: "test".to_owned(),
             status: FileStatus::Indexed,
             symbols,
+            refs: Vec::new(),
         }
     }
 }

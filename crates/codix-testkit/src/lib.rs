@@ -88,12 +88,31 @@ pub fn run_in(cwd: &Path, binary: &str, args: &[&str]) -> Run {
 /// When a file differs from its expectation, or the directory has no source
 /// files.
 pub fn check_corpus(dir: impl AsRef<Path>, extract: impl Fn(&str, &str) -> Vec<String>) {
+    check_corpus_as(dir, "symbols", extract);
+}
+
+/// Like [`check_corpus`], with the expectations in `<file>.<suffix>`.
+///
+/// # Panics
+///
+/// When a file differs from its expectation, or the directory has no source
+/// files.
+pub fn check_corpus_as(
+    dir: impl AsRef<Path>,
+    suffix: &str,
+    extract: impl Fn(&str, &str) -> Vec<String>,
+) {
     let dir = dir.as_ref();
     let mut sources: Vec<_> = fs::read_dir(dir)
         .unwrap_or_else(|e| panic!("cannot read corpus {}: {e}", dir.display()))
         .filter_map(Result::ok)
         .map(|entry| entry.path())
-        .filter(|path| path.is_file() && path.extension().is_none_or(|e| e != "symbols"))
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .is_none_or(|e| e != "symbols" && e != "scopes")
+        })
         .collect();
     sources.sort();
     assert!(!sources.is_empty(), "corpus {} is empty", dir.display());
@@ -105,7 +124,7 @@ pub fn check_corpus(dir: impl AsRef<Path>, extract: impl Fn(&str, &str) -> Vec<S
         let content = fs::read_to_string(&source).expect("read corpus source");
         let mut actual = extract(name, &content).join("\n");
         actual.push('\n');
-        assert_golden(dir.join(format!("{name}.symbols")), &actual);
+        assert_golden(dir.join(format!("{name}.{suffix}")), &actual);
     }
 }
 
@@ -157,5 +176,72 @@ pub fn check_language_corpus(language: &str) {
                 )
             })
             .collect()
+    });
+}
+
+/// Checks the scopes of a compiled-in language at tier 2, against
+/// `corpus/<language>/<case>.scopes`: each local definition as
+/// `line:col kind name`, and each reference as
+/// `line:col context name -> line:col` of the definition it binds to, or
+/// `-> free` or `-> uncertain`; `(low)` marks parse-error regions.
+///
+/// # Panics
+///
+/// When the language is not compiled in, has no `locals` query, or its
+/// corpus differs.
+pub fn check_language_scopes(language: &str) {
+    use codix_core::scope::{Binding, Defines};
+
+    let registry = codix_provider::registry();
+    let descriptor = registry
+        .languages
+        .iter()
+        .find(|d| d.name == language)
+        .unwrap_or_else(|| panic!("{language} is not compiled in"));
+    let grammar = registry
+        .grammars
+        .get(language)
+        .unwrap_or_else(|| panic!("{language} has no grammar"));
+    assert!(grammar.locals.is_some(), "{language} has no locals query");
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../corpus")
+        .join(language);
+    check_corpus_as(dir, "scopes", |name, content| {
+        let model = codix_core::scope::model(descriptor, grammar, name, content).expect("model");
+        let low = |low: bool| if low { " (low)" } else { "" };
+        let mut lines: Vec<(u32, String)> = Vec::new();
+        for d in &model.definitions {
+            if let Defines::Local { kind } = &d.defines {
+                let at = d.name_range.start;
+                lines.push((
+                    at.byte,
+                    format!("{}:{} {kind} {}{}", at.line, at.column, d.name, low(d.low)),
+                ));
+            }
+        }
+        for r in &model.references {
+            let target = match r.binding {
+                Binding::Bound(d) => {
+                    let at = model.definitions[d].name_range.start;
+                    format!("{}:{}", at.line, at.column)
+                }
+                Binding::Free => "free".to_owned(),
+                Binding::Uncertain => "uncertain".to_owned(),
+            };
+            let at = r.range.start;
+            lines.push((
+                at.byte,
+                format!(
+                    "{}:{} {} {} -> {target}{}",
+                    at.line,
+                    at.column,
+                    r.context.as_str(),
+                    r.name,
+                    low(r.low)
+                ),
+            ));
+        }
+        lines.sort_by_key(|(byte, _)| *byte);
+        lines.into_iter().map(|(_, line)| line).collect()
     });
 }

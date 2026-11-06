@@ -857,7 +857,7 @@ mod tests {
     }
 
     #[test]
-    fn compiled_in_languages_with_a_grammar_are_tier_1() {
+    fn compiled_in_languages_with_a_grammar_are_tier_1_or_2() {
         use codix_core::capabilities::{Tier, capabilities};
         for language in capabilities().languages {
             let compiled = registry()
@@ -866,7 +866,11 @@ mod tests {
                 .find(|d| d.name == language.name);
             let expected = match compiled {
                 Some(d) if !d.search_only && registry().grammars.contains_key(&d.name) => {
-                    Tier::Symbols
+                    if registry().grammars[&d.name].locals.is_some() {
+                        Tier::Scopes
+                    } else {
+                        Tier::Symbols
+                    }
                 }
                 Some(_) => Tier::Search,
                 None if language.name == "text" => Tier::Search,

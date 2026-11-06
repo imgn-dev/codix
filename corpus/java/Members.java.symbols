@@ -1,0 +1,20 @@
+3:7 class Members | class Members
+4:18 field Members.total [private] | private long total
+5:17 field Members.count [private] | private int count
+7:10 method Members.total | long total()
+11:10 method Members.total | long total(long discount)
+15:10 method Members.update | void update(Members other, long total)
+25:18 class Members.Nested | static class Nested
+26:13 method Members.Nested.count | int count()
+30:14 method Members.Nested.outer | long outer()
+35:18 class Members.Child | static class Child extends Members
+36:14 method Members.Child.sum | long sum()
+40:17 method Members.Child.self | Members self()
+45:14 method Members.anonymous | Runnable anonymous()
+47:25 method Members.anonymous.run [public] | public void run()
+53:9 method Members.helper | int helper()
+57:10 enum Members.Color | enum Color
+57:18 enum_member Members.Color.RED | RED
+57:23 enum_member Members.Color.GREEN | GREEN
+59:9 method Members.pick | int pick(Color color)
+68:33 method Members.max | <T extends Comparable<T>> T max(T a, T b)

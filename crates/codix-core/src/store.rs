@@ -14,13 +14,20 @@ use serde::{Deserialize, Serialize};
 pub use search::{MatchMode, NameQuery};
 
 use crate::Error;
+use crate::scope::RefContext;
 
 /// How long a connection waits for SQLite's own locks before failing.
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Schema migrations, in order. Migration `n` (1-based) moves the database
 /// from version `n - 1` to `n`; later phases append to this list.
-const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4];
+const MIGRATIONS: &[&str] = &[
+    MIGRATION_1,
+    MIGRATION_2,
+    MIGRATION_3,
+    MIGRATION_4,
+    MIGRATION_5,
+];
 
 const MIGRATION_1: &str = "
 CREATE TABLE files (
@@ -115,6 +122,29 @@ CREATE TABLE build_issues (
 const MIGRATION_4: &str = "
 CREATE VIRTUAL TABLE symbols_fts_vocab USING fts5vocab(symbols_fts, 'row');
 CREATE INDEX symbols_name_nocase ON symbols (name COLLATE NOCASE);
+";
+
+/// Tier 2 references that can leave their file's local scopes: bound to a
+/// symbol of the file, or not bound at all. `enclosing` and `target` are
+/// `symbols.id` values of the same file, replaced with it. `context` and
+/// `state` are the codes of [`RefContext`] and [`RefState`].
+const MIGRATION_5: &str = "
+CREATE TABLE refs (
+    id INTEGER PRIMARY KEY,
+    file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    context INTEGER NOT NULL,
+    line INTEGER NOT NULL,
+    column INTEGER NOT NULL,
+    start_byte INTEGER NOT NULL,
+    end_byte INTEGER NOT NULL,
+    enclosing INTEGER,
+    target INTEGER,
+    state INTEGER NOT NULL,
+    low INTEGER NOT NULL
+);
+CREATE INDEX refs_by_name ON refs(name);
+CREATE INDEX refs_by_file ON refs(file_id);
 ";
 
 /// How a file is held in the index.
@@ -233,6 +263,99 @@ pub struct SymbolRow {
     pub confidence: Confidence,
 }
 
+/// What a stored reference binds to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RefState {
+    /// A symbol of its file.
+    Bound,
+    /// Nothing in its file.
+    Free,
+    /// Unknown: an opaque scope may hide what it means.
+    Uncertain,
+}
+
+impl RefState {
+    fn code(self) -> i64 {
+        match self {
+            Self::Bound => 0,
+            Self::Free => 1,
+            Self::Uncertain => 2,
+        }
+    }
+
+    fn from_code(code: i64) -> Self {
+        match code {
+            0 => Self::Bound,
+            2 => Self::Uncertain,
+            _ => Self::Free,
+        }
+    }
+}
+
+fn context_code(context: RefContext) -> i64 {
+    match context {
+        RefContext::Call => 0,
+        RefContext::Type => 1,
+        RefContext::Import => 2,
+        RefContext::Read => 3,
+        RefContext::Write => 4,
+    }
+}
+
+fn context_from_code(code: i64) -> RefContext {
+    match code {
+        0 => RefContext::Call,
+        1 => RefContext::Type,
+        2 => RefContext::Import,
+        4 => RefContext::Write,
+        _ => RefContext::Read,
+    }
+}
+
+/// A reference to store with its file: one that can leave the file's local
+/// scopes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefRow {
+    /// The name.
+    pub name: String,
+    /// Its context.
+    pub context: RefContext,
+    /// Where it is.
+    pub range: Span,
+    /// The innermost enclosing symbol, by index into the file's symbols.
+    pub enclosing: Option<usize>,
+    /// The symbol it binds to, by index into the file's symbols.
+    pub target: Option<usize>,
+    /// What it binds to.
+    pub state: RefState,
+    /// How much to trust it.
+    pub confidence: Confidence,
+}
+
+/// A stored reference, with the symbols it names by ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RefHit {
+    /// Root-relative path of its file.
+    pub path: String,
+    /// The name.
+    pub name: String,
+    /// Its context.
+    pub context: RefContext,
+    /// Start of the name.
+    pub start: Point,
+    /// Byte after the name.
+    pub end_byte: u32,
+    /// ID of the innermost enclosing symbol.
+    pub enclosing: Option<String>,
+    /// ID of the symbol it binds to.
+    pub target: Option<String>,
+    /// What it binds to.
+    pub state: RefState,
+    /// How much to trust it.
+    pub confidence: Confidence,
+}
+
 /// A symbol and the file it is defined in.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymbolHit {
@@ -250,8 +373,12 @@ pub struct FileUpdate {
     /// The manifest row.
     pub file: FileRow,
     /// Every symbol of the file, replacing those stored; `None` keeps the
-    /// stored symbols and updates the manifest row only (a touch).
+    /// stored symbols and references and updates the manifest row only (a
+    /// touch).
     pub symbols: Option<Vec<SymbolRow>>,
+    /// The references to store, replacing those stored, when `symbols` is
+    /// given.
+    pub refs: Vec<RefRow>,
 }
 
 /// A connection to a project's index.
@@ -470,7 +597,9 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
     let Some(symbols) = &update.symbols else {
         return Ok(());
     };
+    tx.execute("DELETE FROM refs WHERE file_id = ?1", [file_id])?;
     tx.execute("DELETE FROM symbols WHERE file_id = ?1", [file_id])?;
+    let mut rowids = Vec::with_capacity(symbols.len());
     let mut insert = tx.prepare_cached(
         "INSERT INTO symbols (symbol_id, file_id, name, kind, qualified_name, parent,
              start_line, start_column, start_byte, end_line, end_column, end_byte,
@@ -503,8 +632,57 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
                 Confidence::Low => "low",
             },
         ])?;
+        rowids.push(tx.last_insert_rowid());
+    }
+    let mut insert = tx.prepare_cached(
+        "INSERT INTO refs (file_id, name, context, line, column, start_byte, end_byte,
+             enclosing, target, state, low)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+    )?;
+    for r in &update.refs {
+        insert.execute(params![
+            file_id,
+            r.name,
+            context_code(r.context),
+            r.range.start.line,
+            r.range.start.column,
+            r.range.start.byte,
+            r.range.end.byte,
+            r.enclosing.and_then(|i| rowids.get(i)),
+            r.target.and_then(|i| rowids.get(i)),
+            r.state.code(),
+            i64::from(r.confidence == Confidence::Low),
+        ])?;
     }
     Ok(())
+}
+
+const REF_SELECT: &str = "SELECT f.path, r.name, r.context, r.line, r.column, r.start_byte,
+        r.end_byte, e.symbol_id, t.symbol_id, r.state, r.low
+     FROM refs r JOIN files f ON f.id = r.file_id
+     LEFT JOIN symbols e ON e.id = r.enclosing
+     LEFT JOIN symbols t ON t.id = r.target";
+
+fn ref_hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefHit> {
+    Ok(RefHit {
+        path: row.get(0)?,
+        name: row.get(1)?,
+        context: context_from_code(row.get(2)?),
+        start: Point {
+            line: row.get(3)?,
+            column: row.get(4)?,
+            byte: row.get(5)?,
+        },
+        end_byte: row.get(6)?,
+        enclosing: row.get(7)?,
+        target: row.get(8)?,
+        state: RefState::from_code(row.get(9)?),
+        confidence: if row.get::<_, i64>(10)? == 0 {
+            Confidence::Normal
+        } else {
+            Confidence::Low
+        },
+    })
 }
 
 fn write_dirs(tx: &Transaction<'_>, dirs: &[(String, [u8; 32])]) -> rusqlite::Result<()> {
@@ -703,6 +881,24 @@ impl Snapshot<'_> {
         );
         let mut stmt = self.tx.prepare(&sql).map_err(|e| self.err(&e))?;
         stmt.query_map([path], symbol_hit)
+            .and_then(Iterator::collect)
+            .map_err(|e| self.err(&e))
+    }
+
+    /// The stored references of a file, in file order.
+    pub fn refs_in(&self, path: &str) -> Result<Vec<RefHit>, Error> {
+        let sql = format!("{REF_SELECT} WHERE f.path = ?1 ORDER BY r.start_byte");
+        let mut stmt = self.tx.prepare(&sql).map_err(|e| self.err(&e))?;
+        stmt.query_map([path], ref_hit)
+            .and_then(Iterator::collect)
+            .map_err(|e| self.err(&e))
+    }
+
+    /// The stored references named `name`, by path and position.
+    pub fn refs_named(&self, name: &str) -> Result<Vec<RefHit>, Error> {
+        let sql = format!("{REF_SELECT} WHERE r.name = ?1 ORDER BY f.path, r.start_byte");
+        let mut stmt = self.tx.prepare(&sql).map_err(|e| self.err(&e))?;
+        stmt.query_map([name], ref_hit)
             .and_then(Iterator::collect)
             .map_err(|e| self.err(&e))
     }

@@ -204,6 +204,11 @@
           "type": "string"
         },
         {
+          "const": "scopes",
+          "description": "Tier 2: tier 1, and scope-aware references and renames within a file.",
+          "type": "string"
+        },
+        {
           "const": "search",
           "description": "Keys, headings or text, for search only.",
           "type": "string"

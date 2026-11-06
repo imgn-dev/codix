@@ -32,6 +32,7 @@ impl Description {
     pub fn details(&self) -> String {
         let tier = match self.tier {
             Some(Tier::Symbols) => "\nNeeds: tier 1 (symbols); see `codix capabilities`.",
+            Some(Tier::Scopes) => "\nNeeds: tier 2 (scopes); see `codix capabilities`.",
             Some(Tier::Search | Tier::NotInBuild) => "\nNeeds: any indexed text file.",
             None => "",
         };
@@ -57,6 +58,7 @@ pub fn markdown() -> String {
     for d in COMMANDS {
         let needs = match d.tier {
             Some(Tier::Symbols) => "\n- **Needs:** tier 1 (symbols)",
+            Some(Tier::Scopes) => "\n- **Needs:** tier 2 (scopes)",
             Some(Tier::Search | Tier::NotInBuild) => "\n- **Needs:** any indexed text file",
             None => "",
         };

@@ -1,0 +1,7 @@
+6:7 class Locals | class Locals
+7:9 field Locals.count | int count
+9:9 method Locals.sum | int sum(List<Integer> values, int start)
+25:10 method Locals.shadow | void shadow()
+37:10 method Locals.resources | void resources(Reader in) throws Exception
+49:9 method Locals.later | int later()
+53:9 field Locals.early | int early

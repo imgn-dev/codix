@@ -1,0 +1,88 @@
+5:2 import str
+9:7 type int -> free
+12:14 type Point -> 8:6
+12:20 read X -> free
+12:26 read Y -> free
+14:7 parameter p
+14:9 type Point -> 8:6
+14:20 parameter q
+14:22 type Point -> 8:6
+14:29 type Point -> 8:6
+15:9 type Point -> 8:6
+15:15 read X -> free
+15:18 read p -> 14:7
+15:20 read X -> free
+15:24 read q -> 14:20
+15:26 read X -> free
+15:29 read Y -> free
+15:32 read p -> 14:7
+15:34 read Y -> free
+15:38 read q -> 14:20
+15:40 read Y -> free
+18:10 parameter values
+18:19 type int -> free
+18:25 parameter total
+18:31 type int -> free
+19:9 variable v
+19:20 read values -> 18:10
+20:3 write total -> 18:25
+20:12 read v -> 19:9
+22:2 variable x
+23:5 variable x
+23:10 read x -> 22:2
+23:17 read x -> 23:5
+24:3 write total -> 18:25
+24:11 read x -> 23:5
+26:2 variable y
+26:5 write x -> 22:2
+27:2 write total -> 18:25
+27:10 read total -> 18:25
+27:18 read x -> 22:2
+27:22 read y -> 26:2
+31:24 type int -> free
+32:2 variable count
+33:2 variable inc
+33:16 type int -> free
+34:3 write count -> 32:2
+35:10 read count -> 32:2
+37:9 read inc -> 33:2
+40:12 parameter v
+40:27 type string -> free
+41:9 variable t
+41:14 read v -> 40:12
+42:7 type int -> free
+43:10 read fmt -> free
+43:14 call Sprint -> free
+43:21 read t -> 41:9
+45:10 read str -> 5:2
+45:14 call ToUpper -> free
+45:22 read fmt -> free
+45:26 call Sprint -> free
+45:33 read t -> 41:9
+49:11 parameter key
+49:15 type string -> free
+49:27 type string -> free
+49:34 type int -> free
+50:2 variable m
+50:11 type string -> free
+50:18 type int -> free
+50:22 read key -> 49:11
+51:2 variable n
+51:7 type Labels -> 55:6
+51:14 read key -> uncertain
+52:9 read m -> 50:2
+55:17 type string -> free
+55:24 type int -> free
+57:14 type_parameter T
+57:16 type any -> free
+57:21 parameter a
+57:23 type T -> 57:14
+57:26 type T -> 57:14
+58:6 variable b
+58:8 type T -> 57:14
+58:12 read a -> 57:21
+59:9 read b -> 58:6
+62:14 type Point -> 8:6
+63:9 read origin -> 12:5
+63:16 call Add -> free
+63:20 read origin -> 12:5

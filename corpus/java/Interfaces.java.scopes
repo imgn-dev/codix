@@ -1,0 +1,15 @@
+1:29 type_parameter T
+4:5 type T -> 1:29
+4:12 type String -> free
+4:19 parameter id
+6:13 type List -> free
+6:18 type T -> 1:29
+7:16 read List -> free
+7:21 call of -> free
+12:5 type String -> free
+15:18 field x
+15:25 field y
+17:13 read x -> 15:18
+17:30 type IllegalArgumentException -> free
+20:12 type Point -> 15:8
+21:20 type Point -> 15:8

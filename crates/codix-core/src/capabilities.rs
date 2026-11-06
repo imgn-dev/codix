@@ -18,6 +18,8 @@ use crate::store::{FileStatus, Store};
 pub enum Tier {
     /// Tier 1: definitions, outlines, name search, textual references.
     Symbols,
+    /// Tier 2: tier 1, and scope-aware references and renames within a file.
+    Scopes,
     /// Keys, headings or text, for search only.
     Search,
     /// Known to codix but left out of this build.
@@ -161,6 +163,7 @@ pub fn capabilities() -> Capabilities {
                 Some(d) if d.search_only || !registry.grammars.contains_key(&d.name) => {
                     Tier::Search
                 }
+                Some(d) if registry.grammars[&d.name].locals.is_some() => Tier::Scopes,
                 Some(_) => Tier::Symbols,
             };
             LanguageSupport {

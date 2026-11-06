@@ -1,0 +1,55 @@
+7:20 type string -> free
+7:27 type Shape -> 9:6
+10:9 type float64 -> free
+11:9 type string -> free
+15:7 type float64 -> free
+16:8 type string -> free
+19:14 type float64 -> free
+21:14 type Point -> 14:6
+23:10 type_parameter T
+23:12 type any -> free
+23:33 type T -> 23:10
+25:15 parameter x
+25:18 parameter y
+25:20 type float64 -> free
+25:30 type Point -> 14:6
+26:8 constant local
+27:10 type Point -> 14:6
+27:16 read X -> free
+27:19 read x -> 25:15
+27:22 read Y -> free
+27:25 read y -> 25:18
+30:7 parameter p
+30:10 type Point -> 14:6
+30:22 parameter dx
+30:25 type float64 -> free
+31:2 read p -> 30:7
+31:4 read X -> free
+31:9 read dx -> 30:22
+34:7 parameter p
+34:9 type Point -> 14:6
+34:23 type float64 -> free
+36:7 parameter b
+36:10 type Box -> 23:6
+36:14 type T -> 23:10
+36:24 type int -> free
+36:37 call len -> free
+36:41 read b -> 36:7
+36:43 read items -> free
+38:7 parameter c
+38:9 type Celsius -> 19:6
+38:27 type string -> free
+40:15 parameter a
+40:18 parameter b
+40:20 type Point -> 14:6
+40:27 type float64 -> free
+41:9 read math -> free
+41:14 call Hypot -> free
+41:20 read a -> 40:15
+41:22 read X -> free
+41:24 read b -> 40:18
+41:26 read X -> free
+41:29 read a -> 40:15
+41:31 read Y -> free
+41:33 read b -> 40:18
+41:35 read Y -> free

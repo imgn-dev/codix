@@ -17,3 +17,27 @@ record = "class"
 [symbols.visibility]
 node = "modifiers"
 values = ["public", "protected", "private"]
+
+# Types, methods and values are separate namespaces. A name read in an
+# expression is a variable when one is in scope, else a type.
+[scopes]
+hoisted = ["class", "type"]
+self_receivers = ["this"]
+
+[scopes.namespaces]
+class = "type"
+interface = "type"
+enum = "type"
+type_parameter = "type"
+method = "method"
+constructor = "constructor"
+
+[scopes.contexts]
+call = ["method"]
+type = ["type"]
+import = ["type"]
+read = ["value", "type"]
+
+# Every class inherits the methods of `Object`.
+[scopes.implicit_members]
+method = ["clone", "equals", "finalize", "getClass", "hashCode", "notify", "notifyAll", "toString", "wait"]

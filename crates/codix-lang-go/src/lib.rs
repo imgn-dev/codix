@@ -5,5 +5,6 @@ codix_provider::register!(
     "go",
     "descriptor.toml",
     tree_sitter_go::LANGUAGE,
-    "queries/tags.scm"
+    "queries/tags.scm",
+    "queries/locals.scm"
 );

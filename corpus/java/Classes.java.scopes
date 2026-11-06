@@ -1,0 +1,28 @@
+1:9 read com -> free
+1:13 read acme -> free
+3:8 read java -> free
+3:13 read util -> free
+3:18 import List -> free
+6:19 type List -> free
+6:24 type Line -> 21:28
+9:20 type List -> free
+9:25 type Line -> 21:28
+9:31 parameter lines
+10:14 write lines -> 6:30
+10:22 read lines -> 9:31
+14:16 read lines -> 6:30
+14:22 call stream -> free
+14:31 call mapToLong -> free
+14:41 read Line -> 21:28
+14:47 call amount -> free
+14:55 call sum -> free
+17:21 parameter discount
+18:16 call total -> 13:17
+18:26 read discount -> 17:21
+25:20 read amount -> 22:22
+31:14 type Override -> free
+32:13 type String -> free
+36:16 type String -> free
+36:23 parameter code
+37:9 type String -> free
+37:33 call name -> free

@@ -2,9 +2,10 @@
 
 use std::path::Path;
 
+use codix_core::scope::RefContext;
 use codix_core::store::{
-    Confidence, FileRow, FileStatus, FileUpdate, MatchMode, NameQuery, Point, Span, Store,
-    SymbolRow,
+    Confidence, FileRow, FileStatus, FileUpdate, MatchMode, NameQuery, Point, RefRow, RefState,
+    Span, Store, SymbolRow,
 };
 
 fn file(path: &str) -> FileRow {
@@ -57,6 +58,7 @@ fn update(path: &str, symbols: Vec<SymbolRow>) -> FileUpdate {
     FileUpdate {
         file: file(path),
         symbols: Some(symbols),
+        refs: Vec::new(),
     }
 }
 
@@ -67,8 +69,8 @@ fn open(dir: &Path) -> Store {
 #[test]
 fn migrates_an_empty_database_and_reopens() {
     let dir = tempfile::tempdir().unwrap();
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 4);
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 4);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 5);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 5);
 }
 
 #[test]
@@ -95,6 +97,67 @@ fn replace_file_is_idempotent_and_round_trips() {
         .collect();
     assert_eq!(Some(stored), u.symbols);
     assert_eq!(snapshot.symbol_count().unwrap(), 2);
+}
+
+#[test]
+fn references_round_trip_with_their_symbols_and_are_replaced_with_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    let reference = |name: &str, line: u32, target: Option<usize>, state| RefRow {
+        name: name.to_owned(),
+        context: RefContext::Call,
+        range: Span {
+            start: point(line),
+            end: Point {
+                byte: line * 10 + 5,
+                ..point(line)
+            },
+        },
+        enclosing: Some(0),
+        target,
+        state,
+        confidence: Confidence::Normal,
+    };
+    let mut u = update(
+        "src/A.java",
+        vec![
+            symbol("total", "Invoice.total", 3),
+            symbol("tax", "Invoice.tax", 7),
+        ],
+    );
+    u.refs = vec![
+        reference("tax", 4, Some(1), RefState::Bound),
+        reference("print", 5, None, RefState::Free),
+    ];
+    store.replace_file(&u).unwrap();
+
+    let snapshot = store.snapshot().unwrap();
+    let stored = snapshot.refs_in("src/A.java").unwrap();
+    assert_eq!(stored.len(), 2);
+    assert_eq!(stored[0].name, "tax");
+    assert_eq!(
+        stored[0].target,
+        Some(u.symbols.as_ref().unwrap()[1].symbol_id.clone())
+    );
+    assert_eq!(
+        stored[0].enclosing,
+        Some(u.symbols.as_ref().unwrap()[0].symbol_id.clone())
+    );
+    assert_eq!(stored[0].state, RefState::Bound);
+    assert_eq!((stored[0].start, stored[0].end_byte), (point(4), 45));
+    assert_eq!(
+        (stored[1].target.clone(), stored[1].state),
+        (None, RefState::Free)
+    );
+    assert_eq!(snapshot.refs_named("print").unwrap().len(), 1);
+    drop(snapshot);
+
+    u.refs.clear();
+    store.replace_file(&u).unwrap();
+    assert_eq!(
+        store.snapshot().unwrap().refs_in("src/A.java").unwrap(),
+        Vec::new()
+    );
 }
 
 #[test]

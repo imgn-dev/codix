@@ -11,3 +11,9 @@ separator = "."
 body_fields = ["body", "value"]
 body_tokens = ["{"]
 # Exported names are capitalized; Go has no visibility keywords.
+
+# Types and values share one namespace per scope; fields and methods are
+# reached only through a value, so no plain name reads them.
+[scopes.namespaces]
+field = "member"
+method = "member"
