@@ -233,6 +233,12 @@ fn errors_are_tool_errors_that_say_what_to_do() {
     assert_eq!(bad["isError"], true, "{bad}");
     assert!(text(&bad).starts_with("error[usage]: "), "{bad}");
 
+    let missing = client.call(5, "outline", &json!({ "path": "org/springframework" }));
+    assert!(
+        text(&missing).contains("project root; find a file with the find tool"),
+        "{missing}"
+    );
+
     let (_elsewhere_guard, elsewhere) = files_only(&[]);
     let outside = client.call(4, "status", &json!({ "cwd": elsewhere }));
     assert!(

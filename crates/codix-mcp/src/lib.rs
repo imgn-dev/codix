@@ -281,7 +281,7 @@ fn failure(error: &Error, warnings: &[Warning]) -> CallToolResult {
         "no_project" | "not_indexed" => {
             "call the init tool with cwd at the project root".to_owned()
         }
-        _ => error.hint(),
+        _ => error.hint().replace("`codix find <name>`", "the find tool"),
     };
     let mut text = warning_lines(warnings);
     // Writing to a String cannot fail.
