@@ -8,6 +8,7 @@ use crate::capabilities::{CapabilitiesOp, LanguagesOp};
 use crate::config::ConfigOp;
 use crate::indexing::{IndexOp, InitOp, StatusOp};
 use crate::op::{Context, Operation};
+use crate::previews::{DiscardOp, PreviewsOp};
 use crate::query::{DefOp, FindOp, GrepOp, OutlineOp, ShowOp};
 use crate::refs::RefsOp;
 
@@ -53,6 +54,8 @@ operations!(
     OutlineOp,
     ShowOp,
     GrepOp,
+    PreviewsOp,
+    DiscardOp,
 );
 
 fn run<O: Operation>(op: &O, ctx: &Context, request: Value) -> Result<Value, Error> {

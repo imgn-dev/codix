@@ -330,6 +330,13 @@ impl Config {
             .unwrap_or(Duration::from_mins(30))
     }
 
+    /// `previews.expiry`.
+    pub fn preview_expiry(&self) -> Duration {
+        self.text("previews.expiry")
+            .and_then(schema::parse_duration)
+            .unwrap_or(Duration::from_hours(1))
+    }
+
     /// `index.scan_interval`.
     pub fn scan_interval(&self) -> Duration {
         self.text("index.scan_interval")

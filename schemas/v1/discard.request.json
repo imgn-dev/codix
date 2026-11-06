@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`DiscardOp`].",
+  "properties": {
+    "all": {
+      "default": false,
+      "description": "Drop every pending preview.",
+      "type": "boolean"
+    },
+    "ids": {
+      "default": [],
+      "description": "Preview IDs to drop.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "title": "DiscardRequest",
+  "type": "object"
+}

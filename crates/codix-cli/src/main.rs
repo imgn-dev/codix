@@ -68,6 +68,7 @@ use codix_core::error::exit;
 use codix_core::indexing::{IndexOp, IndexRequest, InitOp, InitRequest, StatusOp, StatusRequest};
 use codix_core::op::{Context, Operation, Outcome, Warning};
 use codix_core::page::{DEFAULT_LIMIT, Page};
+use codix_core::previews::{DiscardOp, DiscardRequest, PreviewsOp, PreviewsRequest};
 use codix_core::project::ScopeRequest;
 use codix_core::query::{
     DefOp, DefRequest, FindOp, FindRequest, GrepOp, GrepRequest, OutlineOp, OutlineRequest, ShowOp,
@@ -134,6 +135,15 @@ enum Command {
         narrow: NarrowArgs,
     },
     Refs(RefsArgs),
+    Previews,
+    Discard {
+        /// Preview IDs to drop.
+        #[arg(required_unless_present = "all", conflicts_with = "all")]
+        ids: Vec<String>,
+        /// Drop every pending preview.
+        #[arg(long)]
+        all: bool,
+    },
     Outline {
         /// File or directory.
         path: String,
@@ -676,6 +686,10 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
             run(output, &RefsOp, ctx, request)
         }
         Command::Outline { path } => run(output, &OutlineOp, ctx, Ok(OutlineRequest { path })),
+        Command::Previews => run(output, &PreviewsOp, ctx, Ok(PreviewsRequest {})),
+        Command::Discard { ids, all } => {
+            run(output, &DiscardOp, ctx, Ok(DiscardRequest { ids, all }))
+        }
         Command::Show {
             symbol,
             narrow,

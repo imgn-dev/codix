@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What [`DiscardOp`] answers.",
+  "properties": {
+    "discarded": {
+      "description": "The previews dropped.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "discarded"
+  ],
+  "title": "DiscardResponse",
+  "type": "object"
+}

@@ -134,6 +134,15 @@ pub const KEYS: &[KeyDef] = &[
         effect: "matching files will be reindexed on the next scan",
     },
     KeyDef {
+        path: "previews.expiry",
+        map: false,
+        kind: Kind::Duration,
+        default: Some("1h"),
+        description: "How long a preview can be applied after it is planned.",
+        file: ConfigFile::Local,
+        effect: "applies to every preview, pending ones included",
+    },
+    KeyDef {
         path: "sources.roots",
         map: false,
         kind: Kind::PathList,

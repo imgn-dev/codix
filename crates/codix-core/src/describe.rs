@@ -175,6 +175,22 @@ pub const COMMANDS: &[Description] = &[
         example: "codix refs Invoice.total",
     },
     Description {
+        name: "previews",
+        summary: "List the pending previews that `apply` can apply.",
+        when: "To find a preview ID again, or check whether a preview still applies after files changed.",
+        returns: "Each preview with its ID, what it does, its age and its state: ready, rebase (files changed elsewhere; apply adapts it), stale or expired (removed now; plan again).",
+        tier: None,
+        example: "codix previews",
+    },
+    Description {
+        name: "discard",
+        summary: "Drop pending previews without applying them.",
+        when: "When a preview will not be applied, so it no longer shows in `previews`.",
+        returns: "The IDs dropped.",
+        tier: None,
+        example: "codix discard 3f9a2c41",
+    },
+    Description {
         name: "outline",
         summary: "Show the symbols of a file or directory as a tree, signatures only.",
         when: "Instead of reading a whole file to learn its structure.",
