@@ -75,3 +75,44 @@ fn scanning_indexes_java_files_and_keeps_others_for_search() {
         "{names:?}"
     );
 }
+
+#[test]
+fn scanning_stores_references_except_those_bound_to_locals() {
+    use codix_core::store::RefState;
+
+    let dir = tempfile::tempdir().unwrap();
+    let root = codix_core::project::canonicalize(dir.path()).unwrap();
+    fs::create_dir_all(root.join(".codix")).unwrap();
+    fs::write(
+        root.join("Invoice.java"),
+        "class Invoice {\n    long total;\n    long sum(long tax) {\n        return total + tax + other.total;\n    }\n}\n",
+    )
+    .unwrap();
+    let project = Project::discover(&root).unwrap().unwrap();
+    let config = Config::load(&project).unwrap();
+    scan(&project, &config, &PackIndexer::new(&config), &FileGate).unwrap();
+
+    let mut store = Store::open(&project.index_path()).unwrap();
+    let snapshot = store.snapshot().unwrap();
+    let refs: Vec<(String, RefState, Option<String>, Option<String>)> = snapshot
+        .refs_in("Invoice.java")
+        .unwrap()
+        .into_iter()
+        .map(|r| (r.name, r.state, r.target, r.enclosing))
+        .collect();
+    let field = "java:Invoice.java::Invoice.total#";
+    let sum = Some(
+        snapshot.symbols_in("Invoice.java").unwrap()[2]
+            .symbol
+            .symbol_id
+            .clone(),
+    );
+    assert_eq!(refs.len(), 3, "{refs:?}");
+    assert!(
+        refs[0].2.as_deref().is_some_and(|t| t.starts_with(field)),
+        "{refs:?}"
+    );
+    assert_eq!((refs[0].1, &refs[0].3), (RefState::Bound, &sum));
+    assert_eq!((refs[1].0.as_str(), refs[1].1), ("other", RefState::Free));
+    assert_eq!((refs[2].0.as_str(), refs[2].1), ("total", RefState::Free));
+}

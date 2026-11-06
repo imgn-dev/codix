@@ -19,6 +19,7 @@ pub mod providers;
 pub mod query;
 pub mod render;
 pub mod scan;
+pub mod scope;
 pub mod store;
 pub mod symbol_id;
 pub mod vcs;

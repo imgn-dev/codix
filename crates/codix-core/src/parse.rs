@@ -7,7 +7,7 @@ use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
 use codix_provider::{Grammar, LanguageDescriptor, registry};
 use streaming_iterator::StreamingIterator;
-use tree_sitter::{Language, Node, Parser, Query, QueryCursor};
+use tree_sitter::{Language, Node, Parser, Query, QueryCursor, Tree};
 
 use crate::Error;
 use crate::config::Config;
@@ -31,19 +31,24 @@ fn queries() -> &'static Mutex<HashMap<String, Arc<Query>>> {
     QUERIES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// The pack's `tags` query, compiled once per process.
-fn tags_query(name: &str, grammar: &Grammar) -> Result<Arc<Query>, Error> {
+/// One of a pack's queries, `tags` or `locals`, compiled once per process.
+pub(crate) fn query(
+    name: &str,
+    which: &str,
+    grammar: &Grammar,
+    source: &str,
+) -> Result<Arc<Query>, Error> {
+    let key = format!("{name}/{which}");
     let mut cache = queries().lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some(query) = cache.get(name) {
+    if let Some(query) = cache.get(&key) {
         return Ok(Arc::clone(query));
     }
-    let query = Query::new(&Language::new(grammar.language), grammar.tags).map_err(|e| {
-        Error::Internal {
-            message: format!("the {name} tags query does not compile: {e}"),
-        }
-    })?;
+    let query =
+        Query::new(&Language::new(grammar.language), source).map_err(|e| Error::Internal {
+            message: format!("the {name} {which} query does not compile: {e}"),
+        })?;
     let query = Arc::new(query);
-    cache.insert(name.to_owned(), Arc::clone(&query));
+    cache.insert(key, Arc::clone(&query));
     Ok(query)
 }
 
@@ -68,7 +73,18 @@ pub fn extract(
     path: &str,
     content: &str,
 ) -> Result<Vec<SymbolRow>, Error> {
-    let tree = PARSERS.with(|parsers| {
+    let tree = parse(descriptor, grammar, path, content)?;
+    symbols_of(descriptor, grammar, path, content, &tree)
+}
+
+/// Parses one file with its pack's grammar.
+pub(crate) fn parse(
+    descriptor: &LanguageDescriptor,
+    grammar: &Grammar,
+    path: &str,
+    content: &str,
+) -> Result<Tree, Error> {
+    PARSERS.with(|parsers| {
         let mut parsers = parsers.borrow_mut();
         if !parsers.contains_key(&descriptor.name) {
             let mut parser = Parser::new();
@@ -87,8 +103,18 @@ pub fn extract(
         parser.parse(content, None).ok_or_else(|| Error::Internal {
             message: format!("{path}: the {} parser gave up", descriptor.name),
         })
-    })?;
-    let query = tags_query(&descriptor.name, grammar)?;
+    })
+}
+
+/// The symbols of a parsed file.
+pub(crate) fn symbols_of(
+    descriptor: &LanguageDescriptor,
+    grammar: &Grammar,
+    path: &str,
+    content: &str,
+    tree: &Tree,
+) -> Result<Vec<SymbolRow>, Error> {
+    let query = query(&descriptor.name, "tags", grammar, grammar.tags)?;
     let definitions = definitions(descriptor, &query, tree.root_node(), content);
     let (mut rows, parents) = symbols(descriptor, path, content, &definitions);
     symbol_id::disambiguate(&mut rows, &descriptor.id_prefix, path);
@@ -442,7 +468,7 @@ fn in_error(descriptor: &LanguageDescriptor, definition: &Definition<'_>) -> boo
     false
 }
 
-fn span(content: &str, node: Node<'_>) -> Span {
+pub(crate) fn span(content: &str, node: Node<'_>) -> Span {
     Span {
         start: point(content, node.start_byte(), node.start_position()),
         end: point(content, node.end_byte(), node.end_position()),
@@ -500,6 +526,10 @@ fn grammar_fingerprint(grammar: &Grammar) -> String {
     let language = Language::new(grammar.language);
     let mut hasher = blake3::Hasher::new();
     hasher.update(grammar.tags.as_bytes());
+    if let Some(locals) = grammar.locals {
+        hasher.update(&[0]);
+        hasher.update(locals.as_bytes());
+    }
     hasher.update(&language.abi_version().to_le_bytes());
     hasher.update(&language.node_kind_count().to_le_bytes());
     hasher.update(&language.field_count().to_le_bytes());
@@ -523,6 +553,7 @@ impl Indexer for PackIndexer {
             language: detection.language.clone(),
             status,
             symbols: Vec::new(),
+            refs: Vec::new(),
         };
         match classify(content) {
             ContentClass::Binary => return search_only(FileStatus::Skipped),
@@ -544,11 +575,12 @@ impl Indexer for PackIndexer {
         let Ok(text) = std::str::from_utf8(content) else {
             return search_only(FileStatus::SearchOnly);
         };
-        match extract(descriptor, grammar, id.as_str(), text) {
-            Ok(symbols) => Indexed {
+        match crate::scope::model(descriptor, grammar, id.as_str(), text) {
+            Ok(model) => Indexed {
                 language: detection.language,
                 status: FileStatus::Indexed,
-                symbols,
+                refs: model.stored_refs(),
+                symbols: model.symbols,
             },
             Err(_) => search_only(FileStatus::Error),
         }

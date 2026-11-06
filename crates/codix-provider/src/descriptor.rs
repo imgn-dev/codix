@@ -60,6 +60,64 @@ pub struct LanguageDescriptor {
     /// How definitions become symbols; packs without a grammar have none.
     #[serde(default)]
     pub symbols: Symbols,
+    /// How references bind to definitions within a file, for packs with a
+    /// `locals` query.
+    #[serde(default)]
+    pub scopes: Scopes,
+}
+
+/// The contexts a reference can appear in, as `@local.reference.<context>`
+/// captures name them.
+pub const REFERENCE_CONTEXTS: &[&str] = &["call", "type", "import", "read", "write"];
+
+/// The namespace of definitions and contexts a pack does not list.
+pub const DEFAULT_NAMESPACE: &str = "value";
+
+/// Binding rules that a `locals` query's captures do not carry.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Scopes {
+    /// The namespace of each definition kind, a symbol kind or a local kind
+    /// such as `parameter`; kinds not listed are in `value`. Java keeps
+    /// types, methods and values apart; Python has one namespace.
+    #[serde(default)]
+    pub namespaces: std::collections::BTreeMap<String, String>,
+    /// The namespaces each reference context reads, in order; contexts not
+    /// listed read `value`. In Java a name read in an expression is a
+    /// variable if one is in scope, else a type.
+    #[serde(default)]
+    pub contexts: std::collections::BTreeMap<String, Vec<String>>,
+    /// Scope kinds whose definitions are visible before their position, such
+    /// as class bodies; in other scopes a reference sees only earlier
+    /// definitions.
+    #[serde(default)]
+    pub hoisted: Vec<String>,
+    /// Receivers meaning the enclosing type's own instance, such as `this`:
+    /// a member reached through one binds to the members of that type.
+    #[serde(default)]
+    pub self_receivers: Vec<String>,
+    /// Names that scopes of a kind have without declaring them, by scope
+    /// kind: Java classes inherit `toString` and the other methods of
+    /// `Object`.
+    #[serde(default)]
+    pub implicit_members: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+impl Scopes {
+    /// The namespace of a definition kind.
+    pub fn namespace_of(&self, kind: &str) -> &str {
+        self.namespaces
+            .get(kind)
+            .map_or(DEFAULT_NAMESPACE, String::as_str)
+    }
+
+    /// The namespaces a reference context reads, in order.
+    pub fn read_by(&self, context: &str) -> Vec<&str> {
+        self.contexts.get(context).map_or_else(
+            || vec![DEFAULT_NAMESPACE],
+            |namespaces| namespaces.iter().map(String::as_str).collect(),
+        )
+    }
 }
 
 /// The kinds every language maps its definitions onto.
@@ -218,8 +276,8 @@ pub enum IgnoreStrategy {
 /// A descriptor of any kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Descriptor {
-    /// A language pack.
-    Language(LanguageDescriptor),
+    /// A language pack, boxed: it is much larger than the others.
+    Language(Box<LanguageDescriptor>),
     /// A build system.
     Build(BuildDescriptor),
     /// A version control system.
@@ -232,7 +290,7 @@ impl Descriptor {
     pub fn parse(kind: ProviderKind, text: &str) -> Result<Self, String> {
         let descriptor = match kind {
             ProviderKind::Language => {
-                Self::Language(toml::from_str(text).map_err(|e| e.to_string())?)
+                Self::Language(Box::new(toml::from_str(text).map_err(|e| e.to_string())?))
             }
             ProviderKind::Build => Self::Build(toml::from_str(text).map_err(|e| e.to_string())?),
             ProviderKind::Vcs => Self::Vcs(toml::from_str(text).map_err(|e| e.to_string())?),
@@ -243,6 +301,14 @@ impl Descriptor {
                     return Err(format!(
                         "symbols.kinds.{capture} = \"{kind}\" is not one of: {}",
                         SYMBOL_KINDS.join(", ")
+                    ));
+                }
+            }
+            for context in language.scopes.contexts.keys() {
+                if !REFERENCE_CONTEXTS.contains(&context.as_str()) {
+                    return Err(format!(
+                        "scopes.contexts.{context} is not one of: {}",
+                        REFERENCE_CONTEXTS.join(", ")
                     ));
                 }
             }
@@ -306,6 +372,26 @@ mod symbol_tests {
             "name = \"x\"\nversion = 1\nid_prefix = \"x\"\n[symbols.kinds]\nclass = \"klass\"\n";
         let error = Descriptor::parse(ProviderKind::Language, text).unwrap_err();
         assert!(error.contains("klass"), "{error}");
+    }
+
+    #[test]
+    fn unknown_reference_contexts_are_refused() {
+        let text = "name = \"x\"\nversion = 1\nid_prefix = \"x\"\n[scopes.contexts]\ninvoke = [\"method\"]\n";
+        let error = Descriptor::parse(ProviderKind::Language, text).unwrap_err();
+        assert!(error.contains("invoke"), "{error}");
+    }
+
+    #[test]
+    fn unlisted_kinds_and_contexts_use_the_value_namespace() {
+        let text = "name = \"x\"\nversion = 1\nid_prefix = \"x\"\n[scopes.namespaces]\nclass = \"type\"\n[scopes.contexts]\nread = [\"value\", \"type\"]\n";
+        let Descriptor::Language(d) = Descriptor::parse(ProviderKind::Language, text).unwrap()
+        else {
+            panic!("not a language");
+        };
+        assert_eq!(d.scopes.namespace_of("class"), "type");
+        assert_eq!(d.scopes.namespace_of("variable"), "value");
+        assert_eq!(d.scopes.read_by("read"), ["value", "type"]);
+        assert_eq!(d.scopes.read_by("call"), ["value"]);
     }
 
     #[test]

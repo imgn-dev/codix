@@ -1,0 +1,55 @@
+1:9 read com -> free
+1:13 read acme -> free
+8:16 read total -> 4:18
+11:21 parameter discount
+12:16 call total -> 7:10
+12:26 read discount -> 11:21
+15:17 type Members -> 3:7
+15:25 parameter other
+15:37 parameter total
+16:14 write total -> 4:18
+16:22 read total -> 15:37
+17:9 write count -> 5:17
+17:17 read other -> 15:25
+17:23 read count -> free
+18:9 read other -> 15:25
+18:15 call total -> free
+19:14 call total -> 7:10
+20:9 read Math -> free
+20:14 call max -> free
+20:18 read total -> 15:37
+20:25 read count -> 5:17
+21:9 type String -> free
+21:16 variable text
+21:23 call toString -> free
+22:9 type Members -> 3:7
+22:17 variable copy
+22:28 type Members -> 3:7
+27:24 type Members -> 3:7
+27:34 read count -> free
+31:20 call total -> 7:10
+35:32 type Members -> 3:7
+37:20 call total -> uncertain
+37:30 call helper -> uncertain
+40:9 type Members -> uncertain
+45:5 type Runnable -> free
+46:20 type Runnable -> free
+48:17 call total -> uncertain
+59:14 type Color -> 57:10
+59:20 parameter color
+60:17 read color -> 59:20
+61:18 read RED -> free
+64:24 read count -> 5:17
+68:6 type_parameter T
+68:16 type Comparable -> free
+68:27 type T -> 68:6
+68:31 type T -> 68:6
+68:37 type T -> 68:6
+68:39 parameter a
+68:42 type T -> 68:6
+68:44 parameter b
+69:16 read a -> 68:39
+69:18 call compareTo -> free
+69:28 read b -> 68:44
+69:37 read a -> 68:39
+69:41 read b -> 68:44

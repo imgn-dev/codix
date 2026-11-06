@@ -398,6 +398,7 @@ impl TextRender for Capabilities {
         for command in &self.commands {
             let needs = match command.tier {
                 Some(Tier::Symbols) => "needs tier 1 (symbols)",
+                Some(Tier::Scopes) => "needs tier 2 (scopes)",
                 Some(Tier::Search | Tier::NotInBuild) => "any indexed text",
                 None => "any project",
             };
@@ -440,6 +441,7 @@ fn files(count: usize) -> String {
 fn tier_text(tier: Tier) -> &'static str {
     match tier {
         Tier::Symbols => "tier 1 (symbols)",
+        Tier::Scopes => "tier 2 (scopes)",
         Tier::Search => "search only",
         Tier::NotInBuild => "not in this build",
     }

@@ -44,7 +44,7 @@ fn languages_lists_every_known_language() {
         .iter()
         .find(|l| l["name"] == "java")
         .expect("java");
-    assert_eq!(java["tier"], "symbols");
+    assert_eq!(java["tier"], "scopes");
     assert_eq!(java["extensions"], serde_json::json!(["java"]));
 }
 

@@ -13,7 +13,7 @@ mod registry;
 
 pub use build::{BuildModel, BuildResolver, Module, Unsupported};
 pub use descriptor::{
-    BuildDescriptor, Descriptor, Detect, IgnoreStrategy, LanguageDescriptor, ProviderKind,
+    BuildDescriptor, Descriptor, Detect, IgnoreStrategy, LanguageDescriptor, ProviderKind, Scopes,
     VcsDescriptor,
 };
 pub use registry::{Grammar, ProviderEntry, Registry, registry};
@@ -23,8 +23,9 @@ pub use inventory;
 
 /// Registers a provider: `register!(Vcs, "git", "descriptor.toml")`, with
 /// paths relative to the calling crate's manifest directory. A language pack
-/// that parses adds its grammar and `tags` query:
-/// `register!(Language, "java", "descriptor.toml", tree_sitter_java::LANGUAGE, "queries/tags.scm")`;
+/// that parses adds its grammar and `tags` query, and for tier 2 its `locals`
+/// query:
+/// `register!(Language, "java", "descriptor.toml", tree_sitter_java::LANGUAGE, "queries/tags.scm", "queries/locals.scm")`;
 /// a build system adds its resolver: `register!(Build, "maven", "descriptor.toml", &Maven)`.
 #[macro_export]
 macro_rules! register {
@@ -59,6 +60,22 @@ macro_rules! register {
                 grammar: Some($crate::Grammar {
                     language: $language,
                     tags: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $tags)),
+                    locals: None,
+                }),
+                resolver: None,
+            }
+        }
+    };
+    (Language, $name:literal, $path:literal, $language:expr, $tags:literal, $locals:literal) => {
+        $crate::inventory::submit! {
+            $crate::ProviderEntry {
+                kind: $crate::ProviderKind::Language,
+                name: $name,
+                descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
+                grammar: Some($crate::Grammar {
+                    language: $language,
+                    tags: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $tags)),
+                    locals: Some(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $locals))),
                 }),
                 resolver: None,
             }

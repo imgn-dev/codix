@@ -1,0 +1,72 @@
+1:9 read com -> free
+1:13 read acme -> free
+3:8 read java -> free
+3:13 read util -> free
+3:18 import List -> free
+4:8 read java -> free
+4:13 read io -> free
+4:16 import Reader -> free
+9:13 type List -> free
+9:18 type Integer -> free
+9:27 parameter values
+9:39 parameter start
+10:13 variable total
+10:21 read start -> 9:39
+11:18 variable value
+11:26 read values -> 9:27
+12:13 write total -> 10:13
+12:22 read value -> 11:18
+14:18 variable i
+14:25 read i -> 14:18
+14:29 read total -> 10:13
+14:36 write i -> 14:18
+15:17 variable count
+15:25 read i -> 14:18
+16:13 write total -> 10:13
+16:21 read total -> 10:13
+16:29 read count -> 15:17
+19:17 variable total2
+19:26 read total -> 10:13
+20:13 write total -> 10:13
+20:21 read total2 -> 19:17
+22:16 read total -> 10:13
+22:24 read count -> 7:9
+26:13 variable a
+28:17 variable b
+28:21 read a -> 26:13
+30:13 variable b
+31:9 type Runnable -> free
+31:18 variable r
+32:17 variable c
+32:21 read a -> 26:13
+32:25 read b -> 30:13
+34:9 type java -> free
+34:14 type util -> free
+34:19 type function -> free
+34:28 type Function -> free
+34:37 type Integer -> free
+34:46 type Integer -> free
+34:55 variable f
+34:59 parameter x
+34:64 read x -> 34:59
+34:68 read b -> 30:13
+37:20 type Reader -> free
+37:27 parameter in
+37:38 type Exception -> free
+38:14 type Reader -> free
+38:21 variable reader
+38:30 read in -> 37:27
+39:13 read reader -> 38:21
+39:20 call read -> free
+40:18 type RuntimeException -> free
+40:35 parameter e
+41:19 read e -> 40:35
+43:9 type Object -> free
+43:16 variable o
+43:20 read in -> 37:27
+44:13 read o -> 43:16
+44:26 type Reader -> free
+44:33 variable r
+45:13 read r -> 44:33
+45:15 call close -> free
+50:16 read early -> 53:9

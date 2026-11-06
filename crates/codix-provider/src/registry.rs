@@ -28,6 +28,9 @@ pub struct Grammar {
     pub language: tree_sitter_language::LanguageFn,
     /// The pack's `tags` query.
     pub tags: &'static str,
+    /// The pack's `locals` query, for tier 2: scopes, local definitions and
+    /// references.
+    pub locals: Option<&'static str>,
 }
 
 impl std::fmt::Debug for Grammar {
@@ -107,7 +110,7 @@ pub fn registry() -> &'static Registry {
                     if let Some(grammar) = entry.grammar {
                         registry.grammars.insert(d.name.clone(), grammar);
                     }
-                    registry.languages.push(d);
+                    registry.languages.push(*d);
                 }
                 Descriptor::Build(d) => {
                     if let Some(resolver) = entry.resolver {
