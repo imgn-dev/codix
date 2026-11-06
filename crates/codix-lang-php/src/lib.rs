@@ -5,5 +5,6 @@ codix_provider::register!(
     "php",
     "descriptor.toml",
     tree_sitter_php::LANGUAGE_PHP,
-    "queries/tags.scm"
+    "queries/tags.scm",
+    "queries/locals.scm"
 );

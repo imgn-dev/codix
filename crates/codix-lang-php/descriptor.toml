@@ -16,3 +16,39 @@ body_tokens = ["="]
 [symbols.visibility]
 node = "visibility_modifier"
 values = ["public", "protected", "private"]
+
+# Variables, functions, types and constants are separate namespaces;
+# members are reached through `$this`, `self`, `static` or another object.
+[scopes]
+hoisted = ["function", "arrow", "class"]
+self_receivers = ["$this", "self", "static"]
+
+[scopes.namespaces]
+parameter = "variable"
+variable = "variable"
+function = "function"
+class = "type"
+interface = "type"
+trait = "type"
+enum = "type"
+import = "type"
+namespace = "type"
+module = "type"
+method = "member"
+constructor = "member"
+field = "member"
+enum_member = "member"
+
+[scopes.contexts]
+read = ["variable", "value", "type"]
+write = ["variable"]
+call = ["function"]
+type = ["type"]
+
+[scopes.member_contexts]
+read = ["member", "value"]
+write = ["member"]
+call = ["member"]
+
+[scopes.closed]
+function = ["variable"]

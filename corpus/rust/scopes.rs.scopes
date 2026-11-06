@@ -1,0 +1,87 @@
+1:5 read std -> free
+1:10 read collections -> free
+1:23 import HashMap
+2:5 read std -> free
+2:10 read fmt -> free
+2:22 read Display -> free
+2:33 import Show
+6:17 type_parameter T
+7:12 type Vec -> free
+7:16 type T -> 6:17
+11:6 type_parameter T
+11:9 type Clone -> free
+11:16 type Cart -> 6:12
+11:21 type T -> 11:6
+12:21 type Self -> free
+13:9 read Self -> free
+13:15 call with_capacity -> 16:8
+13:29 read LIMIT -> 4:7
+16:22 parameter size
+16:38 type Self -> free
+17:9 type Cart -> 6:12
+17:23 read Vec -> free
+17:28 call with_capacity -> free
+17:42 read size -> 16:22
+20:27 parameter item
+20:33 type T -> 11:6
+21:14 read items -> free
+21:20 call push -> free
+21:25 read item -> 20:27
+21:30 call clone -> free
+22:14 write count -> free
+23:13 variable count
+23:26 read count -> free
+24:13 variable count
+24:21 read count -> 23:13
+25:9 call helper -> 29:4
+25:16 read count -> 24:13
+29:11 parameter value
+30:9 variable doubled
+30:20 parameter x
+30:30 read x -> 30:20
+31:13 variable total
+31:21 call later -> 45:4
+31:27 read value -> 29:11
+32:10 variable index
+32:17 variable item
+32:33 call iter -> free
+32:40 call enumerate -> free
+33:9 write total -> 31:13
+33:18 read index -> 32:10
+33:26 read item -> 32:17
+35:12 read Some -> free
+35:17 variable found
+35:26 call Some -> free
+35:31 read total -> 31:13
+36:9 write total -> 31:13
+36:17 read found -> 35:17
+38:11 read total -> 31:13
+39:14 call doubled -> 30:9
+39:22 read total -> 31:13
+40:9 variable n
+40:14 read n -> 40:9
+40:18 read LIMIT -> 4:7
+40:27 read n -> 40:9
+41:9 variable other
+41:18 read other -> 41:9
+41:26 read value -> 29:11
+45:10 parameter x
+46:20 read x -> 45:10
+47:5 read x -> 45:10
+52:9 call helper -> free
+56:11 parameter map
+56:16 type HashMap -> 1:23
+56:24 type String -> free
+56:43 type Option -> free
+57:9 type Point -> 61:8
+57:17 variable x
+57:23 variable height
+57:34 type Point -> 61:8
+58:5 read map -> 56:11
+58:9 call get -> free
+58:18 call copied -> free
+58:27 call map -> free
+58:32 parameter v
+58:35 read v -> 58:32
+58:39 read x -> 57:17
+58:43 read height -> 57:23

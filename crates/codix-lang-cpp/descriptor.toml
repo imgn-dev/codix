@@ -12,3 +12,23 @@ body_fields = ["body", "value", "default_value"]
 # Anonymous structs in a typedef come before the name.
 body_tokens = ["{"]
 # C++ visibility is set by `public:` sections, not on each member.
+
+# Types are a namespace apart from values; class members are visible by
+# name in their class's member functions, and through `this`.
+[scopes]
+hoisted = ["class", "type", "module"]
+self_receivers = ["this"]
+
+[scopes.namespaces]
+class = "type"
+struct = "type"
+enum = "type"
+type_alias = "type"
+namespace = "type"
+type_parameter = "type"
+constructor = "constructor"
+
+[scopes.contexts]
+type = ["type", "value"]
+read = ["value", "type"]
+call = ["value", "type"]

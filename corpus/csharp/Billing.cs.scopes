@@ -1,0 +1,20 @@
+1:7 read System -> free
+1:14 read Collections -> free
+5:31 read Invoice -> 21:18
+5:39 parameter invoice
+19:31 parameter Label
+19:46 parameter Amount
+21:28 read IPriced -> 7:22
+24:26 read List -> uncertain
+24:31 read Line -> uncertain
+25:22 read Paid -> uncertain
+27:24 read List -> uncertain
+27:29 read Line -> uncertain
+27:35 parameter lines
+29:18 read lines -> 27:35
+29:26 read lines -> 27:35
+38:35 read Total -> 34:24
+40:24 read Invoice -> uncertain
+40:53 read Invoice -> uncertain
+40:65 read List -> uncertain
+40:70 read Line -> uncertain

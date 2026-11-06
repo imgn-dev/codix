@@ -115,6 +115,15 @@ pub struct Scopes {
     /// `{ f: function () {} }` is in the `member` namespace.
     #[serde(default)]
     pub member_name_parents: Vec<String>,
+    /// Whether the symbols of the `tags` query are visible in their whole
+    /// scope, before their position, as Rust items are in a block.
+    #[serde(default)]
+    pub symbols_hoisted: bool,
+    /// Scope kinds that names of some namespaces do not cross, by kind: a
+    /// Rust `mod` does not see the names around it, and a Ruby `def` does
+    /// not see the local variables around it.
+    #[serde(default)]
+    pub closed: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 /// The namespace of members reached only through a receiver.

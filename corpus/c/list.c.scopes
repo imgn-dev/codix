@@ -1,0 +1,30 @@
+7:19 read MAX_ITEMS -> 3:9
+11:12 type node -> 9:8
+19:16 type node -> 9:8
+25:5 read length -> 34:5
+25:25 type node -> 9:8
+25:31 parameter head
+27:15 type node -> 9:8
+27:33 type node -> 9:8
+27:39 parameter head
+27:49 parameter value
+28:12 type node -> 9:8
+28:18 variable n
+28:22 call malloc -> free
+28:37 read n -> 28:18
+29:5 read n -> 28:18
+29:8 write value -> free
+29:16 read value -> 27:49
+30:5 read n -> 28:18
+30:8 write next -> free
+30:15 read head -> 27:39
+31:12 read n -> 28:18
+34:25 type node -> 9:8
+34:31 parameter head
+35:9 variable n
+36:12 read head -> 34:31
+36:18 write head -> 34:31
+36:25 read head -> 34:31
+36:31 read next -> free
+36:37 write n -> 35:9
+37:12 read n -> 35:9

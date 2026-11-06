@@ -15,9 +15,9 @@
 25:30 type Point -> 14:6
 26:8 constant local
 27:10 type Point -> 14:6
-27:16 read X -> free
+27:16 read X -> uncertain
 27:19 read x -> 25:15
-27:22 read Y -> free
+27:22 read Y -> uncertain
 27:25 read y -> 25:18
 30:7 parameter p
 30:10 type Point -> 14:6

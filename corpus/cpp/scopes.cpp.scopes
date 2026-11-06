@@ -1,0 +1,30 @@
+5:20 type_parameter T
+8:20 type T -> 5:20
+8:22 parameter scale
+8:38 read scale -> 8:22
+9:5 type T -> 5:20
+9:29 read scale_ -> 13:7
+9:38 call factor -> 10:7
+10:5 type T -> 5:20
+13:5 type T -> 5:20
+16:20 type_parameter T
+17:1 type T -> 16:20
+17:3 type Shape -> 6:7
+17:9 type T -> 16:20
+18:12 read scale_ -> uncertain
+21:23 type Shape -> 6:7
+23:31 call area -> uncertain
+26:22 type vector -> free
+26:35 parameter values
+27:9 variable sum
+28:21 variable value
+28:29 read values -> 26:35
+29:9 write sum -> 27:9
+29:16 read value -> 28:21
+31:10 variable twice
+31:19 read sum -> 27:9
+31:28 parameter x
+31:40 read x -> 31:28
+31:48 read sum -> 27:9
+32:12 call twice -> 31:10
+32:18 read sum -> 27:9
