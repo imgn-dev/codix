@@ -192,8 +192,9 @@ fn unknown_keys_and_invalid_values_write_nothing() {
 
     let out = config(&root, &["index.max_file_sise", "1MB"]);
     assert!(
-        out.stderr
-            .contains("hint: valid keys: daemon.idle_timeout, index.max_file_size, "),
+        out.stderr.contains(
+            "hint: valid keys: daemon.idle_timeout, edits.generated, index.max_file_size, "
+        ),
         "{}",
         out.stderr
     );

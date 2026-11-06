@@ -98,6 +98,15 @@ pub const KEYS: &[KeyDef] = &[
         effect: "takes effect the next time a daemon starts",
     },
     KeyDef {
+        path: "edits.generated",
+        map: false,
+        kind: Kind::PathList,
+        default: None,
+        description: "Generated or vendored files, which edits refuse to change without --allow generated: paths or gitignore-style patterns, relative to the root.",
+        file: ConfigFile::Shared,
+        effect: "applies to the next edit planned",
+    },
+    KeyDef {
         path: "index.max_file_size",
         map: false,
         kind: Kind::Size,

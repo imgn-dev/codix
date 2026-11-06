@@ -41,3 +41,11 @@ call = ["method"]
 [scopes.closed]
 function = ["value"]
 class = ["value"]
+
+# Method names may end with `?` or `!`.
+[names]
+identifier = "^[\\p{XID_Start}_]\\p{XID_Continue}*[?!]?$"
+keywords = ["BEGIN", "END", "alias", "and", "begin", "break", "case", "class", "def", "defined?", "do", "else", "elsif", "end", "ensure", "false", "for", "if", "in", "module", "next", "nil", "not", "or", "redo", "rescue", "retry", "return", "self", "super", "then", "true", "undef", "unless", "until", "when", "while", "yield"]
+
+[generated]
+paths = ["vendor/"]

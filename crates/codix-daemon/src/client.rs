@@ -64,7 +64,7 @@ pub fn call<O: Operation>(ctx: &Context, request: &O::Request) -> Route<O::Respo
             warnings,
         },
         Ok(Response::Failed { error, warnings }) => Route::Daemon {
-            outcome: Err(Error::Remote(error)),
+            outcome: Err(Error::Remote(Box::new(error))),
             warnings,
         },
         Ok(other) => internal(ctx, format!("the daemon answered {other:?}")),

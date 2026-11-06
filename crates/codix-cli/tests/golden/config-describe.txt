@@ -4,6 +4,12 @@ daemon.idle_timeout
   default: 30m
   file: .codix/config.toml
 
+edits.generated
+  Generated or vendored files, which edits refuse to change without --allow generated: paths or gitignore-style patterns, relative to the root.
+  type: comma-separated directories, relative to the project root
+  default: none
+  file: codix.toml
+
 index.max_file_size
   Files larger than this are skipped.
   type: size, such as 2MB (units B, KB, MB, GB; 1 KB = 1024 B)

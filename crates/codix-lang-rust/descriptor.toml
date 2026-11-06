@@ -49,3 +49,11 @@ write = ["member"]
 
 [scopes.closed]
 module = ["value", "type"]
+
+# A module declared without a body is the file named after it.
+[names]
+keywords = ["as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false", "fn", "for", "gen", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while", "abstract", "become", "box", "do", "final", "macro", "override", "priv", "typeof", "unsized", "virtual", "yield", "try"]
+file_named_after = [{ kinds = ["module"], without_body = true }]
+
+[generated]
+paths = ["vendor/"]

@@ -18,3 +18,6 @@ body_fields = ["body", "right"]
 hoisted = ["function", "class", "comprehension"]
 self_receivers = ["self", "cls"]
 hidden_from_functions = ["class"]
+
+[names]
+keywords = ["False", "None", "True", "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while", "with", "yield"]

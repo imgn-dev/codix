@@ -15,6 +15,7 @@ pub mod lock;
 pub mod op;
 pub mod page;
 pub mod parse;
+pub mod preflight;
 pub mod project;
 pub mod providers;
 pub mod query;

@@ -821,6 +821,21 @@ pub fn text_error(w: &mut dyn Write, error: &Error, style: Style) -> io::Result<
     for candidate in error.candidates() {
         writeln!(w, "  {candidate}")?;
     }
+    let sites: Vec<String> = error
+        .sites()
+        .iter()
+        .map(|s| location(&s.location))
+        .collect();
+    let width = sites.iter().map(String::len).max().unwrap_or(0);
+    for (site, at) in error.sites().iter().zip(&sites) {
+        writeln!(
+            w,
+            "  {}{}{COLUMN_GAP}{}",
+            style.paint("36", at),
+            " ".repeat(width - at.len()),
+            site.note
+        )?;
+    }
     writeln!(w, "{}: {}", style.paint("1", "hint"), error.hint())
 }
 

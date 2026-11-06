@@ -40,3 +40,9 @@ type = ["type", "value"]
 call = ["member"]
 read = ["member"]
 write = ["member"]
+
+# TypeScript names may hold `$`.
+[names]
+identifier = "^[\\p{XID_Start}_$][\\p{XID_Continue}$]*$"
+keywords = ["break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete", "do", "else", "enum", "export", "extends", "false", "finally", "for", "function", "if", "import", "in", "instanceof", "let", "new", "null", "return", "static", "super", "switch", "this", "throw", "true", "try", "typeof", "var", "void", "while", "with", "yield", "await", "implements", "interface", "package", "private", "protected", "public"]
+type_keywords = ["any", "boolean", "never", "number", "object", "string", "symbol", "undefined", "unknown", "void"]

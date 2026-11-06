@@ -17,3 +17,12 @@ body_tokens = ["{"]
 [scopes.namespaces]
 field = "member"
 method = "member"
+
+# A capital first letter exports a name.
+[names]
+keywords = ["break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "for", "func", "go", "goto", "if", "import", "interface", "map", "package", "range", "return", "select", "struct", "switch", "type", "var"]
+visibility_by_case = true
+
+[generated]
+headers = ["^// Code generated .* DO NOT EDIT\\.$"]
+paths = ["vendor/"]

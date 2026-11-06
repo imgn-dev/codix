@@ -7,6 +7,8 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::page::Location;
+
 /// Process exit codes shared by every frontend.
 pub mod exit {
     /// Success with results.
@@ -90,13 +92,24 @@ pub enum Error {
         /// Its socket.
         socket: String,
     },
+    /// An edit refused by a check, with the sites that made it fail.
+    Refused {
+        /// Stable code, such as `name_collision`.
+        code: &'static str,
+        /// What is wrong.
+        cause: String,
+        /// The next step, such as the override that allows it.
+        hint: String,
+        /// Where.
+        sites: Vec<Site>,
+    },
     /// A bug in codix.
     Internal {
         /// What went wrong.
         message: String,
     },
     /// An error that happened in a daemon, as it reported it.
-    Remote(ErrorReport),
+    Remote(Box<ErrorReport>),
 }
 
 /// An error as it crosses the daemon socket: everything a frontend shows.
@@ -110,8 +123,21 @@ pub struct ErrorReport {
     pub hint: String,
     /// Symbol IDs listed with the error.
     pub candidates: Vec<String>,
+    /// Sites listed with the error, such as those refusing an edit.
+    #[serde(default)]
+    pub sites: Vec<Site>,
     /// Process exit code.
     pub exit_code: u8,
+}
+
+/// A place in a file an error points at.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Site {
+    /// Where.
+    #[serde(flatten)]
+    pub location: Location,
+    /// What is there, such as the line's text.
+    pub note: String,
 }
 
 impl Error {
@@ -129,6 +155,7 @@ impl Error {
             Self::Io { .. } => "io",
             Self::FileExists { .. } => "file_exists",
             Self::DaemonRunning { .. } => "daemon_running",
+            Self::Refused { code, .. } => code,
             Self::Internal { .. } => "internal",
         }
     }
@@ -148,7 +175,9 @@ impl Error {
                 format!("\"{query}\" matches {} symbols", candidates.len())
             }
             Self::UnknownSymbol { query } => format!("no symbol matches \"{query}\""),
-            Self::InvalidConfig { cause, .. } | Self::Usage { cause, .. } => cause.clone(),
+            Self::InvalidConfig { cause, .. }
+            | Self::Usage { cause, .. }
+            | Self::Refused { cause, .. } => cause.clone(),
             Self::NotSupportedInBuild { provider, path } => {
                 format!("{path}: {provider} is not supported in this build")
             }
@@ -176,7 +205,9 @@ impl Error {
             Self::UnknownSymbol { .. } => {
                 "check the name with `codix find`, or pass a full symbol ID".to_owned()
             }
-            Self::InvalidConfig { hint, .. } | Self::Usage { hint, .. } => hint.clone(),
+            Self::InvalidConfig { hint, .. }
+            | Self::Usage { hint, .. }
+            | Self::Refused { hint, .. } => hint.clone(),
             Self::NotSupportedInBuild { .. } => {
                 "use the full codix build, which includes every provider".to_owned()
             }
@@ -203,6 +234,15 @@ impl Error {
         }
     }
 
+    /// Sites listed with the error; empty for most errors.
+    pub fn sites(&self) -> &[Site] {
+        match self {
+            Self::Refused { sites, .. } => sites,
+            Self::Remote(report) => &report.sites,
+            _ => &[],
+        }
+    }
+
     /// The process exit code for this error.
     pub fn exit_code(&self) -> u8 {
         match self {
@@ -213,7 +253,9 @@ impl Error {
             Self::InvalidConfig { .. } | Self::NotSupportedInBuild { .. } | Self::Usage { .. } => {
                 exit::USAGE
             }
-            Self::DaemonRunning { .. } | Self::FileExists { .. } => exit::REFUSED,
+            Self::DaemonRunning { .. } | Self::FileExists { .. } | Self::Refused { .. } => {
+                exit::REFUSED
+            }
             Self::Io { .. } | Self::Internal { .. } => exit::INTERNAL,
         }
     }
@@ -227,6 +269,7 @@ impl Error {
             cause: self.cause(),
             hint: self.hint(),
             candidates: self.candidates().to_vec(),
+            sites: self.sites().to_vec(),
             exit_code: self.exit_code(),
         }
     }

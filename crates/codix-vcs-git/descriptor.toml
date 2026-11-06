@@ -3,6 +3,8 @@ name = "git"
 detect = [".git"]
 skip_dirs = [".git"]
 honor_ignore_files = [".gitignore"]
+# `.gitattributes` marks generated and vendored files for GitHub Linguist.
+generated_attributes = ["linguist-generated", "linguist-vendored"]
 
 [ignore]
 strategy = "nested-file"
