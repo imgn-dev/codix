@@ -359,10 +359,12 @@ impl Output {
             stdout: Style {
                 color: color_allowed && io::stdout().is_terminal(),
                 show_origin: false,
+                tools: false,
             },
             stderr: Style {
                 color: color_allowed && io::stderr().is_terminal(),
                 show_origin: false,
+                tools: false,
             },
             warnings: Vec::new(),
         }

@@ -2,6 +2,7 @@
 //! read a consistent snapshot while one writer commits. Rows are keyed by file
 //! so a file's rows are replaced in one transaction.
 
+mod previews;
 mod search;
 
 use std::collections::HashSet;
@@ -11,6 +12,7 @@ use std::time::Duration;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
+pub use previews::PreviewRow;
 pub use search::{MatchMode, NameQuery};
 
 use crate::Error;
@@ -27,6 +29,7 @@ const MIGRATIONS: &[&str] = &[
     MIGRATION_3,
     MIGRATION_4,
     MIGRATION_5,
+    previews::MIGRATION,
 ];
 
 const MIGRATION_1: &str = "

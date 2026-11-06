@@ -8,6 +8,7 @@ pub mod daemon;
 pub mod describe;
 pub mod detect;
 pub mod dispatch;
+pub mod edit;
 pub mod error;
 pub mod indexing;
 pub mod lock;
