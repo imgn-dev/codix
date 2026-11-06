@@ -142,7 +142,8 @@ fn local_overrides_shared_and_show_origin_says_so() {
         "default             daemon.idle_timeout = 30m\n\
          .codix/config.toml  index.max_file_size = 16MB\n\
          default             index.scan_interval = 10m\n\
-         codix.toml          languages.overrides.\"*.h\" = cpp\n"
+         codix.toml          languages.overrides.\"*.h\" = cpp\n\
+         default             previews.expiry = 1h\n"
     );
 
     let out = config(&root, &["--list"]);

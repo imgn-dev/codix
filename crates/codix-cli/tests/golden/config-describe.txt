@@ -28,6 +28,12 @@ languages.overrides."<glob>"
   default: none
   file: codix.toml
 
+previews.expiry
+  How long a preview can be applied after it is planned.
+  type: duration, such as 10m (units s, m, h, d)
+  default: 1h
+  file: .codix/config.toml
+
 sources.roots
   Source directories, overriding those found from build files.
   type: comma-separated directories, relative to the project root

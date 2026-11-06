@@ -99,6 +99,46 @@ pub struct PlannedFile {
     pub regions: Vec<Region>,
 }
 
+/// Where a planned file stands now.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum PreviewState {
+    /// Unchanged since planning: applies as planned.
+    Ready,
+    /// Changed outside the edited regions: `apply` rebases it.
+    Rebase,
+    /// An edited region changed, or the file is gone: plan again.
+    Stale,
+}
+
+/// Where a planned file stands, given its current content (`None` when it
+/// is gone).
+pub fn file_state(planned: &PlannedFile, content: Option<&str>) -> PreviewState {
+    let Some(content) = content else {
+        return PreviewState::Stale;
+    };
+    if hash(content.as_bytes()) == planned.hash {
+        return PreviewState::Ready;
+    }
+    let lines: Vec<&str> = content.split_inclusive('\n').collect();
+    let intact = planned.regions.iter().all(|region| {
+        let first = region.first_line as usize - 1;
+        let last = region.last_line as usize;
+        // A region may have moved: look for its exact lines anywhere.
+        let count = last - first;
+        lines
+            .windows(count.max(1))
+            .any(|window| window.concat() == region.text)
+    });
+    if intact {
+        PreviewState::Rebase
+    } else {
+        PreviewState::Stale
+    }
+}
+
 /// BLAKE3 of a file's content, in hex.
 pub fn hash(content: &[u8]) -> String {
     blake3::hash(content).to_hex().to_string()

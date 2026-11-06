@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "PreviewSummary": {
+      "description": "One pending preview.",
+      "properties": {
+        "age": {
+          "description": "Seconds since it was planned.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "description": {
+          "description": "What it does.",
+          "type": "string"
+        },
+        "files": {
+          "description": "Files it edits.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "id": {
+          "description": "Its ID.",
+          "type": "string"
+        },
+        "sites": {
+          "description": "Sites it edits.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "state": {
+          "$ref": "#/$defs/State",
+          "description": "How it stands."
+        }
+      },
+      "required": [
+        "id",
+        "description",
+        "age",
+        "files",
+        "sites",
+        "state"
+      ],
+      "type": "object"
+    },
+    "State": {
+      "description": "How a pending preview stands.",
+      "oneOf": [
+        {
+          "const": "ready",
+          "description": "Applies as planned.",
+          "type": "string"
+        },
+        {
+          "const": "rebase",
+          "description": "A file changed outside the edited regions: `apply` rebases it.",
+          "type": "string"
+        },
+        {
+          "const": "stale",
+          "description": "An edited region changed: plan it again. Removed once listed.",
+          "type": "string"
+        },
+        {
+          "const": "expired",
+          "description": "Older than `previews.expiry`. Removed once listed.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What [`PreviewsOp`] answers.",
+  "properties": {
+    "previews": {
+      "description": "Pending previews, oldest first.",
+      "items": {
+        "$ref": "#/$defs/PreviewSummary"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "previews"
+  ],
+  "title": "PreviewsResponse",
+  "type": "object"
+}

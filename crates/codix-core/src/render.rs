@@ -12,6 +12,7 @@ use crate::edit::{Exclusion, PreviewResponse};
 use crate::indexing::{InitResponse, StatusResponse};
 use crate::op::Warning;
 use crate::page::{Location, Paged};
+use crate::previews::{DiscardResponse, PreviewsResponse, State};
 use crate::query::{
     DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse, ShowResponse,
     SymbolResult,
@@ -124,6 +125,52 @@ impl TextRender for RefsResponse {
             writeln!(w, "{} scoped, {} textual", self.scoped, self.textual)?;
         }
         stale(w, self.possibly_stale)
+    }
+}
+
+impl TextRender for PreviewsResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        if self.previews.is_empty() {
+            return writeln!(w, "no pending previews");
+        }
+        let rows: Vec<Vec<String>> = self
+            .previews
+            .iter()
+            .map(|p| {
+                let state = match p.state {
+                    State::Ready => "ready",
+                    State::Rebase => "rebase",
+                    State::Stale => "stale, removed",
+                    State::Expired => "expired, removed",
+                };
+                vec![
+                    p.id.clone(),
+                    state.to_owned(),
+                    format!("{} ago", elapsed(p.age)),
+                    p.description.clone(),
+                ]
+            })
+            .collect();
+        let widths = column_widths(&rows);
+        for row in &rows {
+            let mut line = style.paint("1", &row[0]);
+            for (i, cell) in row.iter().enumerate().skip(1) {
+                line.push_str(&" ".repeat(widths[i - 1] - row[i - 1].chars().count()));
+                line.push_str(COLUMN_GAP);
+                line.push_str(cell);
+            }
+            writeln!(w, "{line}")?;
+        }
+        Ok(())
+    }
+}
+
+impl TextRender for DiscardResponse {
+    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+        match self.discarded.as_slice() {
+            [] => writeln!(w, "no pending previews"),
+            ids => writeln!(w, "discarded {}", ids.join(", ")),
+        }
     }
 }
 
