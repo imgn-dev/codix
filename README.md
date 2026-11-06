@@ -6,9 +6,11 @@ directory, stays current incrementally as files change, and answers structural
 questions directly: where a symbol is defined, what a file contains, where a
 name appears and inside which symbol.
 
-This is phase 1: tier 1 symbols (definitions, outlines, name search) for Java,
+This is phase 2: tier 1 symbols (definitions, outlines, name search) for Java,
 Go, TypeScript, Python, Kotlin, JavaScript, Rust, C, C++, C#, PHP and Ruby, plus
-keys and headings of JSON, YAML, TOML, XML, Markdown and SQL for search.
+keys and headings of JSON, YAML, TOML, XML, Markdown and SQL for search; a
+per-project daemon that answers in milliseconds and watches files; and
+`codix mcp`, the same commands as tools for agents.
 
 ## Install
 
@@ -66,7 +68,8 @@ src/billing/Invoice.java:6:17  method  Invoice.total
 - `find` matches exactly, then by prefix, then fuzzily, and says which matched;
   `--exact`, `--prefix`, `--fuzzy` and `--glob` (on qualified names, such as
   `'Invoice.*'`) choose one. `--kind`, `--lang`, `--path` and `--here` narrow.
-- `def` gives one definition; `--kind` and `--path` narrow an ambiguous name.
+- `def` gives the definition, or every overload of a name in one file;
+  `--kind` and `--path` narrow an ambiguous name.
   Results carry symbol IDs, such as
   `java:src/billing/Invoice.java::Invoice.total#381c`; every command accepts an
   ID, its path part without the hash, `file:line:col`, or a name.
@@ -91,6 +94,44 @@ error[ambiguous_symbol]: "total" matches 3 symbols
 hint: pass a full symbol ID, or narrow with --kind or --path
 ```
 
+`codix help <command>` describes any command: what it does, when to prefer it
+over grep, what it returns. `codix capabilities` lists what each language
+supports here, and `codix languages` how each kind of file is recognized. The
+same descriptions are in [docs/commands.md](docs/commands.md).
+
+## Daemon
+
+Without a daemon, each command opens the index itself. A daemon keeps the index
+of one project open and current, so queries answer in milliseconds:
+
+```
+codix daemon start        # this project's daemon, in the background
+codix daemon list         # every running daemon: project, memory, idle time
+codix daemon stop [--all] # this project's daemon, or every one
+codix watch               # the daemon in the foreground, logging to stderr
+```
+
+Commands use the project's daemon when one runs, with the same output. The
+daemon watches the project's files and indexes each change within a moment of
+the save; a full rescan every `index.scan_interval` catches what the watcher
+missed. It stops by itself after `daemon.idle_timeout` without a request.
+`status` names the running daemon and what its watcher covers.
+
+## Agents
+
+`codix mcp` serves the commands as MCP tools on stdin and stdout, with the same
+names, descriptions and output as the CLI. For Claude Code:
+
+```
+claude mcp add codix -- codix mcp
+```
+
+Each call can name its directory (`cwd`), so one server covers every project
+an agent works in; the server starts each project's daemon on its first call.
+`codix init --agent-docs` writes `CODIX.md`, a short workflow guide to add to an
+agent's instructions. `eval/` holds the benchmark that checks agents use codix
+well with nothing but these descriptions.
+
 ## Configuration
 
 `codix config` reads and edits both configuration files, as `git config` does:
@@ -111,6 +152,7 @@ codix config --describe [<key>]     # meaning, type, default and file
 | `languages.overrides."<glob>"` | `codix.toml` | | Language of matching files |
 | `sources.roots` | `codix.toml` | | Source directories, overriding the build files |
 | `index.scan_interval` | `.codix/config.toml` | `10m` | Full rescan interval of a daemon |
+| `daemon.idle_timeout` | `.codix/config.toml` | `30m` | A daemon stops after this long without a request |
 
 Edits keep comments and ordering. `.codixignore`, in gitignore syntax, excludes
 files from the index; the ignore files of the version control systems in use
@@ -124,7 +166,7 @@ apply too.
 | 1 | Success, no results |
 | 2 | Usage error: bad flag, bad value, unknown symbol syntax |
 | 3 | Ambiguous input; candidates listed |
-| 4 | Edit refused (from phase 3) |
+| 4 | Refused: a daemon already serves the project, a file codix did not write is in the way |
 | 5 | Internal or I/O error |
 | 6 | No project found, or project not indexed |
 
@@ -135,7 +177,13 @@ cargo test                     # the default build
 cargo test -p codix-cli --features full
 cargo clippy --all-targets -- -D warnings
 cargo bench -p codix-benches   # performance targets on pinned repositories
+cargo run -p codix-eval --release  # the LLM benchmark, through Claude Code
 ```
+
+Run the two benchmarks from a terminal: inside a Claude Code session, the
+sandbox lets no daemon bind its socket and `claude` reach its login. Tests that
+need a real socket or file watcher are named `live_*`; where those are not
+available, run the suite with `-- --skip live_`.
 
 Language packs keep their expected symbols in `corpus/<language>`; run the
 tests with `CODIX_BLESS=1` to rewrite expectations and golden outputs after an
