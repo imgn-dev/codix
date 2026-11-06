@@ -270,6 +270,7 @@ dependencies = [
  "blake3",
  "codix-build-gradle",
  "codix-build-maven",
+ "codix-lang-go",
  "codix-lang-java",
  "codix-provider",
  "codix-vcs-git",
@@ -496,6 +497,7 @@ name = "codix-provider"
 version = "0.2.0"
 dependencies = [
  "inventory",
+ "regex",
  "schemars",
  "serde",
  "toml",

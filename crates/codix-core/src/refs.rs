@@ -21,7 +21,7 @@ use crate::store::{FileStatus, RefState, Snapshot, Store, SymbolHit};
 use crate::symbol_id::{SymbolRef, resolve_overloads_where};
 
 /// A file read from disk, with its model.
-pub(crate) struct Analyzed {
+pub struct Analyzed {
     /// The file.
     pub id: FileId,
     /// Its language.
@@ -34,11 +34,7 @@ pub(crate) struct Analyzed {
 
 /// Reads a file and builds its model; `None` when its language has no
 /// grammar in this build or it is not UTF-8.
-pub(crate) fn analyze(
-    project: &Project,
-    config: &Config,
-    id: &FileId,
-) -> Result<Option<Analyzed>, Error> {
+pub fn analyze(project: &Project, config: &Config, id: &FileId) -> Result<Option<Analyzed>, Error> {
     let path = project.path_of(id);
     let bytes = fs::read(&path).map_err(|source| Error::Io { path, source })?;
     let language = Detector::new(config).detect(id.as_str(), &bytes).language;

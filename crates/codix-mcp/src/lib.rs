@@ -293,6 +293,10 @@ fn failure(error: &Error, warnings: &[Warning]) -> CallToolResult {
     for candidate in error.candidates() {
         let _ = writeln!(text, "  {candidate}");
     }
+    for site in error.sites() {
+        let l = &site.location;
+        let _ = writeln!(text, "  {}:{}:{}  {}", l.path, l.line, l.column, site.note);
+    }
     let _ = writeln!(text, "hint: {hint}");
     CallToolResult::error(vec![ContentBlock::text(text)])
 }

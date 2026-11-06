@@ -64,6 +64,71 @@ pub struct LanguageDescriptor {
     /// `locals` query.
     #[serde(default)]
     pub scopes: Scopes,
+    /// What a valid name is, for renames.
+    #[serde(default)]
+    pub names: Names,
+    /// How the language's generated and vendored files are marked.
+    #[serde(default)]
+    pub generated: Generated,
+}
+
+/// What a valid name is, for the pre-flight checks of renames.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Names {
+    /// A regular expression a name must match entirely; by default letters,
+    /// digits and `_`, not starting with a digit (Unicode identifiers).
+    pub identifier: Option<String>,
+    /// Reserved words.
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    /// Words reserved as type names only, such as Java's `var` and `record`.
+    #[serde(default)]
+    pub type_keywords: Vec<String>,
+    /// Whether methods can share a name, told apart by their parameters.
+    #[serde(default)]
+    pub overloading: bool,
+    /// Whether the case of a name's first letter sets its visibility, as in
+    /// Go, where a capital exports it.
+    #[serde(default)]
+    pub visibility_by_case: bool,
+    /// Whether a type's constructors (and destructors) carry its name.
+    #[serde(default)]
+    pub constructors_named_after_type: bool,
+    /// Definitions whose name the file's name must match.
+    #[serde(default)]
+    pub file_named_after: Vec<FileNamed>,
+}
+
+/// Definitions whose name the file's name must match, such as a Java public
+/// top-level class.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct FileNamed {
+    /// Symbol kinds.
+    pub kinds: Vec<String>,
+    /// Only with this visibility.
+    pub visibility: Option<String>,
+    /// Only outside any other symbol.
+    #[serde(default)]
+    pub top_level: bool,
+    /// Only declarations without a body, such as Rust's `mod x;`.
+    #[serde(default)]
+    pub without_body: bool,
+}
+
+/// How a language marks generated and vendored files.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Generated {
+    /// Regular expressions matched against each of a file's first lines,
+    /// such as Go's `^// Code generated .* DO NOT EDIT\.$`.
+    #[serde(default)]
+    pub headers: Vec<String>,
+    /// Gitignore-style patterns of vendored directories, such as
+    /// `vendor/`.
+    #[serde(default)]
+    pub paths: Vec<String>,
 }
 
 /// The contexts a reference can appear in, as `@local.reference.<context>`
@@ -267,6 +332,10 @@ pub struct BuildDescriptor {
     pub name: String,
     /// Files whose presence in a directory marks a module, such as `pom.xml`.
     pub detect: Vec<String>,
+    /// Gitignore-style patterns of the files the build generates, such as
+    /// `**/target/generated-sources/`.
+    #[serde(default)]
+    pub generated: Vec<String>,
 }
 
 /// A version control system.
@@ -284,6 +353,10 @@ pub struct VcsDescriptor {
     /// Ignore files honored when the system is detected, such as `.gitignore`.
     #[serde(default)]
     pub honor_ignore_files: Vec<String>,
+    /// Attributes, set in the system's attribute files, that mark a file as
+    /// generated or vendored, such as git's `linguist-generated`.
+    #[serde(default)]
+    pub generated_attributes: Vec<String>,
     /// How to keep `.codix/` out of the system.
     pub ignore: IgnoreStrategy,
 }
@@ -336,6 +409,18 @@ impl Descriptor {
                     return Err(format!(
                         "symbols.kinds.{capture} = \"{kind}\" is not one of: {}",
                         SYMBOL_KINDS.join(", ")
+                    ));
+                }
+            }
+            let patterns = language
+                .names
+                .identifier
+                .iter()
+                .chain(&language.generated.headers);
+            for pattern in patterns {
+                if let Err(e) = regex::Regex::new(pattern) {
+                    return Err(format!(
+                        "`{pattern}` is not a valid regular expression: {e}"
                     ));
                 }
             }
@@ -419,6 +504,13 @@ mod symbol_tests {
         let text = "name = \"x\"\nversion = 1\nid_prefix = \"x\"\n[scopes.contexts]\ninvoke = [\"method\"]\n";
         let error = Descriptor::parse(ProviderKind::Language, text).unwrap_err();
         assert!(error.contains("invoke"), "{error}");
+    }
+
+    #[test]
+    fn invalid_name_patterns_are_refused() {
+        let text = "name = \"x\"\nversion = 1\nid_prefix = \"x\"\n[names]\nidentifier = \"[a-\"\n";
+        let error = Descriptor::parse(ProviderKind::Language, text).unwrap_err();
+        assert!(error.contains("regular expression"), "{error}");
     }
 
     #[test]

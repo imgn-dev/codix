@@ -349,6 +349,18 @@ impl Config {
             .collect()
     }
 
+    /// `edits.generated`, empty when not set.
+    pub fn generated_paths(&self) -> Vec<String> {
+        match self
+            .settings
+            .get("edits.generated")
+            .map(|stored| &stored.value)
+        {
+            Some(Value::List(paths)) => paths.clone(),
+            _ => Vec::new(),
+        }
+    }
+
     /// `sources.roots`, empty when not set.
     pub fn source_roots(&self) -> Vec<String> {
         match self
