@@ -183,6 +183,14 @@ pub const COMMANDS: &[Description] = &[
         example: "codix rename Invoice.total sum",
     },
     Description {
+        name: "apply",
+        summary: "Apply a preview: write its edits to the files.",
+        when: "After reviewing a preview from `rename`. Files changed since planning are handled: edits are rebased when their regions are intact, refused with stale_preview when not.",
+        returns: "The files written and the sites edited; `undo` reverts it.",
+        tier: None,
+        example: "codix apply 3f9a2c41",
+    },
+    Description {
         name: "previews",
         summary: "List the pending previews that `apply` can apply.",
         when: "To find a preview ID again, or check whether a preview still applies after files changed.",

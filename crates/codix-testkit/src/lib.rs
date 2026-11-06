@@ -66,10 +66,20 @@ pub fn run(binary: &str, args: &[&str]) -> Run {
 ///
 /// When the binary cannot be started or its output is not UTF-8.
 pub fn run_in(cwd: &Path, binary: &str, args: &[&str]) -> Run {
+    run_with_env(cwd, binary, args, &[])
+}
+
+/// Like [`run_in`], with extra environment variables.
+///
+/// # Panics
+///
+/// When the binary cannot be started or its output is not UTF-8.
+pub fn run_with_env(cwd: &Path, binary: &str, args: &[&str], env: &[(&str, &str)]) -> Run {
     let output = Command::new(binary)
         .args(args)
         .current_dir(cwd)
         .env_remove("NO_COLOR")
+        .envs(env.iter().copied())
         .output()
         .expect("start binary");
     Run {

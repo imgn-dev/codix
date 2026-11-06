@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, PoisonError};
 
 use codix_core::Error;
+use codix_core::apply::ApplyOp;
 use codix_core::capabilities::{CapabilitiesOp, LanguagesOp};
 use codix_core::config::ConfigOp;
 use codix_core::daemon::running;
@@ -155,6 +156,7 @@ operations!(
     ShowOp,
     GrepOp,
     RenameOp,
+    ApplyOp,
     PreviewsOp,
     DiscardOp,
 );

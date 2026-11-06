@@ -189,3 +189,44 @@ fn live_codix_watch_runs_the_daemon_in_the_foreground() {
     assert_eq!(out.code, Some(0), "{}", out.stderr);
     assert!(child.wait().expect("wait").success());
 }
+
+#[cfg(feature = "lang-java")]
+#[test]
+fn live_an_apply_through_the_daemon_leaves_its_index_current() {
+    let runtime = tempfile::tempdir().expect("runtime dir");
+    let (_guard, root) = indexed(
+        CODIX,
+        &[(
+            "src/A.java",
+            "class A {\n    int f() {\n        int x = 1;\n        return x;\n    }\n}\n",
+        )],
+    );
+    let _daemon = Daemon::start(runtime.path(), &root, &[]);
+    wait_until("the startup scan is done", || {
+        watching(runtime.path(), &root)
+    });
+    let planned = codix(
+        runtime.path(),
+        &root,
+        &["rename", "src/A.java:3:13", "y"],
+        &[],
+    );
+    assert_eq!(planned.code, Some(0), "{}", planned.stderr);
+    let id = planned
+        .stdout
+        .split_whitespace()
+        .nth(1)
+        .expect("an ID")
+        .trim_end_matches(':')
+        .to_owned();
+    let applied = codix(runtime.path(), &root, &["apply", &id], &[]);
+    assert_eq!(applied.code, Some(0), "{}", applied.stderr);
+    assert!(
+        std::fs::read_to_string(root.join("src/A.java"))
+            .expect("read")
+            .contains("return y;")
+    );
+    assert!(current(runtime.path(), &root));
+    let refs = codix(runtime.path(), &root, &["refs", "src/A.java:3:13"], &[]);
+    assert!(refs.stdout.contains("src/A.java:4:16"), "{}", refs.stdout);
+}
