@@ -80,6 +80,7 @@ use codix_core::refs::{RefsOp, RefsRequest};
 use codix_core::rename::{RenameOp, RenameRequest};
 use codix_core::render::{self, Style, TextRender};
 use codix_core::store::MatchMode;
+use codix_core::undo::{UndoOp, UndoRequest};
 use codix_daemon::client::{self, Route};
 use codix_daemon::{control, server};
 
@@ -143,6 +144,7 @@ enum Command {
         /// The preview ID, as `rename` or `undo` returned it.
         id: String,
     },
+    Undo,
     Previews,
     Discard {
         /// Preview IDs to drop.
@@ -759,6 +761,7 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
         Command::Outline { path } => run(output, &OutlineOp, ctx, Ok(OutlineRequest { path })),
         Command::Rename(args) => run(output, &RenameOp, ctx, Ok(args.request())),
         Command::Apply { id } => run(output, &ApplyOp, ctx, Ok(ApplyRequest { id })),
+        Command::Undo => run(output, &UndoOp, ctx, Ok(UndoRequest {})),
         Command::Previews => run(output, &PreviewsOp, ctx, Ok(PreviewsRequest {})),
         Command::Discard { ids, all } => {
             run(output, &DiscardOp, ctx, Ok(DiscardRequest { ids, all }))

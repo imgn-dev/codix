@@ -191,6 +191,14 @@ pub const COMMANDS: &[Description] = &[
         example: "codix apply 3f9a2c41",
     },
     Description {
+        name: "undo",
+        summary: "Plan reverting the latest apply not undone yet; returns a preview to apply.",
+        when: "To take back an apply. Running it again goes one apply further back, up to the last 20.",
+        returns: "A preview restoring the files as they were, refused if they changed since; apply it with `apply`.",
+        tier: None,
+        example: "codix undo",
+    },
+    Description {
         name: "previews",
         summary: "List the pending previews that `apply` can apply.",
         when: "To find a preview ID again, or check whether a preview still applies after files changed.",

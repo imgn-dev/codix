@@ -13,6 +13,7 @@ use crate::previews::{DiscardOp, PreviewsOp};
 use crate::query::{DefOp, FindOp, GrepOp, OutlineOp, ShowOp};
 use crate::refs::RefsOp;
 use crate::rename::RenameOp;
+use crate::undo::UndoOp;
 
 macro_rules! operations {
     ($($op:ident),* $(,)?) => {
@@ -58,6 +59,7 @@ operations!(
     GrepOp,
     RenameOp,
     ApplyOp,
+    UndoOp,
     PreviewsOp,
     DiscardOp,
 );
