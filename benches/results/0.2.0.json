@@ -1,0 +1,62 @@
+{
+  "version": "0.2.0",
+  "cpus": 10,
+  "os": "macos",
+  "cold_index": {
+    "repository": "spring-framework v6.2.0",
+    "files": 10860,
+    "lines": 1600036,
+    "seconds": 10.91
+  },
+  "no_change_scan": {
+    "repository": "linux v6.12",
+    "files": 86605,
+    "lines": 39626044,
+    "seconds": 0.549
+  },
+  "lookup_p95_ms": 79.3,
+  "daemon": {
+    "cli_p95_ms": 79.3,
+    "mcp_p95_ms": 70.3,
+    "memory_mb": 25,
+    "reindex_ms": 31
+  },
+  "targets": [
+    {
+      "name": "cold index",
+      "goal": "1M lines across 10k files in under 30 s",
+      "measured": "1600036 lines across 10860 files in 10.91 s",
+      "met": true
+    },
+    {
+      "name": "no-change scan",
+      "goal": "100k files in under 1 s",
+      "measured": "86605 files in 0.549 s",
+      "met": true
+    },
+    {
+      "name": "CLI lookup p95",
+      "goal": "under 150 ms",
+      "measured": "79.3 ms",
+      "met": true
+    },
+    {
+      "name": "query via daemon p95",
+      "goal": "under 10 ms, through the CLI",
+      "measured": "79.3 ms through the CLI, 70.3 ms through MCP",
+      "met": false
+    },
+    {
+      "name": "daemon memory",
+      "goal": "under 500 MB on a 1M-line project",
+      "measured": "25 MB on 1600036 lines, after 1,000 queries",
+      "met": true
+    },
+    {
+      "name": "reindex after one save",
+      "goal": "under 50 ms, from the end of the debounce",
+      "measured": "31 ms",
+      "met": true
+    }
+  ]
+}
