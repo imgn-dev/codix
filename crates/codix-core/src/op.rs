@@ -48,6 +48,14 @@ impl Context {
     /// Discovers the project for a command run from `cwd`, or opens the one at
     /// `root` (`--root`, relative to `cwd`) without searching.
     pub fn discover(cwd: &Path, root: Option<&Path>) -> Result<Self, Error> {
+        Ok(Self::locate(cwd, root)?.with_project_warnings())
+    }
+
+    /// Like [`Context::discover`], without the warnings about the project:
+    /// enough to hand a request to the project's daemon, which sends its own.
+    /// Checking the filesystem costs a disk enumeration, longer than the
+    /// whole request through a daemon.
+    pub fn locate(cwd: &Path, root: Option<&Path>) -> Result<Self, Error> {
         let cwd = crate::project::canonicalize(cwd).map_err(|source| Error::Io {
             path: cwd.to_path_buf(),
             source,
@@ -56,21 +64,29 @@ impl Context {
             Some(root) => Some(Project::at(&cwd.join(root))?),
             None => Project::discover(&cwd)?,
         };
-        let warnings = project
+        Ok(Self {
+            cwd,
+            project,
+            root_override: root.is_some(),
+            warnings: Vec::new(),
+            gate: Arc::new(FileGate),
+            watch: None,
+        })
+    }
+
+    /// The same context, with the warnings about its project, such as an
+    /// index on a network filesystem.
+    #[must_use]
+    pub fn with_project_warnings(self) -> Self {
+        let warnings = self
+            .project
             .iter()
             .filter_map(|p| {
                 let dir = p.data_dir();
                 network_filesystem_warning(if dir.is_dir() { &dir } else { p.root() })
             })
             .collect();
-        Ok(Self {
-            cwd,
-            project,
-            root_override: root.is_some(),
-            warnings,
-            gate: Arc::new(FileGate),
-            watch: None,
-        })
+        Self { warnings, ..self }
     }
 
     /// The context of a request that a daemon serving `project` received from

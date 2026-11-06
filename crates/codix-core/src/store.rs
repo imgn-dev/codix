@@ -20,7 +20,7 @@ const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Schema migrations, in order. Migration `n` (1-based) moves the database
 /// from version `n - 1` to `n`; later phases append to this list.
-const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3];
+const MIGRATIONS: &[&str] = &[MIGRATION_1, MIGRATION_2, MIGRATION_3, MIGRATION_4];
 
 const MIGRATION_1: &str = "
 CREATE TABLE files (
@@ -108,6 +108,13 @@ CREATE TABLE build_issues (
     line INTEGER NOT NULL,
     construct TEXT NOT NULL
 );
+";
+
+/// How many symbols hold each trigram, so fuzzy search can start from the
+/// rarest ones; and names in case-blind order, for prefix search.
+const MIGRATION_4: &str = "
+CREATE VIRTUAL TABLE symbols_fts_vocab USING fts5vocab(symbols_fts, 'row');
+CREATE INDEX symbols_name_nocase ON symbols (name COLLATE NOCASE);
 ";
 
 /// How a file is held in the index.
