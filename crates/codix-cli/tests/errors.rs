@@ -113,7 +113,7 @@ fn io() {
     );
     assert!(
         out.stderr
-            .ends_with("\nhint: check that the file exists and is accessible\n"),
+            .ends_with("\nhint: paths are relative to the current directory or the project root; find a file with `codix find <name>`\n"),
         "{}",
         out.stderr
     );

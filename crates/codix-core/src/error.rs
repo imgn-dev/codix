@@ -180,6 +180,9 @@ impl Error {
             Self::NotSupportedInBuild { .. } => {
                 "use the full codix build, which includes every provider".to_owned()
             }
+            Self::Io { source, .. } if source.kind() == io::ErrorKind::NotFound => {
+                "paths are relative to the current directory or the project root; find a file with `codix find <name>`".to_owned()
+            }
             Self::Io { .. } => "check that the file exists and is accessible".to_owned(),
             Self::DaemonRunning { .. } => {
                 "use it as it is, or stop it first with `codix daemon stop`".to_owned()
