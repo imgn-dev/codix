@@ -8,6 +8,7 @@ use serde::Serialize;
 use crate::Error;
 use crate::capabilities::{Capabilities, LanguagesResponse, Tier};
 use crate::config::{ConfigResponse, Setting};
+use crate::edit::{Exclusion, PreviewResponse};
 use crate::indexing::{InitResponse, StatusResponse};
 use crate::op::Warning;
 use crate::page::{Location, Paged};
@@ -30,6 +31,8 @@ pub struct Style {
     pub color: bool,
     /// `config --list --show-origin`.
     pub show_origin: bool,
+    /// Whether next steps name MCP tools rather than CLI commands.
+    pub tools: bool,
 }
 
 impl Style {
@@ -162,6 +165,78 @@ impl TextRender for DefResponse {
 
 fn location(l: &Location) -> String {
     format!("{}:{}:{}", l.path, l.line, l.column)
+}
+
+fn plural(count: usize, one: &str, many: &str) -> String {
+    format!("{count} {}", if count == 1 { one } else { many })
+}
+
+impl TextRender for PreviewResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        writeln!(
+            w,
+            "preview {}: {}",
+            style.paint("1", &self.id),
+            self.description
+        )?;
+        writeln!(
+            w,
+            "  {}, {}",
+            plural(self.files, "file", "files"),
+            plural(self.sites, "site", "sites")
+        )?;
+        for o in &self.overrides {
+            writeln!(w, "  override {}: {}", o.flag, o.condition)?;
+            for site in &o.sites {
+                writeln!(w, "    {}", style.paint("36", &location(site)))?;
+            }
+        }
+        for (reason, one, many) in [
+            (Exclusion::Unresolved, "unresolved site", "unresolved sites"),
+            (Exclusion::Mention, "mention", "mentions"),
+        ] {
+            let sites: Vec<_> = self
+                .excluded
+                .iter()
+                .filter(|e| e.reason == reason)
+                .collect();
+            if sites.is_empty() {
+                continue;
+            }
+            writeln!(w, "  not changed, {}:", plural(sites.len(), one, many))?;
+            let width = sites
+                .iter()
+                .map(|e| location(&e.location).len())
+                .max()
+                .unwrap_or(0);
+            for e in sites {
+                let at = location(&e.location);
+                writeln!(
+                    w,
+                    "    {}{}{COLUMN_GAP}{}",
+                    style.paint("36", &at),
+                    " ".repeat(width - at.len()),
+                    e.text
+                )?;
+            }
+        }
+        if !self.ambiguous.is_empty() {
+            writeln!(
+                w,
+                "  ambiguous, {}:",
+                plural(self.ambiguous.len(), "site", "sites")
+            )?;
+            for site in &self.ambiguous {
+                writeln!(w, "    {}", style.paint("36", &location(site)))?;
+            }
+        }
+        w.write_all(self.diff.as_bytes())?;
+        if style.tools {
+            writeln!(w, "apply with: the apply tool, id \"{}\"", self.id)
+        } else {
+            writeln!(w, "apply with: codix apply {}", self.id)
+        }
+    }
 }
 
 impl TextRender for OutlineResponse {
@@ -757,10 +832,79 @@ mod tests {
             Style {
                 color,
                 show_origin: false,
+                tools: false,
             },
         )
         .unwrap();
         String::from_utf8(out).unwrap()
+    }
+
+    #[test]
+    fn previews_name_the_next_step_for_each_frontend() {
+        use crate::edit::{ExcludedSite, OverrideUse};
+        use crate::project::FileId;
+
+        let at = |path: &str, line| Location {
+            path: path.to_owned(),
+            root_path: FileId::from_canonical(path),
+            line,
+            column: 9,
+        };
+        let preview = PreviewResponse {
+            id: "3f9a2c41".to_owned(),
+            description: "rename method Invoice.total to sum".to_owned(),
+            files: 1,
+            sites: 2,
+            overrides: vec![OverrideUse {
+                flag: "--exclude-unresolved".to_owned(),
+                condition: "references codix cannot bind, left unchanged".to_owned(),
+                sites: vec![at("Report.java", 5)],
+            }],
+            excluded: vec![
+                ExcludedSite {
+                    location: at("Report.java", 5),
+                    reason: Exclusion::Unresolved,
+                    text: "return invoice.total();".to_owned(),
+                },
+                ExcludedSite {
+                    location: at("Invoice.java", 12),
+                    reason: Exclusion::Mention,
+                    text: "// total of the lines".to_owned(),
+                },
+            ],
+            ambiguous: Vec::new(),
+            diff: "--- a/Invoice.java\n+++ b/Invoice.java\n".to_owned(),
+        };
+        let render = |tools| {
+            let mut out = Vec::new();
+            preview
+                .render_text(
+                    &mut out,
+                    Style {
+                        color: false,
+                        show_origin: false,
+                        tools,
+                    },
+                )
+                .unwrap();
+            String::from_utf8(out).unwrap()
+        };
+        assert_eq!(
+            render(false),
+            "preview 3f9a2c41: rename method Invoice.total to sum
+  1 file, 2 sites
+  override --exclude-unresolved: references codix cannot bind, left unchanged
+    Report.java:5:9
+  not changed, 1 unresolved site:
+    Report.java:5:9  return invoice.total();
+  not changed, 1 mention:
+    Invoice.java:12:9  // total of the lines
+--- a/Invoice.java
++++ b/Invoice.java
+apply with: codix apply 3f9a2c41
+"
+        );
+        assert!(render(true).ends_with("apply with: the apply tool, id \"3f9a2c41\"\n"));
     }
 
     #[test]
@@ -797,6 +941,7 @@ mod tests {
             Style {
                 color: false,
                 show_origin: false,
+                tools: false,
             },
         )
         .unwrap();
@@ -823,6 +968,7 @@ mod tests {
             Style {
                 color: true,
                 show_origin: false,
+                tools: false,
             },
         )
         .unwrap();

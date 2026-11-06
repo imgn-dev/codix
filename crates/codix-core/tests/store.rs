@@ -69,8 +69,8 @@ fn open(dir: &Path) -> Store {
 #[test]
 fn migrates_an_empty_database_and_reopens() {
     let dir = tempfile::tempdir().unwrap();
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 5);
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 5);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 6);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 6);
 }
 
 #[test]
@@ -358,4 +358,51 @@ fn fuzzy_finds_typos_closest_first() {
         qualified(&mut store, "zzzzzz", MatchMode::Fuzzy),
         Vec::<String>::new()
     );
+}
+
+#[test]
+fn previews_round_trip_under_unique_ids_and_are_deleted() {
+    use codix_core::edit::{Edit, EditSet, PreviewResponse, plan_file};
+    use codix_core::store::PreviewRow;
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    let content = "long total() {}\n";
+    let edit = Edit {
+        start: 5,
+        end: 10,
+        replacement: "sum".to_owned(),
+    };
+    let row = |created| PreviewRow {
+        created,
+        operation: "rename".to_owned(),
+        request: r#"{"symbol":"total","new_name":"sum"}"#.to_owned(),
+        edits: EditSet::new([("A.java".to_owned(), edit.clone())]).unwrap(),
+        files: vec![plan_file("A.java", content, std::slice::from_ref(&edit))],
+        response: PreviewResponse {
+            id: String::new(),
+            description: "rename method total to sum".to_owned(),
+            files: 1,
+            sites: 1,
+            overrides: Vec::new(),
+            excluded: Vec::new(),
+            ambiguous: Vec::new(),
+            diff: String::new(),
+        },
+    };
+    let (mut first, mut second) = (row(10), row(20));
+    store.insert_preview(&mut first).unwrap();
+    store.insert_preview(&mut second).unwrap();
+    assert_eq!(first.response.id.len(), 8);
+    assert_ne!(first.response.id, second.response.id);
+
+    assert_eq!(
+        store.preview(&first.response.id).unwrap(),
+        Some(first.clone())
+    );
+    assert_eq!(store.previews().unwrap(), [first.clone(), second.clone()]);
+    assert!(store.delete_preview(&first.response.id).unwrap());
+    assert!(!store.delete_preview(&first.response.id).unwrap());
+    assert_eq!(store.preview(&first.response.id).unwrap(), None);
+    assert_eq!(store.previews().unwrap(), [second]);
 }

@@ -261,6 +261,7 @@ where
     let style = Style {
         color: false,
         show_origin: false,
+        tools: true,
     };
     if let Err(e) = response.render_text(&mut rendered, style) {
         return failure(
