@@ -127,6 +127,17 @@ Apply a preview: write its edits to the files.
 codix apply 3f9a2c41
 ```
 
+## `codix undo`
+
+Plan reverting the latest apply not undone yet; returns a preview to apply.
+
+- **When:** To take back an apply. Running it again goes one apply further back, up to the last 20.
+- **Returns:** A preview restoring the files as they were, refused if they changed since; apply it with `apply`.
+
+```
+codix undo
+```
+
 ## `codix previews`
 
 List the pending previews that `apply` can apply.

@@ -409,6 +409,7 @@ fn write(
     }
     if let Some(undone) = undoes(row) {
         store.set_entry_state(undone, EntryState::Undone)?;
+        store.remove_aliases(undone)?;
     }
     store.set_entry_state(entry_id, EntryState::Done)
 }

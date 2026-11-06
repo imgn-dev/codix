@@ -110,6 +110,8 @@ pub enum Error {
         /// The symbol's ID now.
         new: String,
     },
+    /// No apply is left to undo.
+    NothingToUndo,
     /// A bug in codix.
     Internal {
         /// What went wrong.
@@ -164,6 +166,7 @@ impl Error {
             Self::DaemonRunning { .. } => "daemon_running",
             Self::Refused { code, .. } => code,
             Self::SymbolRenamed { .. } => "symbol_renamed",
+            Self::NothingToUndo => "nothing_to_undo",
             Self::Internal { .. } => "internal",
         }
     }
@@ -197,6 +200,7 @@ impl Error {
                 format!("a daemon already serves this project (pid {pid}, socket {socket})")
             }
             Self::SymbolRenamed { old, new } => format!("`{old}` was renamed to `{new}`"),
+            Self::NothingToUndo => "no apply is left to undo".to_owned(),
             Self::Internal { message } => message.clone(),
         }
     }
@@ -233,6 +237,9 @@ impl Error {
             Self::SymbolRenamed { new, .. } => {
                 format!("look at `{new}` before editing it")
             }
+            Self::NothingToUndo => {
+                "undo reverts the last 20 applies codix made, newest first".to_owned()
+            }
             Self::Internal { .. } => "this is a bug in codix; please report it".to_owned(),
         }
     }
@@ -261,7 +268,7 @@ impl Error {
             Self::Remote(report) => report.exit_code,
             Self::NoProject { .. } | Self::NotIndexed { .. } => exit::NO_PROJECT,
             Self::AmbiguousSymbol { .. } => exit::AMBIGUOUS,
-            Self::UnknownSymbol { .. } => exit::NO_RESULTS,
+            Self::UnknownSymbol { .. } | Self::NothingToUndo => exit::NO_RESULTS,
             Self::InvalidConfig { .. } | Self::NotSupportedInBuild { .. } | Self::Usage { .. } => {
                 exit::USAGE
             }

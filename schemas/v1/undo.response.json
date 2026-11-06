@@ -1,0 +1,165 @@
+{
+  "$defs": {
+    "ExcludedSite": {
+      "description": "A site the plan leaves unchanged.",
+      "properties": {
+        "location": {
+          "$ref": "#/$defs/Location",
+          "description": "Where."
+        },
+        "reason": {
+          "$ref": "#/$defs/Exclusion",
+          "description": "Why."
+        },
+        "text": {
+          "description": "The line, trimmed.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "location",
+        "reason",
+        "text"
+      ],
+      "type": "object"
+    },
+    "Exclusion": {
+      "description": "Why a site is not edited.",
+      "oneOf": [
+        {
+          "const": "unresolved",
+          "description": "A reference codix cannot bind, left unchanged under\n`--exclude-unresolved`.",
+          "type": "string"
+        },
+        {
+          "const": "mention",
+          "description": "The name in a comment, a string or a macro body.",
+          "type": "string"
+        }
+      ]
+    },
+    "FileId": {
+      "description": "A file or directory identity: its root-relative path with `/` separators,\nthe case found on disk, and symlinks resolved. The root itself is `\"\"`.",
+      "type": "string"
+    },
+    "Location": {
+      "description": "A position in a file: its path as shown from the cwd, its root-relative\nidentity, and a 1-based line and column.",
+      "properties": {
+        "column": {
+          "description": "1-based column, in Unicode scalar values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "1-based line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Path relative to the cwd, with `/` separators.",
+          "type": "string"
+        },
+        "root_path": {
+          "$ref": "#/$defs/FileId",
+          "description": "Root-relative path."
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "line",
+        "column"
+      ],
+      "type": "object"
+    },
+    "OverrideUse": {
+      "description": "An override used by a plan, with the sites it allowed.",
+      "properties": {
+        "condition": {
+          "description": "The condition it allowed.",
+          "type": "string"
+        },
+        "flag": {
+          "description": "The flag, such as `--allow-shadowing`.",
+          "type": "string"
+        },
+        "sites": {
+          "description": "Where.",
+          "items": {
+            "$ref": "#/$defs/Location"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "flag",
+        "condition",
+        "sites"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What every edit command returns: a preview to apply with `apply <id>`.",
+  "properties": {
+    "ambiguous": {
+      "description": "Edited sites whose meaning codix could not settle.",
+      "items": {
+        "$ref": "#/$defs/Location"
+      },
+      "type": "array"
+    },
+    "description": {
+      "description": "What the plan does, such as `rename method Invoice.total to sum`.",
+      "type": "string"
+    },
+    "diff": {
+      "description": "Unified diff of every edited file.",
+      "type": "string"
+    },
+    "excluded": {
+      "description": "Sites left unchanged, with the reason.",
+      "items": {
+        "$ref": "#/$defs/ExcludedSite"
+      },
+      "type": "array"
+    },
+    "files": {
+      "description": "Files edited.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "id": {
+      "description": "The preview ID, for `apply` and `discard`.",
+      "type": "string"
+    },
+    "overrides": {
+      "description": "Overrides used, with the sites each allowed.",
+      "items": {
+        "$ref": "#/$defs/OverrideUse"
+      },
+      "type": "array"
+    },
+    "sites": {
+      "description": "Sites edited.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "id",
+    "description",
+    "files",
+    "sites",
+    "overrides",
+    "excluded",
+    "ambiguous",
+    "diff"
+  ],
+  "title": "PreviewResponse",
+  "type": "object"
+}
