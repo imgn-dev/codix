@@ -65,12 +65,10 @@ pub struct Overrides {
     /// Allow a condition the checks refuse; repeatable.
     #[serde(default)]
     pub allow: Vec<Allow>,
-    /// Edit the sites codix binds and leave unchanged the references it
-    /// cannot bind, in other files or through other objects.
+    /// Edit the sites codix binds and leave unchanged the references it cannot bind, in other files or through other objects.
     #[serde(default)]
     pub exclude_unresolved: bool,
-    /// At tier 1, where codix cannot bind names, rename every whole-word
-    /// match of the name in its file.
+    /// At tier 1, where codix cannot bind names, rename every whole-word match of the name in its file.
     #[serde(default)]
     pub textual: bool,
 }

@@ -258,7 +258,9 @@ fn blocks(starts: &[usize], edits: &[Edit]) -> Vec<Block> {
     for edit in edits {
         let (first, last) = touched(starts, edit);
         match blocks.last_mut() {
-            Some(block) if first <= block.last => {
+            // Adjacent lines join too, so a diff shows their old lines, then
+            // their new ones.
+            Some(block) if first <= block.last + 1 => {
                 block.last = block.last.max(last);
                 block.edits.push(edit.clone());
             }

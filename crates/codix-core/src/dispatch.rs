@@ -11,6 +11,7 @@ use crate::op::{Context, Operation};
 use crate::previews::{DiscardOp, PreviewsOp};
 use crate::query::{DefOp, FindOp, GrepOp, OutlineOp, ShowOp};
 use crate::refs::RefsOp;
+use crate::rename::RenameOp;
 
 macro_rules! operations {
     ($($op:ident),* $(,)?) => {
@@ -54,6 +55,7 @@ operations!(
     OutlineOp,
     ShowOp,
     GrepOp,
+    RenameOp,
     PreviewsOp,
     DiscardOp,
 );

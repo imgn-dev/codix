@@ -20,6 +20,7 @@ use codix_core::op::{Context, Operation, Warning};
 use codix_core::previews::{DiscardOp, PreviewsOp};
 use codix_core::query::{DefOp, FindOp, GrepOp, OutlineOp, ShowOp};
 use codix_core::refs::RefsOp;
+use codix_core::rename::RenameOp;
 use codix_core::render::{Style, TextRender};
 use codix_daemon::client::{self, Route};
 use codix_daemon::control;
@@ -153,6 +154,7 @@ operations!(
     OutlineOp,
     ShowOp,
     GrepOp,
+    RenameOp,
     PreviewsOp,
     DiscardOp,
 );

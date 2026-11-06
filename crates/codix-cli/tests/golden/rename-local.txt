@@ -1,0 +1,16 @@
+preview <id>: rename variable base at src/Invoice.java:12:14 to net
+  1 file, 2 sites
+--- a/src/Invoice.java
++++ b/src/Invoice.java
+@@ -9,8 +9,8 @@
+     }
+ 
+     long withTax(long tax) {
+-        long base = total();
+-        return base + tax;
++        long net = total();
++        return net + tax;
+     }
+ 
+     long total(long discount) {
+apply with: codix apply <id>
