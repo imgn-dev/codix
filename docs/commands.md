@@ -116,6 +116,17 @@ Plan renaming a symbol or local variable within its file; returns a preview to a
 codix rename Invoice.total sum
 ```
 
+## `codix apply`
+
+Apply a preview: write its edits to the files.
+
+- **When:** After reviewing a preview from `rename`. Files changed since planning are handled: edits are rebased when their regions are intact, refused with stale_preview when not.
+- **Returns:** The files written and the sites edited; `undo` reverts it.
+
+```
+codix apply 3f9a2c41
+```
+
 ## `codix previews`
 
 List the pending previews that `apply` can apply.

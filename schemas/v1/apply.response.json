@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What [`ApplyOp`] answers.",
+  "properties": {
+    "description": {
+      "description": "What it did.",
+      "type": "string"
+    },
+    "files": {
+      "description": "Files written, relative to the cwd.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "id": {
+      "description": "The preview applied.",
+      "type": "string"
+    },
+    "rebased": {
+      "description": "Whether files had changed since planning, outside the edited\nregions, so the plan was made again on them.",
+      "type": "boolean"
+    },
+    "sites": {
+      "description": "Sites edited.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "id",
+    "description",
+    "files",
+    "sites",
+    "rebased"
+  ],
+  "title": "ApplyResponse",
+  "type": "object"
+}

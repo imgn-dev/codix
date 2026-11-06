@@ -59,6 +59,7 @@ use std::process::ExitCode;
 use clap::error::ErrorKind;
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use codix_core::Error;
+use codix_core::apply::{ApplyOp, ApplyRequest};
 use codix_core::capabilities::{
     CapabilitiesOp, CapabilitiesRequest, LanguagesOp, LanguagesRequest,
 };
@@ -138,6 +139,10 @@ enum Command {
     },
     Refs(RefsArgs),
     Rename(RenameArgs),
+    Apply {
+        /// The preview ID, as `rename` or `undo` returned it.
+        id: String,
+    },
     Previews,
     Discard {
         /// Preview IDs to drop.
@@ -753,6 +758,7 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
         Command::Refs(args) => run(output, &RefsOp, ctx, args.request()),
         Command::Outline { path } => run(output, &OutlineOp, ctx, Ok(OutlineRequest { path })),
         Command::Rename(args) => run(output, &RenameOp, ctx, Ok(args.request())),
+        Command::Apply { id } => run(output, &ApplyOp, ctx, Ok(ApplyRequest { id })),
         Command::Previews => run(output, &PreviewsOp, ctx, Ok(PreviewsRequest {})),
         Command::Discard { ids, all } => {
             run(output, &DiscardOp, ctx, Ok(DiscardRequest { ids, all }))

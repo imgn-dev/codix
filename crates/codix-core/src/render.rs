@@ -6,6 +6,7 @@ use codix_provider::ProviderKind;
 use serde::Serialize;
 
 use crate::Error;
+use crate::apply::ApplyResponse;
 use crate::capabilities::{Capabilities, LanguagesResponse, Tier};
 use crate::config::{ConfigResponse, Setting};
 use crate::edit::{Exclusion, PreviewResponse};
@@ -162,6 +163,36 @@ impl TextRender for PreviewsResponse {
             writeln!(w, "{line}")?;
         }
         Ok(())
+    }
+}
+
+impl TextRender for ApplyResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        writeln!(
+            w,
+            "applied {}: {}",
+            style.paint("1", &self.id),
+            self.description
+        )?;
+        let rebased = if self.rebased {
+            " (rebased onto changes made since planning)"
+        } else {
+            ""
+        };
+        writeln!(
+            w,
+            "  {}, {}{rebased}",
+            plural(self.files.len(), "file", "files"),
+            plural(self.sites, "site", "sites")
+        )?;
+        for file in &self.files {
+            writeln!(w, "    {}", style.paint("36", file))?;
+        }
+        if style.tools {
+            writeln!(w, "undo with: the undo tool")
+        } else {
+            writeln!(w, "undo with: codix undo")
+        }
     }
 }
 

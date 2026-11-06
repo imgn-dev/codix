@@ -53,6 +53,9 @@ pub(crate) struct Plan {
     pub file: Analyzed,
     /// What planning answers, without an ID yet.
     pub response: PreviewResponse,
+    /// The target as stored with the preview, to plan it again: a symbol's
+    /// ID, or a local's root-relative `file:line:col`.
+    pub target: String,
 }
 
 impl Operation for RenameOp {
@@ -72,7 +75,11 @@ impl Operation for RenameOp {
         let mut row = PreviewRow {
             created: since_epoch(),
             operation: Self::NAME.to_owned(),
-            request: serde_json::to_string(&request).map_err(|e| Error::Internal {
+            request: serde_json::to_string(&RenameRequest {
+                symbol: plan.target.clone(),
+                ..request
+            })
+            .map_err(|e| Error::Internal {
                 message: format!("cannot store the rename request: {e}"),
             })?,
             files: vec![plan_file(
@@ -189,10 +196,12 @@ pub(crate) fn plan(
         diff: diff(file.id.as_str(), &file.content, &edits),
     };
     let edits = EditSet::new(edits.into_iter().map(|e| (file.id.as_str().to_owned(), e)))?;
+    let target = crate::refs::symbol_result(ctx, &file, definitions[0], "scoped").symbol_id;
     Ok(Plan {
         edits,
         file,
         response,
+        target,
     })
 }
 

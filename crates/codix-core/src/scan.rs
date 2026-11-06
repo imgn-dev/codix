@@ -179,6 +179,8 @@ pub fn scan_within(
     let Some(_access) = gate.enter(project, wait)? else {
         return Ok(None);
     };
+    // The first writer after a crash mid-apply rolls it back.
+    crate::apply::recover(project, &mut store)?;
     recheck(project, indexer, &mut outcomes, start_ns);
     let fresh = rows_by_path(store.snapshot()?.files()?);
     let updates = tally(outcomes, &fresh, &mut report, &mut kept);
@@ -300,6 +302,8 @@ pub fn scan_dirs(
     let Some(_access) = gate.enter(project, wait)? else {
         return Ok(None);
     };
+    // The first writer after a crash mid-apply rolls it back.
+    crate::apply::recover(project, &mut store)?;
     recheck(project, indexer, &mut outcomes, start_ns);
     let fresh = rows_by_path(store.snapshot()?.files()?);
     let updates = tally(outcomes, &fresh, &mut report, &mut Vec::new());
@@ -358,6 +362,8 @@ pub fn rescan(
     let Some(_access) = gate.enter(project, Some(wait))? else {
         return Ok(None);
     };
+    // The first writer after a crash mid-apply rolls it back.
+    crate::apply::recover(project, &mut store)?;
     recheck(project, indexer, &mut outcomes, start_ns);
     let fresh = rows_by_path(store.snapshot()?.files()?);
     let updates = tally(outcomes, &fresh, &mut report, &mut Vec::new());
@@ -365,6 +371,36 @@ pub fn rescan(
     store.commit(&updates, &deleted)?;
     report.errors.sort();
     Ok(Some(report))
+}
+
+/// Records files the caller just wrote under the write access it holds:
+/// their new content and stats, so the next scan and the watcher find them
+/// current.
+pub(crate) fn record_written(
+    project: &Project,
+    indexer: &dyn Indexer,
+    store: &mut Store,
+    ids: &[FileId],
+) -> Result<(), Error> {
+    let start_ns = now_ns();
+    let rows = rows_by_path(store.snapshot()?.files()?);
+    let mut updates = Vec::new();
+    for id in ids {
+        let Some(file) = stat(project, id) else {
+            continue;
+        };
+        match process(project, indexer, &file, rows.get(id.as_str()), start_ns) {
+            Outcome::Indexed(update) | Outcome::Touched(update) | Outcome::Pending(update) => {
+                updates.push(update);
+            }
+            Outcome::Failed(path, error) => {
+                return Err(Error::Internal {
+                    message: format!("{path} was written but cannot be read back: {error}"),
+                });
+            }
+        }
+    }
+    store.commit(&updates, &[])
 }
 
 fn rows_by_path(rows: Vec<FileRow>) -> HashMap<String, FileRow> {

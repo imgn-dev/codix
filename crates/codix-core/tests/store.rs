@@ -69,8 +69,8 @@ fn open(dir: &Path) -> Store {
 #[test]
 fn migrates_an_empty_database_and_reopens() {
     let dir = tempfile::tempdir().unwrap();
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 6);
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 6);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 7);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 7);
 }
 
 #[test]
@@ -405,4 +405,44 @@ fn previews_round_trip_under_unique_ids_and_are_deleted() {
     assert!(!store.delete_preview(&first.response.id).unwrap());
     assert_eq!(store.preview(&first.response.id).unwrap(), None);
     assert_eq!(store.previews().unwrap(), [second]);
+}
+
+#[test]
+fn journal_entries_round_trip_and_only_the_newest_are_kept() {
+    use codix_core::store::{EntryState, JournalEntry, JournalFile};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    let entry = |n: u64| JournalEntry {
+        id: 0,
+        preview: format!("p{n}"),
+        operation: "rename".to_owned(),
+        description: "rename variable x to y".to_owned(),
+        applied: n,
+        state: EntryState::Writing,
+        undoes: None,
+        files: vec![JournalFile {
+            path: "A.java".to_owned(),
+            original: b"int x;".to_vec(),
+            original_hash: "old".to_owned(),
+            new_hash: "new".to_owned(),
+        }],
+    };
+    let first = store.begin_apply(&entry(1)).unwrap();
+    let stored = store.entry(first).unwrap().unwrap();
+    assert_eq!(
+        stored,
+        JournalEntry {
+            id: first,
+            ..entry(1)
+        }
+    );
+    assert_eq!(store.entries(EntryState::Writing).unwrap().len(), 1);
+    store.set_entry_state(first, EntryState::Done).unwrap();
+    assert_eq!(store.entries(EntryState::Writing).unwrap().len(), 0);
+    for n in 2..=25 {
+        store.begin_apply(&entry(n)).unwrap();
+    }
+    assert_eq!(store.entry(first).unwrap(), None);
+    assert_eq!(store.entries(EntryState::Writing).unwrap().len(), 20);
 }
