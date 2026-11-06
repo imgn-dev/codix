@@ -4,6 +4,24 @@
       "description": "A file or directory identity: its root-relative path with `/` separators,\nthe case found on disk, and symlinks resolved. The root itself is `\"\"`.",
       "type": "string"
     },
+    "Renamed": {
+      "description": "A symbol ID that codix renamed, followed to the symbol's ID now.",
+      "properties": {
+        "from": {
+          "description": "The ID as given.",
+          "type": "string"
+        },
+        "to": {
+          "description": "The ID the symbol has now.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
     "SymbolResult": {
       "description": "A symbol in query results.",
       "properties": {
@@ -93,6 +111,18 @@
     "possibly_stale": {
       "description": "See [`FindResponse::possibly_stale`].",
       "type": "boolean"
+    },
+    "renamed": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Renamed"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the ID given was the symbol's before codix renamed it."
     },
     "symbol": {
       "$ref": "#/$defs/SymbolResult",

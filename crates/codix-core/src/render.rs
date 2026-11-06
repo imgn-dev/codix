@@ -15,8 +15,8 @@ use crate::op::Warning;
 use crate::page::{Location, Paged};
 use crate::previews::{DiscardResponse, PreviewsResponse, State};
 use crate::query::{
-    DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse, ShowResponse,
-    SymbolResult,
+    DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse, Renamed,
+    ShowResponse, SymbolResult,
 };
 use crate::refs::{RefResult, RefsResponse};
 use crate::scan::ScanReport;
@@ -125,6 +125,7 @@ impl TextRender for RefsResponse {
         if self.references.total > 0 {
             writeln!(w, "{} scoped, {} textual", self.scoped, self.textual)?;
         }
+        renamed(w, self.renamed.as_ref())?;
         stale(w, self.possibly_stale)
     }
 }
@@ -262,7 +263,15 @@ impl TextRender for DefResponse {
         if !self.overloads.is_empty() {
             writeln!(w, "{} overloads", self.overloads.len() + 1)?;
         }
+        renamed(w, self.renamed.as_ref())?;
         stale(w, self.possibly_stale)
+    }
+}
+
+fn renamed(w: &mut dyn Write, renamed: Option<&Renamed>) -> io::Result<()> {
+    match renamed {
+        Some(r) => writeln!(w, "note: {} was renamed to {}", r.from, r.to),
+        None => Ok(()),
     }
 }
 
@@ -387,6 +396,7 @@ impl TextRender for ShowResponse {
         for (i, line) in self.lines.iter().enumerate() {
             writeln!(w, "{:>width$} | {line}", self.first_line as usize + i)?;
         }
+        renamed(w, self.renamed.as_ref())?;
         stale(w, self.possibly_stale)
     }
 }

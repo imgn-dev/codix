@@ -103,6 +103,13 @@ pub enum Error {
         /// Where.
         sites: Vec<Site>,
     },
+    /// The symbol ID names a symbol codix renamed.
+    SymbolRenamed {
+        /// The ID as given.
+        old: String,
+        /// The symbol's ID now.
+        new: String,
+    },
     /// A bug in codix.
     Internal {
         /// What went wrong.
@@ -156,6 +163,7 @@ impl Error {
             Self::FileExists { .. } => "file_exists",
             Self::DaemonRunning { .. } => "daemon_running",
             Self::Refused { code, .. } => code,
+            Self::SymbolRenamed { .. } => "symbol_renamed",
             Self::Internal { .. } => "internal",
         }
     }
@@ -188,6 +196,7 @@ impl Error {
             Self::DaemonRunning { pid, socket } => {
                 format!("a daemon already serves this project (pid {pid}, socket {socket})")
             }
+            Self::SymbolRenamed { old, new } => format!("`{old}` was renamed to `{new}`"),
             Self::Internal { message } => message.clone(),
         }
     }
@@ -221,6 +230,9 @@ impl Error {
             Self::FileExists { .. } => {
                 "pass another path, or move the file out of the way".to_owned()
             }
+            Self::SymbolRenamed { new, .. } => {
+                format!("look at `{new}` before editing it")
+            }
             Self::Internal { .. } => "this is a bug in codix; please report it".to_owned(),
         }
     }
@@ -253,9 +265,10 @@ impl Error {
             Self::InvalidConfig { .. } | Self::NotSupportedInBuild { .. } | Self::Usage { .. } => {
                 exit::USAGE
             }
-            Self::DaemonRunning { .. } | Self::FileExists { .. } | Self::Refused { .. } => {
-                exit::REFUSED
-            }
+            Self::DaemonRunning { .. }
+            | Self::FileExists { .. }
+            | Self::Refused { .. }
+            | Self::SymbolRenamed { .. } => exit::REFUSED,
             Self::Io { .. } | Self::Internal { .. } => exit::INTERNAL,
         }
     }

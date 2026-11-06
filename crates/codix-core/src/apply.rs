@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::config::Config;
+use crate::detect::Detector;
 use crate::edit::{EditSet, PlannedFile, apply, hash, regions};
 use crate::error::Site;
 use crate::op::{Context, Operation, Outcome};
@@ -280,6 +281,37 @@ fn moved_line(planned: &PlannedFile, content: &str, line: u32) -> Option<u32> {
         .min_by_key(|candidate| candidate.abs_diff(line))
 }
 
+/// The symbols whose ID an edit of one file changed, as (old, new): the
+/// symbols before and after, paired in file order, which a rename keeps.
+fn renamed_ids(
+    config: &Config,
+    id: &FileId,
+    original: &str,
+    new: &str,
+) -> Result<Vec<(String, String)>, Error> {
+    let language = Detector::new(config)
+        .detect(id.as_str(), original.as_bytes())
+        .language;
+    let registry = codix_provider::registry();
+    let (Some(descriptor), Some(grammar)) = (
+        registry.languages.iter().find(|d| d.name == language),
+        registry.grammars.get(&language),
+    ) else {
+        return Ok(Vec::new());
+    };
+    let before = crate::parse::extract(descriptor, grammar, id.as_str(), original)?;
+    let after = crate::parse::extract(descriptor, grammar, id.as_str(), new)?;
+    if before.len() != after.len() {
+        return Ok(Vec::new());
+    }
+    Ok(before
+        .into_iter()
+        .zip(after)
+        .filter(|(b, a)| b.symbol_id != a.symbol_id)
+        .map(|(b, a)| (b.symbol_id, a.symbol_id))
+        .collect())
+}
+
 /// The journal entry an `undo` preview reverts.
 fn undoes(row: &PreviewRow) -> Option<i64> {
     if row.operation != "undo" {
@@ -368,6 +400,13 @@ fn write(
     }
     let ids: Vec<FileId> = files.iter().map(|(id, _, _)| id.clone()).collect();
     crate::scan::record_written(project, &PackIndexer::new(config), store, &ids)?;
+    if row.operation == "rename" {
+        let mut renames = Vec::new();
+        for (id, original, new) in &files {
+            renames.extend(renamed_ids(config, id, original, new)?);
+        }
+        store.add_aliases(&renames, entry_id, since_epoch())?;
+    }
     if let Some(undone) = undoes(row) {
         store.set_entry_state(undone, EntryState::Undone)?;
     }

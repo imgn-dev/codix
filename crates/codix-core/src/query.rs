@@ -76,6 +76,29 @@ impl SymbolResult {
     }
 }
 
+/// A symbol ID that codix renamed, followed to the symbol's ID now.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Renamed {
+    /// The ID as given.
+    pub from: String,
+    /// The ID the symbol has now.
+    pub to: String,
+}
+
+/// Runs a query on `input`; when it names a symbol codix renamed, runs it
+/// again on the symbol's ID now, and says so.
+pub(crate) fn following<T>(
+    input: &str,
+    query: impl Fn(&str) -> Result<T, Error>,
+) -> Result<(T, Option<Renamed>), Error> {
+    match query(input) {
+        Err(Error::SymbolRenamed { old, new }) => {
+            Ok((query(&new)?, Some(Renamed { from: old, to: new })))
+        }
+        other => other.map(|answer| (answer, None)),
+    }
+}
+
 /// The project, indexed, with its configuration.
 pub(crate) fn indexed(ctx: &Context) -> Result<(&Project, Config), Error> {
     let project = ctx.project()?;
@@ -257,6 +280,9 @@ pub struct DefResponse {
     pub overloads: Vec<SymbolResult>,
     /// See [`FindResponse::possibly_stale`].
     pub possibly_stale: bool,
+    /// When the ID given was the symbol's before codix renamed it.
+    #[serde(default)]
+    pub renamed: Option<Renamed>,
 }
 
 impl Outcome for DefResponse {
@@ -284,19 +310,22 @@ impl Operation for DefOp {
                         definition,
                         overloads: results,
                         possibly_stale: false,
+                        renamed: None,
                     });
                 }
                 Some(DefAt::ByName(unbound)) => name = unbound,
                 None => {}
             }
         }
-        let (hits, possibly_stale) = lookup(ctx, project, &config, |snapshot| {
-            let hits = resolve_overloads_where(snapshot, project, ctx.cwd(), &name, &|hit| {
-                (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
-                    && scope.contains(&FileId::from_canonical(hit.path.as_str()))
-            })?;
-            let paths = distinct(hits.iter().map(|h| h.path.clone()));
-            Ok((hits, paths))
+        let ((hits, possibly_stale), renamed) = following(&name, |name| {
+            lookup(ctx, project, &config, |snapshot| {
+                let hits = resolve_overloads_where(snapshot, project, ctx.cwd(), name, &|hit| {
+                    (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
+                        && scope.contains(&FileId::from_canonical(hit.path.as_str()))
+                })?;
+                let paths = distinct(hits.iter().map(|h| h.path.clone()));
+                Ok((hits, paths))
+            })
         })?;
         let mut results = hits.into_iter().map(|hit| SymbolResult::new(ctx, hit));
         let definition = results.next().ok_or_else(|| Error::Internal {
@@ -306,6 +335,7 @@ impl Operation for DefOp {
             definition,
             overloads: results.collect(),
             possibly_stale,
+            renamed,
         })
     }
 }
@@ -478,6 +508,9 @@ pub struct ShowResponse {
     pub lines: Vec<String>,
     /// See [`FindResponse::possibly_stale`].
     pub possibly_stale: bool,
+    /// When the ID given was the symbol's before codix renamed it.
+    #[serde(default)]
+    pub renamed: Option<Renamed>,
 }
 
 impl Outcome for ShowResponse {
@@ -494,13 +527,15 @@ impl Operation for ShowOp {
     fn run(&self, ctx: &Context, request: ShowRequest) -> Result<ShowResponse, Error> {
         let (project, config) = indexed(ctx)?;
         let scope = ctx.scope(&request.scope)?;
-        let (hit, possibly_stale) = lookup(ctx, project, &config, |snapshot| {
-            let hit = resolve_where(snapshot, project, ctx.cwd(), &request.symbol, &|hit| {
-                (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
-                    && scope.contains(&FileId::from_canonical(hit.path.as_str()))
-            })?;
-            let path = hit.path.clone();
-            Ok((hit, vec![path]))
+        let ((hit, possibly_stale), renamed) = following(&request.symbol, |input| {
+            lookup(ctx, project, &config, |snapshot| {
+                let hit = resolve_where(snapshot, project, ctx.cwd(), input, &|hit| {
+                    (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
+                        && scope.contains(&FileId::from_canonical(hit.path.as_str()))
+                })?;
+                let path = hit.path.clone();
+                Ok((hit, vec![path]))
+            })
         })?;
         let path = project.path_of(&FileId::from_canonical(hit.path.as_str()));
         let text = fs::read_to_string(&path).map_err(|source| Error::Io { path, source })?;
@@ -527,6 +562,7 @@ impl Operation for ShowOp {
             first_line: u32::try_from(first).unwrap_or(u32::MAX),
             lines,
             possibly_stale,
+            renamed,
         })
     }
 }
