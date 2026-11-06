@@ -16,3 +16,29 @@ body_tokens = ["="]
 [symbols.visibility]
 node = "modifiers"
 values = ["public", "protected", "private", "internal"]
+
+# Types, functions and values are separate namespaces. Calling a name may
+# call a function, a value of function type, or a class's constructor.
+[scopes]
+hoisted = ["class", "type"]
+self_receivers = ["this"]
+
+[scopes.namespaces]
+class = "type"
+interface = "type"
+enum = "type"
+type_alias = "type"
+type_parameter = "type"
+function = "function"
+method = "function"
+constructor = "constructor"
+
+[scopes.contexts]
+call = ["function", "value", "type"]
+type = ["type"]
+read = ["value", "type"]
+import = ["type", "function", "value"]
+
+# Every class inherits the members of `Any`.
+[scopes.implicit_members]
+function = ["equals", "hashCode", "toString"]

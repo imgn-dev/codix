@@ -5,5 +5,6 @@ codix_provider::register!(
     "javascript",
     "descriptor.toml",
     tree_sitter_javascript::LANGUAGE,
-    "queries/tags.scm"
+    "queries/tags.scm",
+    "queries/locals.scm"
 );

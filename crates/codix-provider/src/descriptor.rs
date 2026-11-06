@@ -101,7 +101,24 @@ pub struct Scopes {
     /// `Object`.
     #[serde(default)]
     pub implicit_members: std::collections::BTreeMap<String, Vec<String>>,
+    /// The namespaces each context reads for a member reached through a self
+    /// receiver, when they differ from `contexts`: in JavaScript, `this.x`
+    /// reads class members, which no plain name reads.
+    #[serde(default)]
+    pub member_contexts: std::collections::BTreeMap<String, Vec<String>>,
+    /// Scope kinds that code in a nested function does not see, such as a
+    /// Python class body from its methods.
+    #[serde(default)]
+    pub hidden_from_functions: Vec<String>,
+    /// Node kinds whose child names a member rather than a variable: a symbol
+    /// whose name is the property in `obj.f = function () {}` or the key in
+    /// `{ f: function () {} }` is in the `member` namespace.
+    #[serde(default)]
+    pub member_name_parents: Vec<String>,
 }
+
+/// The namespace of members reached only through a receiver.
+pub const MEMBER_NAMESPACE: &str = "member";
 
 impl Scopes {
     /// The namespace of a definition kind.
@@ -109,6 +126,15 @@ impl Scopes {
         self.namespaces
             .get(kind)
             .map_or(DEFAULT_NAMESPACE, String::as_str)
+    }
+
+    /// The namespaces a context reads for a member reached through a self
+    /// receiver, in order.
+    pub fn members_read_by(&self, context: &str) -> Vec<&str> {
+        match self.member_contexts.get(context) {
+            Some(namespaces) => namespaces.iter().map(String::as_str).collect(),
+            None => self.read_by(context),
+        }
     }
 
     /// The namespaces a reference context reads, in order.
@@ -304,7 +330,12 @@ impl Descriptor {
                     ));
                 }
             }
-            for context in language.scopes.contexts.keys() {
+            for context in language
+                .scopes
+                .contexts
+                .keys()
+                .chain(language.scopes.member_contexts.keys())
+            {
                 if !REFERENCE_CONTEXTS.contains(&context.as_str()) {
                     return Err(format!(
                         "scopes.contexts.{context} is not one of: {}",

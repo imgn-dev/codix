@@ -5,5 +5,6 @@ codix_provider::register!(
     "python",
     "descriptor.toml",
     tree_sitter_python::LANGUAGE,
-    "queries/tags.scm"
+    "queries/tags.scm",
+    "queries/locals.scm"
 );

@@ -10,3 +10,21 @@ modelines = ["javascript", "js"]
 [symbols]
 separator = "."
 body_fields = ["body", "value"]
+
+# Class members are reached through `this` or another object, never by a
+# plain name.
+[scopes]
+hoisted = ["function", "class", "block"]
+self_receivers = ["this"]
+member_name_parents = ["member_expression", "pair", "field_definition"]
+
+[scopes.namespaces]
+method = "member"
+constructor = "member"
+field = "member"
+property = "member"
+
+[scopes.member_contexts]
+call = ["member"]
+read = ["member"]
+write = ["member"]

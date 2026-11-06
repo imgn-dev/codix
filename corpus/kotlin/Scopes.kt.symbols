@@ -1,0 +1,17 @@
+6:11 constant LIMIT | const val LIMIT
+8:7 class Cart | class Cart<T : Comparable<T>>(private val owner: String, size: Int)
+8:43 property Cart.owner [private] | private val owner: String
+9:17 property Cart.items [private] | private val items
+10:9 property Cart.count | var count
+12:9 method Cart.add | fun add(item: T): Int
+19:9 method Cart.total | fun total(extra: Int = 0): Int
+20:13 property Cart.total.sum | var sum
+24:13 property Cart.total.best | val best
+28:9 method Cart.labels | fun labels(): List<String>
+30:9 method Cart.apply | fun apply(block: Cart<T>.() -> Unit)
+32:9 method Cart.describe | fun describe(): String
+33:13 property Cart.describe.id | val id
+38:7 class Special | class Special(owner: String) : Base(owner)
+39:9 method Special.shout | fun shout()
+42:5 function build | fun build(): Cart<String>
+43:9 property build.cart | val cart

@@ -1,0 +1,7 @@
+5:26 variable label
+5:35 type Props -> 1:11
+6:19 read label -> 5:26
+9:23 parameter props
+9:30 type Props -> 1:11
+9:41 read Button -> 5:17
+9:52 read props -> 9:23

@@ -1,0 +1,25 @@
+9:15 parameter items
+10:10 write items -> free
+10:18 read items -> 9:15
+14:17 read items -> free
+14:23 call reduce -> free
+14:31 parameter a
+14:34 parameter b
+14:40 read a -> 14:31
+14:44 read b -> 14:34
+18:17 read items -> free
+18:23 read length -> free
+26:26 parameter cart
+27:10 read cart -> 26:26
+27:15 call total -> free
+30:19 parameter price
+30:29 read price -> 30:19
+32:1 read module -> free
+32:8 write exports -> free
+33:10 parameter value
+34:12 call String -> free
+34:19 read value -> 33:10
+36:20 parameter value
+37:12 read Math -> free
+37:17 call round -> free
+37:23 read value -> 36:20

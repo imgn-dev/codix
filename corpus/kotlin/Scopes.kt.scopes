@@ -1,0 +1,75 @@
+3:18 import UUID
+4:27 import maximum
+8:12 type_parameter T
+8:16 type Comparable -> free
+8:27 type T -> 8:12
+8:50 type String -> free
+8:58 parameter size
+8:64 type Int -> free
+9:25 read ArrayList -> free
+9:35 read T -> 8:12
+9:38 read size -> 8:58
+12:13 parameter item
+12:19 type T -> 8:12
+12:23 type Int -> free
+13:9 read items -> 9:17
+13:15 call add -> free
+13:19 read item -> 12:13
+14:9 write count -> 10:9
+14:17 read count -> 10:9
+15:14 read count -> 10:9
+16:16 call total -> 19:9
+16:22 read count -> 10:9
+19:15 parameter extra
+19:22 type Int -> free
+19:32 type Int -> free
+20:19 read extra -> 19:15
+21:15 variable index
+21:22 variable value
+21:32 read items -> 9:17
+21:38 call withIndex -> free
+22:13 write sum -> 20:13
+22:20 read index -> 21:15
+24:20 read items -> 9:17
+24:26 call maxOrNull -> free
+25:16 call maximum -> 4:27
+25:24 read sum -> 20:13
+25:29 read LIMIT -> 6:11
+25:38 read owner -> 8:43
+25:44 read length -> free
+28:19 type List -> free
+28:24 type String -> free
+28:34 read items -> 9:17
+28:40 call map -> free
+28:46 read it -> free
+28:49 call toString -> free
+28:62 read owner -> uncertain
+30:15 parameter block
+30:22 type Cart -> 8:7
+30:27 type T -> 8:12
+30:36 type Unit -> free
+30:44 call block -> 30:15
+32:21 type String -> free
+33:18 read UUID -> 3:18
+33:23 call randomUUID -> free
+34:16 call run -> free
+34:29 read count -> uncertain
+34:41 call toString -> free
+38:15 parameter owner
+38:22 type String -> free
+38:32 type Base -> free
+38:37 read owner -> 38:15
+39:19 call name -> free
+39:28 read LIMIT -> uncertain
+42:14 type Cart -> 8:7
+42:19 type String -> free
+43:16 call Cart -> 8:7
+43:21 type String -> free
+43:29 read owner -> free
+43:43 read size -> free
+45:9 read cart -> 43:9
+45:14 call add -> free
+46:14 parameter error
+46:21 type IllegalStateException -> free
+47:15 read error -> 46:14
+49:12 read cart -> 43:9

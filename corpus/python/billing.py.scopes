@@ -1,0 +1,27 @@
+9:12 type int -> free
+12:18 parameter self
+12:24 parameter lines
+13:9 read self -> 12:18
+13:14 write lines -> free
+13:22 read lines -> 12:24
+15:6 call property -> free
+16:15 parameter self
+16:24 type int -> free
+17:17 parameter a
+17:20 parameter b
+18:20 read a -> 17:17
+18:24 read b -> 17:20
+19:16 call sum -> free
+19:20 read self -> 16:15
+19:25 read lines -> free
+21:6 call staticmethod -> free
+23:16 call Invoice -> 8:7
+26:20 parameter self
+30:18 parameter invoice
+30:27 type Invoice -> 8:7
+30:39 parameter verbose
+30:57 type str -> free
+31:12 call str -> free
+31:16 read invoice -> 30:18
+31:24 read total -> free
+34:17 parameter url

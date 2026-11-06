@@ -1,4 +1,5 @@
-//! The TypeScript corpus: expected symbols for each case in `corpus/typescript`.
+//! The TypeScript corpus: expected symbols and scopes for each case in
+//! `corpus/typescript` and `corpus/tsx`.
 
 use codix_lang_typescript as _;
 
@@ -10,4 +11,14 @@ fn corpus() {
 #[test]
 fn tsx_corpus() {
     codix_testkit::check_language_corpus("tsx");
+}
+
+#[test]
+fn scopes() {
+    codix_testkit::check_language_scopes("typescript");
+}
+
+#[test]
+fn tsx_scopes() {
+    codix_testkit::check_language_scopes("tsx");
 }
