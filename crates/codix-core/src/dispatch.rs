@@ -9,6 +9,7 @@ use crate::config::ConfigOp;
 use crate::indexing::{IndexOp, InitOp, StatusOp};
 use crate::op::{Context, Operation};
 use crate::query::{DefOp, FindOp, GrepOp, OutlineOp, ShowOp};
+use crate::refs::RefsOp;
 
 macro_rules! operations {
     ($($op:ident),* $(,)?) => {
@@ -48,6 +49,7 @@ operations!(
     ConfigOp,
     FindOp,
     DefOp,
+    RefsOp,
     OutlineOp,
     ShowOp,
     GrepOp,

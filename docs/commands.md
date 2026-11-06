@@ -92,6 +92,18 @@ Show where a symbol is defined.
 codix def Invoice.total
 ```
 
+## `codix refs`
+
+List every reference to a symbol or local variable, definition first.
+
+- **When:** Instead of grep to find who uses a name: references are bound by scope, so a different variable with the same name is not one of them.
+- **Returns:** Each site with its context (call, type, read, write) and enclosing symbol; `scoped` when bound by scope, `textual` when matched by name in another file or through another object.
+- **Needs:** tier 1 (symbols)
+
+```
+codix refs Invoice.total
+```
+
 ## `codix outline`
 
 Show the symbols of a file or directory as a tree, signatures only.

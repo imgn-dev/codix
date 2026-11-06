@@ -18,6 +18,7 @@ pub mod parse;
 pub mod project;
 pub mod providers;
 pub mod query;
+pub mod refs;
 pub mod render;
 pub mod scan;
 pub mod scope;

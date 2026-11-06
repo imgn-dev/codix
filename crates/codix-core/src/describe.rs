@@ -167,6 +167,14 @@ pub const COMMANDS: &[Description] = &[
         example: "codix def Invoice.total",
     },
     Description {
+        name: "refs",
+        summary: "List every reference to a symbol or local variable, definition first.",
+        when: "Instead of grep to find who uses a name: references are bound by scope, so a different variable with the same name is not one of them.",
+        returns: "Each site with its context (call, type, read, write) and enclosing symbol; `scoped` when bound by scope, `textual` when matched by name in another file or through another object.",
+        tier: Some(Tier::Symbols),
+        example: "codix refs Invoice.total",
+    },
+    Description {
         name: "outline",
         summary: "Show the symbols of a file or directory as a tree, signatures only.",
         when: "Instead of reading a whole file to learn its structure.",

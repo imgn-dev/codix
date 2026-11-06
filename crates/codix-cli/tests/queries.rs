@@ -238,3 +238,115 @@ fn an_edit_between_two_queries_is_seen_by_the_second() {
     fs::remove_file(root.join("src/billing/Tax.java")).unwrap();
     assert_eq!(codix(&root, &root, &["grep", "rate"]).code, Some(1));
 }
+
+/// A method used in its own file and through another object in another one.
+const REFS: &[(&str, &str)] = &[
+    (
+        "src/Invoice.java",
+        "package billing;\n\npublic class Invoice {\n    private long total;\n\n    public long total() {\n        return total;\n    }\n\n    long withTax(long tax) {\n        long base = total();\n        return base + tax;\n    }\n}\n",
+    ),
+    (
+        "src/Report.java",
+        "package billing;\n\nclass Report {\n    long render(Invoice invoice) {\n        return invoice.total();\n    }\n}\n",
+    ),
+];
+
+#[test]
+fn refs_lists_scoped_references_then_textual_ones_elsewhere() {
+    let (_guard, root) = indexed(REFS);
+    let text = codix(&root, &root, &["refs", "Invoice.total", "--kind", "method"]);
+    assert_eq!(text.code, Some(0), "{}", text.stderr);
+    assert_golden(golden("refs-invoice-total.txt"), &text.stdout);
+    let json = codix(
+        &root,
+        &root,
+        &["refs", "Invoice.total", "--kind", "method", "--json"],
+    );
+    assert_golden(golden("refs-invoice-total.json"), &json.stdout);
+}
+
+#[test]
+fn refs_of_a_private_field_or_a_local_stay_in_their_file() {
+    let (_guard, root) = indexed(REFS);
+    let field = codix(&root, &root, &["refs", "Invoice.total", "--kind", "field"]);
+    assert_eq!(
+        field.stdout,
+        "src/Invoice.java:4:18  def   -              scoped\n\
+         src/Invoice.java:7:16  read  Invoice.total  scoped\n\
+         2 results\n2 scoped, 0 textual\n"
+    );
+    let local = codix(&root, &root.join("src"), &["refs", "Invoice.java:11:14"]);
+    assert_eq!(
+        local.stdout,
+        "Invoice.java:11:14  def   -                scoped\n\
+         Invoice.java:12:16  read  Invoice.withTax  scoped\n\
+         2 results\n2 scoped, 0 textual\n"
+    );
+}
+
+#[test]
+fn refs_sees_a_file_changed_without_index() {
+    let (_guard, root) = indexed(REFS);
+    write(
+        &root,
+        "src/Audit.java",
+        "class Audit {\n    long check(Invoice i) { return i.total(); }\n}\n",
+    );
+    let out = codix(&root, &root, &["refs", "Invoice.total", "--kind", "method"]);
+    assert!(
+        out.stdout
+            .lines()
+            .any(|l| l.starts_with("src/Audit.java:2:38 ") && l.ends_with("textual")),
+        "{}",
+        out.stdout
+    );
+}
+
+#[test]
+fn def_at_a_name_follows_its_binding() {
+    let (_guard, root) = indexed(REFS);
+    let field = codix(&root, &root, &["def", "src/Invoice.java:7:16"]);
+    assert!(
+        field
+            .stdout
+            .starts_with("src/Invoice.java:4:18  field  Invoice.total"),
+        "{}",
+        field.stdout
+    );
+    let call = codix(&root, &root, &["def", "src/Invoice.java:11:21", "--json"]);
+    let json: Value = serde_json::from_str(&call.stdout).unwrap();
+    assert_eq!(json["result"]["definition"]["kind"], "method");
+    assert_eq!(json["result"]["definition"]["confidence"], "scoped");
+
+    let local = codix(&root, &root, &["def", "src/Invoice.java:12:16", "--json"]);
+    let json: Value = serde_json::from_str(&local.stdout).unwrap();
+    let definition = &json["result"]["definition"];
+    assert_eq!(
+        (
+            &definition["kind"],
+            &definition["line"],
+            &definition["symbol_id"]
+        ),
+        (
+            &Value::from("variable"),
+            &Value::from(11),
+            &Value::from("src/Invoice.java:11:14")
+        )
+    );
+
+    // Through another object, the name is looked up by name.
+    let other = codix(&root, &root, &["def", "src/Report.java:5:24"]);
+    assert_eq!(other.code, Some(3), "{}", other.stdout);
+    let narrowed = codix(
+        &root,
+        &root,
+        &["def", "src/Report.java:5:24", "--kind", "method"],
+    );
+    assert!(
+        narrowed
+            .stdout
+            .starts_with("src/Invoice.java:6:17  method  Invoice.total"),
+        "{}",
+        narrowed.stdout
+    );
+}

@@ -15,9 +15,10 @@ use crate::op::{Context, Operation, Outcome};
 use crate::page::{Location, Page, Paged, Ranked, sort_results};
 use crate::parse::PackIndexer;
 use crate::project::{FileId, Project, ScopeRequest};
+use crate::refs::DefAt;
 use crate::scan::{rescan, scan_within};
 use crate::store::{FileStatus, MatchMode, NameQuery, Snapshot, Store, SymbolHit};
-use crate::symbol_id::{resolve_overloads_where, resolve_where};
+use crate::symbol_id::{SymbolRef, resolve_overloads_where, resolve_where};
 
 /// Longest line text shown with a `grep` match, in characters.
 const MAX_LINE: usize = 200;
@@ -40,7 +41,9 @@ pub struct SymbolResult {
     pub signature: Option<String>,
     /// Language of the file.
     pub language: String,
-    /// How it was found: `textual` for tier 1 symbols.
+    /// How it was found: `scoped` when the name at a location binds to it
+    /// within its file, `textual` when found by name, `low` in or around a
+    /// parse error.
     pub confidence: String,
 }
 
@@ -74,7 +77,7 @@ impl SymbolResult {
 }
 
 /// The project, indexed, with its configuration.
-fn indexed(ctx: &Context) -> Result<(&Project, Config), Error> {
+pub(crate) fn indexed(ctx: &Context) -> Result<(&Project, Config), Error> {
     let project = ctx.project()?;
     project.require_indexed()?;
     Ok((project, Config::load(project)?))
@@ -102,6 +105,23 @@ fn lookup<T>(
         Some(r) if r.indexed + r.touched + r.deleted + r.pending == 0 => Ok((first, false)),
         Some(_) => Ok((query(&store.snapshot()?)?.0, false)),
     }
+}
+
+/// Brings the whole index up to date before a query that must not miss a
+/// change anywhere: a daemon whose watcher covers every directory has it
+/// current once its pending changes are in; otherwise the whole tree is
+/// scanned. Whether the write lock stayed busy, so changes may be missed.
+pub(crate) fn complete(ctx: &Context, project: &Project, config: &Config) -> Result<bool, Error> {
+    let watched = ctx.watch().is_some_and(crate::daemon::Watch::flush);
+    Ok(!watched
+        && scan_within(
+            project,
+            config,
+            &PackIndexer::new(config),
+            ctx.gate(),
+            Some(QUERY_WAIT),
+        )?
+        .is_none())
 }
 
 fn distinct(paths: impl Iterator<Item = String>) -> Vec<String> {
@@ -253,12 +273,28 @@ impl Operation for DefOp {
     fn run(&self, ctx: &Context, request: DefRequest) -> Result<DefResponse, Error> {
         let (project, config) = indexed(ctx)?;
         let scope = ctx.scope(&request.scope)?;
+        // At a location, the name there decides, bound by its file's scopes;
+        // a name the file does not bind is looked up by name.
+        let mut name = request.symbol.clone();
+        if let SymbolRef::Location { file, line, column } = SymbolRef::parse(&request.symbol)? {
+            match crate::refs::def_at(ctx, project, &config, &file, line, column)? {
+                Some(DefAt::Found(mut results)) => {
+                    let definition = results.remove(0);
+                    return Ok(DefResponse {
+                        definition,
+                        overloads: results,
+                        possibly_stale: false,
+                    });
+                }
+                Some(DefAt::ByName(unbound)) => name = unbound,
+                None => {}
+            }
+        }
         let (hits, possibly_stale) = lookup(ctx, project, &config, |snapshot| {
-            let hits =
-                resolve_overloads_where(snapshot, project, ctx.cwd(), &request.symbol, &|hit| {
-                    (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
-                        && scope.contains(&FileId::from_canonical(hit.path.as_str()))
-                })?;
+            let hits = resolve_overloads_where(snapshot, project, ctx.cwd(), &name, &|hit| {
+                (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
+                    && scope.contains(&FileId::from_canonical(hit.path.as_str()))
+            })?;
             let paths = distinct(hits.iter().map(|h| h.path.clone()));
             Ok((hits, paths))
         })?;
@@ -573,19 +609,7 @@ impl Operation for GrepOp {
             hint: "grep takes Rust regex syntax; escape special characters with \\".to_owned(),
         })?;
         let scope = ctx.scope(&request.scope)?;
-        // A daemon whose watcher covers every directory has the index
-        // current once its pending changes are in; otherwise the whole tree
-        // is scanned, as without a daemon.
-        let watched = ctx.watch().is_some_and(crate::daemon::Watch::flush);
-        let possibly_stale = !watched
-            && scan_within(
-                project,
-                &config,
-                &PackIndexer::new(&config),
-                ctx.gate(),
-                Some(QUERY_WAIT),
-            )?
-            .is_none();
+        let possibly_stale = complete(ctx, project, &config)?;
         let mut store = Store::open(&project.index_path())?;
         let snapshot = store.snapshot()?;
         let mut matches = Vec::new();
