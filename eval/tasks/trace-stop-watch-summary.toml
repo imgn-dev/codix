@@ -1,0 +1,4 @@
+category = "trace"
+prompt = """Which StopWatch method does shortSummary() call to get the total time it reports?"""
+# The answer must contain every one of these.
+expect = ["getTotalTimeSeconds"]
