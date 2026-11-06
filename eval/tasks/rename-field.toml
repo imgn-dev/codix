@@ -1,0 +1,7 @@
+category = "rename"
+prompt = """StopWatch, in spring-core, keeps a private field taskCount. Rename the field to completedTasks and write the change to the files."""
+[[renames]]
+file = "spring-core/src/main/java/org/springframework/util/StopWatch.java"
+old = "taskCount"
+new = "completedTasks"
+sites = 3

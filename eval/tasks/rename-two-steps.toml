@@ -1,0 +1,12 @@
+category = "rename"
+prompt = """Two renames in spring-core's StopWatch: first rename the private field lastTaskInfo to previousTask, then rename the local variable width in prettyPrint(TimeUnit) to columns. Write both changes to the files."""
+[[renames]]
+file = "spring-core/src/main/java/org/springframework/util/StopWatch.java"
+old = "lastTaskInfo"
+new = "previousTask"
+sites = 5
+[[renames]]
+file = "spring-core/src/main/java/org/springframework/util/StopWatch.java"
+old = "width"
+new = "columns"
+sites = 2

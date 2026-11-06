@@ -1,0 +1,7 @@
+category = "rename"
+prompt = """Rename the parameter taskName of StopWatch.start(String taskName), in spring-core, to label. Write the change to the files."""
+[[renames]]
+file = "spring-core/src/main/java/org/springframework/util/StopWatch.java"
+old = "taskName"
+new = "label"
+sites = 2

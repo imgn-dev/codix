@@ -11,3 +11,8 @@ fn corpus() {
 fn scopes() {
     codix_testkit::check_language_scopes("c");
 }
+
+#[test]
+fn round_trips() {
+    codix_testkit::check_language_round_trips("c");
+}

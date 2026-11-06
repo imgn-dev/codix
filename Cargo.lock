@@ -202,7 +202,7 @@ checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
 name = "codix-benches"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -210,7 +210,7 @@ dependencies = [
 
 [[package]]
 name = "codix-build-gradle"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "tempfile",
@@ -218,7 +218,7 @@ dependencies = [
 
 [[package]]
 name = "codix-build-maven"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "roxmltree",
@@ -227,7 +227,7 @@ dependencies = [
 
 [[package]]
 name = "codix-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "codix-build-gradle",
@@ -265,7 +265,7 @@ dependencies = [
 
 [[package]]
 name = "codix-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "codix-build-gradle",
@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "codix-daemon"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "blake3",
  "codix-core",
@@ -307,7 +307,7 @@ dependencies = [
 
 [[package]]
 name = "codix-eval"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-benches",
  "serde",
@@ -317,7 +317,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-c"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -326,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-cpp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -335,7 +335,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-csharp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -344,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-go"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-java"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-core",
  "codix-provider",
@@ -364,7 +364,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-javascript"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -373,7 +373,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-json"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-kotlin"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -391,7 +391,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-markdown"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -400,7 +400,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-php"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -409,7 +409,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-python"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-ruby"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -427,7 +427,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-rust"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -436,7 +436,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-sql"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -445,7 +445,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-toml"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -454,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-typescript"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -463,7 +463,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-xml"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "codix-lang-yaml"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
  "codix-testkit",
@@ -481,7 +481,7 @@ dependencies = [
 
 [[package]]
 name = "codix-mcp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-core",
  "codix-daemon",
@@ -494,7 +494,7 @@ dependencies = [
 
 [[package]]
 name = "codix-provider"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "inventory",
  "regex",
@@ -506,7 +506,7 @@ dependencies = [
 
 [[package]]
 name = "codix-testkit"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-core",
  "codix-provider",
@@ -516,21 +516,21 @@ dependencies = [
 
 [[package]]
 name = "codix-vcs-git"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
 ]
 
 [[package]]
 name = "codix-vcs-hg"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
 ]
 
 [[package]]
 name = "codix-vcs-svn"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "codix-provider",
 ]

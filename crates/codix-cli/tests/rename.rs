@@ -158,3 +158,22 @@ fn the_same_name_or_an_invalid_one_is_refused() {
         out.stderr
     );
 }
+
+#[cfg(feature = "lang-kotlin")]
+#[test]
+fn a_definition_named_by_a_keyword_is_not_renamed() {
+    let (_guard, root) = indexed(
+        CODIX,
+        &[(
+            "Cart.kt",
+            "class Cart(val size: Int) {\n    constructor() : this(0)\n}\n",
+        )],
+    );
+    let out = codix(&root, &["rename", "Cart.kt:2:5", "make"]);
+    assert_eq!(out.code, Some(4), "{}", out.stdout);
+    assert!(
+        out.stderr.starts_with("error[invalid_name]"),
+        "{}",
+        out.stderr
+    );
+}

@@ -22,3 +22,13 @@ fn scopes() {
 fn tsx_scopes() {
     codix_testkit::check_language_scopes("tsx");
 }
+
+#[test]
+fn round_trips() {
+    codix_testkit::check_language_round_trips("typescript");
+}
+
+#[test]
+fn tsx_round_trips() {
+    codix_testkit::check_language_round_trips("tsx");
+}

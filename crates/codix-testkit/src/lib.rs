@@ -255,3 +255,113 @@ pub fn check_language_scopes(language: &str) {
         lines.into_iter().map(|(_, line)| line).collect()
     });
 }
+
+/// Renames every definition of each case in `corpus/<language>` to a fresh
+/// name and back, through the scope model, and checks that the bytes come
+/// back and that no parse error appears on the way.
+///
+/// # Panics
+///
+/// When the language is not compiled in, or a round trip changes a file.
+pub fn check_language_round_trips(language: &str) {
+    use codix_core::edit::{Edit, apply};
+    use codix_core::scope::{Binding, FileModel};
+
+    let registry = codix_provider::registry();
+    let descriptor = registry
+        .languages
+        .iter()
+        .find(|d| d.name == language)
+        .unwrap_or_else(|| panic!("{language} is not compiled in"));
+    let grammar = registry
+        .grammars
+        .get(language)
+        .unwrap_or_else(|| panic!("{language} has no grammar"));
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../corpus")
+        .join(language);
+    let model = |name: &str, content: &str| {
+        codix_core::scope::model(descriptor, grammar, name, content).expect("model")
+    };
+    let low = |m: &FileModel| {
+        m.definitions.iter().filter(|d| d.low).count()
+            + m.references.iter().filter(|r| r.low).count()
+    };
+    // The edits renaming the definition at `byte`, with its overloads and
+    // every reference bound to them.
+    let renaming = |m: &FileModel, byte: usize, new: &str| -> Vec<Edit> {
+        let Some(d) = m.definition_at(byte) else {
+            return Vec::new();
+        };
+        let set = m.overloads(d);
+        let mut edits: Vec<Edit> = set
+            .iter()
+            .map(|&o| &m.definitions[o].name_range)
+            .chain(
+                m.references
+                    .iter()
+                    .filter(|r| matches!(r.binding, Binding::Bound(b) if set.contains(&b)))
+                    .map(|r| &r.range),
+            )
+            .map(|range| Edit {
+                start: range.start.byte as usize,
+                end: range.end.byte as usize,
+                replacement: new.to_owned(),
+            })
+            .collect();
+        edits.sort_by_key(|e| e.start);
+        edits.dedup();
+        edits
+    };
+    let mut sources: Vec<_> = fs::read_dir(&dir)
+        .unwrap_or_else(|e| panic!("cannot read corpus {}: {e}", dir.display()))
+        .filter_map(Result::ok)
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.is_file()
+                && path
+                    .extension()
+                    .is_none_or(|e| e != "symbols" && e != "scopes")
+        })
+        .collect();
+    sources.sort();
+    for source in sources {
+        let name = source
+            .file_name()
+            .and_then(|n| n.to_str())
+            .expect("UTF-8 name");
+        let original = fs::read_to_string(&source).expect("read corpus source");
+        let before = model(name, &original);
+        for (n, d) in before.definitions.iter().enumerate() {
+            let plain = d
+                .name
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_');
+            if d.low || !plain || descriptor.names.keywords.contains(&d.name) {
+                continue;
+            }
+            let start = d.name_range.start.byte as usize;
+            let fresh = format!("{}_rt{n}", d.name);
+            let there = renaming(&before, start, &fresh);
+            let renamed = apply(&original, &there);
+            let middle = model(name, &renamed);
+            assert!(
+                low(&middle) <= low(&before),
+                "{name}: renaming {} to {fresh} adds parse errors",
+                d.name
+            );
+            let moved = there
+                .iter()
+                .filter(|e| e.end <= start)
+                .map(|e| e.replacement.len().cast_signed() - (e.end - e.start).cast_signed())
+                .sum::<isize>();
+            let back = renaming(&middle, start.saturating_add_signed(moved), &d.name);
+            assert_eq!(
+                apply(&renamed, &back),
+                original,
+                "{name}: renaming {} to {fresh} and back changes the file",
+                d.name
+            );
+        }
+    }
+}

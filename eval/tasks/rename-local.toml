@@ -1,0 +1,7 @@
+category = "rename"
+prompt = """In spring-core's StopWatch, the method prettyPrint(TimeUnit) has a local variable named width. Rename that variable to columns, and write the change to the files."""
+[[renames]]
+file = "spring-core/src/main/java/org/springframework/util/StopWatch.java"
+old = "width"
+new = "columns"
+sites = 2

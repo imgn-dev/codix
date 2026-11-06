@@ -124,6 +124,7 @@ mod tests {
             category,
             prompt: "?".to_owned(),
             expect: vec!["x".to_owned()],
+            renames: Vec::new(),
         }
     }
 

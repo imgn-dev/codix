@@ -1,7 +1,8 @@
 //! The performance targets, on pinned public repositories: cold index of
 //! about 1M lines in 10k files under 30 s, no-change scan of a very large
 //! tree under 1 s, CLI lookup p95 under 150 ms; and with a daemon, query p95
-//! under 10 ms, memory under 500 MB, reindex after a save under 50 ms.
+//! under 10 ms, memory under 500 MB, reindex after a save under 50 ms; and
+//! renames that, applied and renamed back, leave every file as it was.
 //!
 //! Run with `cargo bench -p codix-benches` from a terminal, not from a Claude
 //! Code session, whose sandbox lets no daemon bind its socket. Builds the
@@ -13,6 +14,7 @@ use std::path::Path;
 use std::time::Duration;
 
 mod daemon;
+mod edits;
 
 use codix_benches::{
     Pinned, SPRING, build_codix, checkout, files_and_lines, percentile, time, workspace,
@@ -61,6 +63,10 @@ struct Results {
     no_change_scan: Measure,
     lookup_p95_ms: f64,
     daemon: daemon::DaemonMeasures,
+    /// The index of the cold-indexed repository, in MB.
+    index_mb: u64,
+    edits: edits::EditMeasures,
+    linux_round_trips: edits::RoundTrips,
     targets: Vec<Target>,
 }
 
@@ -94,6 +100,8 @@ struct Measured {
     scan: Duration,
     p95: Duration,
     served: daemon::DaemonMeasures,
+    edited: edits::EditMeasures,
+    linux_trips: edits::RoundTrips,
 }
 
 fn targets(m: &Measured) -> Vec<Target> {
@@ -105,7 +113,10 @@ fn targets(m: &Measured) -> Vec<Target> {
         scan,
         p95,
         ref served,
+        ref edited,
+        ref linux_trips,
     } = m;
+    let trips = [&edited.round_trips, linux_trips];
     vec![
         Target {
             name: "cold index",
@@ -152,7 +163,75 @@ fn targets(m: &Measured) -> Vec<Target> {
             measured: format!("{} ms", served.reindex_ms),
             met: served.reindex_ms < 50,
         },
+        Target {
+            name: "rename round trips",
+            goal: "renamed and back, every file as it was",
+            measured: trips
+                .iter()
+                .map(|t| {
+                    format!(
+                        "{}: {} of {} restored, {} refused, {} failed",
+                        t.repository,
+                        t.restored,
+                        t.attempted,
+                        t.refused.values().sum::<usize>(),
+                        t.failed.len()
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; "),
+            met: trips.iter().all(|t| t.failed.is_empty()),
+        },
     ]
+}
+
+/// The linux checkout's measures: its no-change scan and round trips.
+struct Linux {
+    files: usize,
+    lines: usize,
+    scan: Duration,
+    trips: edits::RoundTrips,
+}
+
+fn linux(codix: &Path, repos: &Path, out: &mut impl std::io::Write) -> Linux {
+    let linux = checkout(repos, LINUX);
+    let (linux_files, linux_lines) = files_and_lines(&linux);
+    if !linux.join(".codix/index.db").exists() {
+        let first = cold_index(codix, &linux);
+        writeln!(
+            out,
+            "first index {}: {:.1} s",
+            LINUX.name,
+            first.as_secs_f64()
+        )
+        .expect("write");
+    }
+    let mut scans: Vec<Duration> = (0..SCAN_RUNS)
+        .map(|_| time(codix, &linux, &["index"]))
+        .collect();
+    let scan = percentile(&mut scans, 50);
+    writeln!(
+        out,
+        "no-change scan {}: {linux_files} files, median {:.3} s",
+        LINUX.name,
+        scan.as_secs_f64()
+    )
+    .expect("write");
+
+    let linux_trips =
+        edits::measure(codix, &linux, LINUX.name, &["kernel", "mm", "lib"]).round_trips;
+    writeln!(
+        out,
+        "round trips {}: {} of {} restored",
+        LINUX.name, linux_trips.restored, linux_trips.attempted
+    )
+    .expect("write");
+    Linux {
+        files: linux_files,
+        lines: linux_lines,
+        scan,
+        trips: linux_trips,
+    }
 }
 
 fn main() {
@@ -180,6 +259,7 @@ fn main() {
     let p95 = percentile(&mut lookups, 95);
     writeln!(out, "lookup p95: {:.1} ms", p95.as_secs_f64() * 1000.0).expect("write");
 
+    let index_mb = std::fs::metadata(spring.join(".codix/index.db")).map_or(0, |m| m.len() >> 20);
     let served = daemon::measure(&codix, &spring);
     writeln!(
         out,
@@ -188,29 +268,24 @@ fn main() {
     )
     .expect("write");
 
-    let linux = checkout(&repos, LINUX);
-    let (linux_files, linux_lines) = files_and_lines(&linux);
-    if !linux.join(".codix/index.db").exists() {
-        let first = cold_index(&codix, &linux);
-        writeln!(
-            out,
-            "first index {}: {:.1} s",
-            LINUX.name,
-            first.as_secs_f64()
-        )
-        .expect("write");
-    }
-    let mut scans: Vec<Duration> = (0..SCAN_RUNS)
-        .map(|_| time(&codix, &linux, &["index"]))
-        .collect();
-    let scan = percentile(&mut scans, 50);
+    let edited = edits::measure(&codix, &spring, SPRING.name, &["."]);
     writeln!(
         out,
-        "no-change scan {}: {linux_files} files, median {:.3} s",
-        LINUX.name,
-        scan.as_secs_f64()
+        "edits: refs p95 {} ms, rename p95 {} ms, apply p95 {} ms; round trips {} of {} restored",
+        edited.refs_p95_ms,
+        edited.rename_p95_ms,
+        edited.apply_p95_ms,
+        edited.round_trips.restored,
+        edited.round_trips.attempted
     )
     .expect("write");
+
+    let Linux {
+        files: linux_files,
+        lines: linux_lines,
+        scan,
+        trips: linux_trips,
+    } = linux(&codix, &repos, &mut out);
 
     let measured = Measured {
         spring_files,
@@ -220,6 +295,8 @@ fn main() {
         scan,
         p95,
         served,
+        edited,
+        linux_trips,
     };
     let targets = targets(&measured);
     let results = Results {
@@ -241,6 +318,9 @@ fn main() {
         },
         lookup_p95_ms: (p95.as_secs_f64() * 10_000.0).round() / 10.0,
         daemon: measured.served,
+        index_mb,
+        edits: measured.edited,
+        linux_round_trips: measured.linux_trips,
     };
     let path = workspace().join(format!(
         "benches/results/{}.json",
