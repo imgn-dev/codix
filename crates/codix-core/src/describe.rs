@@ -175,6 +175,14 @@ pub const COMMANDS: &[Description] = &[
         example: "codix refs Invoice.total",
     },
     Description {
+        name: "rename",
+        summary: "Plan renaming a symbol or local variable within its file; returns a preview to apply.",
+        when: "Instead of editing by hand or with sed: only the definition and the references bound to it change, and the plan is checked for collisions, shadowing and unresolved references first.",
+        returns: "A preview: its ID, the sites, any override used, the sites left unchanged, the diff, and the `apply` command to run. Nothing is written before `apply`.",
+        tier: Some(Tier::Scopes),
+        example: "codix rename Invoice.total sum",
+    },
+    Description {
         name: "previews",
         summary: "List the pending previews that `apply` can apply.",
         when: "To find a preview ID again, or check whether a preview still applies after files changed.",

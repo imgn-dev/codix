@@ -1,0 +1,91 @@
+{
+  "$defs": {
+    "Allow": {
+      "description": "A condition a check refuses, which the user can allow, one at a time.",
+      "oneOf": [
+        {
+          "const": "shadowing",
+          "description": "The new name shadows, or is shadowed by, another definition, changing\nwhat some references mean.",
+          "type": "string"
+        },
+        {
+          "const": "overload",
+          "description": "The new name is another method's in the same scope, making it an\noverload.",
+          "type": "string"
+        },
+        {
+          "const": "visibility-change",
+          "description": "The first letter of a Go name changes case, and with it whether it\nis exported.",
+          "type": "string"
+        },
+        {
+          "const": "generated",
+          "description": "The edit changes generated or vendored files.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`RenameOp`].",
+  "properties": {
+    "all_overloads": {
+      "default": false,
+      "description": "Rename every overload of the name together.",
+      "type": "boolean"
+    },
+    "allow": {
+      "default": [],
+      "description": "Allow a condition the checks refuse; repeatable.",
+      "items": {
+        "$ref": "#/$defs/Allow"
+      },
+      "type": "array"
+    },
+    "exclude_unresolved": {
+      "default": false,
+      "description": "Edit the sites codix binds and leave unchanged the references it cannot bind, in other files or through other objects.",
+      "type": "boolean"
+    },
+    "here": {
+      "default": false,
+      "description": "Limit results to the current directory's subtree.",
+      "type": "boolean"
+    },
+    "kind": {
+      "default": [],
+      "description": "Consider symbols of this kind only; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "new_name": {
+      "description": "The new name.",
+      "type": "string"
+    },
+    "path": {
+      "default": [],
+      "description": "Limit results to this subtree; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "symbol": {
+      "description": "Symbol ID, its path part, `file:line:col`, or a name; a local by `file:line:col` only.",
+      "type": "string"
+    },
+    "textual": {
+      "default": false,
+      "description": "At tier 1, where codix cannot bind names, rename every whole-word match of the name in its file.",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "symbol",
+    "new_name"
+  ],
+  "title": "RenameRequest",
+  "type": "object"
+}

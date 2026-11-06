@@ -68,6 +68,7 @@ use codix_core::error::exit;
 use codix_core::indexing::{IndexOp, IndexRequest, InitOp, InitRequest, StatusOp, StatusRequest};
 use codix_core::op::{Context, Operation, Outcome, Warning};
 use codix_core::page::{DEFAULT_LIMIT, Page};
+use codix_core::preflight::{Allow, Overrides};
 use codix_core::previews::{DiscardOp, DiscardRequest, PreviewsOp, PreviewsRequest};
 use codix_core::project::ScopeRequest;
 use codix_core::query::{
@@ -75,6 +76,7 @@ use codix_core::query::{
     ShowRequest,
 };
 use codix_core::refs::{RefsOp, RefsRequest};
+use codix_core::rename::{RenameOp, RenameRequest};
 use codix_core::render::{self, Style, TextRender};
 use codix_core::store::MatchMode;
 use codix_daemon::client::{self, Route};
@@ -135,6 +137,7 @@ enum Command {
         narrow: NarrowArgs,
     },
     Refs(RefsArgs),
+    Rename(RenameArgs),
     Previews,
     Discard {
         /// Preview IDs to drop.
@@ -301,6 +304,77 @@ struct RefsArgs {
     scope: ScopeArgs,
     #[command(flatten)]
     page: PageArgs,
+}
+
+#[derive(Args)]
+struct RenameArgs {
+    /// Symbol ID, its path part, `file:line:col`, or a name; a local by `file:line:col` only.
+    symbol: String,
+    /// The new name.
+    new_name: String,
+    #[command(flatten)]
+    narrow: NarrowArgs,
+    /// Rename every overload of the name together.
+    #[arg(long)]
+    all_overloads: bool,
+    /// Allow a condition the checks refuse; repeatable.
+    #[arg(long, value_enum, value_name = "CONDITION")]
+    allow: Vec<AllowArg>,
+    /// Edit the sites codix binds and leave unchanged the references it cannot bind, in other files or through other objects.
+    #[arg(long)]
+    exclude_unresolved: bool,
+    /// At tier 1, where codix cannot bind names, rename every whole-word match of the name in its file.
+    #[arg(long)]
+    textual: bool,
+}
+
+impl RenameArgs {
+    fn request(self) -> RenameRequest {
+        RenameRequest {
+            symbol: self.symbol,
+            new_name: self.new_name,
+            kinds: self.narrow.kinds,
+            scope: self.narrow.scope.request(),
+            all_overloads: self.all_overloads,
+            overrides: Overrides {
+                allow: self.allow.into_iter().map(Allow::from).collect(),
+                exclude_unresolved: self.exclude_unresolved,
+                textual: self.textual,
+            },
+        }
+    }
+}
+
+impl RefsArgs {
+    fn request(self) -> Result<RefsRequest, Error> {
+        let page = self.page.page()?;
+        Ok(RefsRequest {
+            symbol: self.symbol,
+            kinds: self.kinds,
+            scope: self.scope.request(),
+            page,
+        })
+    }
+}
+
+/// The conditions `--allow` takes.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum AllowArg {
+    Shadowing,
+    Overload,
+    VisibilityChange,
+    Generated,
+}
+
+impl From<AllowArg> for Allow {
+    fn from(arg: AllowArg) -> Self {
+        match arg {
+            AllowArg::Shadowing => Self::Shadowing,
+            AllowArg::Overload => Self::Overload,
+            AllowArg::VisibilityChange => Self::VisibilityChange,
+            AllowArg::Generated => Self::Generated,
+        }
+    }
 }
 
 /// Narrowing an ambiguous name.
@@ -676,16 +750,9 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
             };
             run(output, &DefOp, ctx, Ok(request))
         }
-        Command::Refs(args) => {
-            let request = args.page.page().map(|page| RefsRequest {
-                symbol: args.symbol,
-                kinds: args.kinds,
-                scope: args.scope.request(),
-                page,
-            });
-            run(output, &RefsOp, ctx, request)
-        }
+        Command::Refs(args) => run(output, &RefsOp, ctx, args.request()),
         Command::Outline { path } => run(output, &OutlineOp, ctx, Ok(OutlineRequest { path })),
+        Command::Rename(args) => run(output, &RenameOp, ctx, Ok(args.request())),
         Command::Previews => run(output, &PreviewsOp, ctx, Ok(PreviewsRequest {})),
         Command::Discard { ids, all } => {
             run(output, &DiscardOp, ctx, Ok(DiscardRequest { ids, all }))

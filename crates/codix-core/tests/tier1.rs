@@ -69,3 +69,44 @@ fn references_at_tier_1_are_whole_word_matches() {
         ]
     );
 }
+
+#[test]
+fn renames_at_tier_1_need_textual_and_edit_whole_words() {
+    use codix_core::preflight::Overrides;
+    use codix_core::rename::{RenameOp, RenameRequest};
+
+    let dir = tempfile::tempdir().unwrap();
+    let root = codix_core::project::canonicalize(dir.path()).unwrap();
+    fs::create_dir_all(root.join(".codix")).unwrap();
+    fs::write(
+        root.join("a.t1"),
+        "class Invoice {\n    long total() { return total + subtotal; }\n}\n",
+    )
+    .unwrap();
+    let project = Project::discover(&root).unwrap().unwrap();
+    let config = Config::load(&project).unwrap();
+    scan(&project, &config, &PackIndexer::new(&config), &FileGate).unwrap();
+    let ctx = Context::discover(&root, None).unwrap();
+    let request = |textual| RenameRequest {
+        symbol: "Invoice.total".to_owned(),
+        new_name: "sum".to_owned(),
+        kinds: Vec::new(),
+        scope: ScopeRequest::default(),
+        all_overloads: false,
+        overrides: Overrides {
+            textual,
+            ..Overrides::default()
+        },
+    };
+    let error = RenameOp.run(&ctx, request(false)).unwrap_err();
+    assert_eq!(error.code(), "tier_too_low");
+    let preview = RenameOp.run(&ctx, request(true)).unwrap();
+    assert_eq!(preview.sites, 2);
+    assert!(
+        preview
+            .diff
+            .contains("+    long sum() { return sum + subtotal; }"),
+        "{}",
+        preview.diff
+    );
+}
