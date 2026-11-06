@@ -170,7 +170,7 @@ impl Operation for FindOp {
                 && (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
                 && (request.languages.is_empty() || request.languages.contains(&hit.language))
         };
-        let ((mode, hits), possibly_stale) = lookup(ctx, project, &config, |snapshot| {
+        let ((mode, results), possibly_stale) = lookup(ctx, project, &config, |snapshot| {
             let mut last = (modes[modes.len() - 1], Vec::new());
             for &mode in &modes {
                 let hits: Vec<SymbolHit> = snapshot
@@ -186,19 +186,26 @@ impl Operation for FindOp {
                     break;
                 }
             }
-            let paths = distinct(last.1.iter().map(|hit| hit.path.clone()));
-            Ok((last, paths))
+            let (mode, hits) = last;
+            let mut results: Vec<SymbolResult> = hits
+                .into_iter()
+                .map(|hit| SymbolResult::new(ctx, hit))
+                .collect();
+            if mode != MatchMode::Fuzzy {
+                sort_results(&mut results, None);
+            }
+            // Only the page is returned, so only its files need to be current.
+            let page = request.page.apply(results);
+            let paths = distinct(
+                page.items
+                    .iter()
+                    .map(|r| r.location.root_path.as_str().to_owned()),
+            );
+            Ok(((mode, page), paths))
         })?;
-        let mut results: Vec<SymbolResult> = hits
-            .into_iter()
-            .map(|hit| SymbolResult::new(ctx, hit))
-            .collect();
-        if mode != MatchMode::Fuzzy {
-            sort_results(&mut results, None);
-        }
         Ok(FindResponse {
             mode,
-            results: request.page.apply(results),
+            results,
             possibly_stale,
         })
     }

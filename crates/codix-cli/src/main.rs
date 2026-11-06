@@ -446,9 +446,10 @@ where
     let (outcome, warnings) = match client::call::<O>(ctx, &request) {
         Route::Daemon { outcome, warnings } => (outcome, warnings),
         Route::InProcess { warnings } => {
-            let mut all = output.warnings.clone();
+            let ctx = ctx.clone().with_project_warnings();
+            let mut all = ctx.warnings().to_vec();
             all.extend(warnings);
-            (op.run(ctx, request), all)
+            (op.run(&ctx, request), all)
         }
     };
     let output = Output {
@@ -588,10 +589,16 @@ fn main() -> ExitCode {
             path: ".".into(),
             source,
         })
-        .and_then(|cwd| Context::discover(&cwd, cli.root.as_deref()))
+        .and_then(|cwd| Context::locate(&cwd, cli.root.as_deref()))
     {
         Ok(ctx) => ctx,
         Err(error) => return ExitCode::from(output.error(&error)),
+    };
+    // An operation may go to the daemon, which sends the project's warnings;
+    // the other commands run here.
+    let ctx = match cli.command {
+        Command::Daemon(_) | Command::Watch | Command::Mcp => ctx.with_project_warnings(),
+        _ => ctx,
     };
     let output = Output {
         warnings: ctx.warnings().to_vec(),

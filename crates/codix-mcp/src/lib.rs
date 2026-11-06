@@ -199,7 +199,7 @@ impl Router {
             Ok(request) => request,
             Err(e) => return failure(&usage(format!("invalid arguments: {e}")), &[]),
         };
-        let ctx = match Context::discover(cwd, None) {
+        let ctx = match Context::locate(cwd, None) {
             Ok(ctx) => ctx,
             Err(error) => return failure(&error, &[]),
         };
@@ -209,6 +209,7 @@ impl Router {
         let (outcome, warnings) = match client::call::<O>(&ctx, &request) {
             Route::Daemon { outcome, warnings } => (outcome, warnings),
             Route::InProcess { warnings } => {
+                let ctx = ctx.clone().with_project_warnings();
                 let mut all = ctx.warnings().to_vec();
                 all.extend(warnings);
                 (op.run(&ctx, request), all)
@@ -220,7 +221,7 @@ impl Router {
         };
         // A project `init` just created has no daemon yet.
         if O::NAME == InitOp::NAME
-            && let Ok(ctx) = Context::discover(cwd, None)
+            && let Ok(ctx) = Context::locate(cwd, None)
         {
             self.ensure_daemon(&ctx);
         }
