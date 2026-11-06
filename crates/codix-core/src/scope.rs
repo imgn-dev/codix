@@ -5,13 +5,21 @@
 //!
 //! - `@local.scope.<kind>` marks a scope, such as `class` or `block`;
 //!   `(#set! local.opaque)` marks one where a name not found may be a member
-//!   codix cannot see, such as an inherited one.
+//!   codix cannot see, such as an inherited one, and
+//!   `(#set! local.opaque "members")` one where such a member can hide
+//!   symbols but not locals, as with a Kotlin lambda's receiver.
 //! - `@local.definition.<kind>` marks the name of a local definition, such
 //!   as a `parameter` or `variable`. `(#set! local.reuse)` makes it a write
 //!   to an earlier definition of the name in the same scope, if there is
 //!   one, as Go's `:=` does. `@local.after` in the same match makes the
 //!   definition visible only after that node, as in Go's `x := x + 1`.
-//!   The symbols of the `tags` query are definitions too.
+//!   `(#set! local.scope "<kind>")` defines it in the nearest enclosing
+//!   scope of that kind rather than the innermost one, as JavaScript's `var`
+//!   is defined in its function. The symbols of the `tags` query are
+//!   definitions too.
+//! - `@local.global` and `@local.nonlocal` mark a name a scope declares as
+//!   the file's or an enclosing function's, as Python's `global` and
+//!   `nonlocal` do: assignments to it there are writes to that one.
 //! - `@local.reference.<context>` marks a reference, `@local.receiver` the
 //!   object of a member access in the same match, and `@local.skip` a name
 //!   that is no reference.
@@ -39,6 +47,20 @@ pub const FILE_SCOPE: &str = "file";
 
 /// The kind of scope a self receiver such as `this` refers to the members of.
 pub const CLASS_SCOPE: &str = "class";
+
+/// The kind of scope of a function, method or lambda body.
+pub const FUNCTION_SCOPE: &str = "function";
+
+/// What a scope may hide that codix cannot see.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Opacity {
+    /// Nothing: every name in scope here is in the file.
+    Clear,
+    /// Members that can hide symbols of the file, not its locals.
+    Members,
+    /// Members that can hide any name.
+    All,
+}
 
 /// Where a reference appears.
 #[derive(
@@ -104,8 +126,8 @@ pub struct ScopeNode {
     pub end: usize,
     /// Enclosing scope; `None` for the file scope only.
     pub parent: Option<usize>,
-    /// Whether members codix cannot see may be in scope here.
-    pub opaque: bool,
+    /// What members codix cannot see may hide here.
+    pub opacity: Opacity,
 }
 
 /// What a definition defines.
@@ -298,6 +320,8 @@ struct LocalCapture<'tree> {
     kind: String,
     reuse: bool,
     after: Option<usize>,
+    /// The kind of enclosing scope to define it in, if not the innermost.
+    place_in: Option<String>,
 }
 
 /// A reference captured by the query, with the pattern that captured it.
@@ -311,12 +335,72 @@ struct RefCapture<'tree> {
     pattern: usize,
 }
 
+/// What one match tells about its captures.
+struct Pattern<'q> {
+    index: usize,
+    settings: &'q [tree_sitter::QueryProperty],
+    receiver: Receiver,
+    after: Option<usize>,
+}
+
+impl Pattern<'_> {
+    fn set(&self, key: &str) -> bool {
+        self.settings.iter().any(|p| &*p.key == key)
+    }
+
+    fn value(&self, key: &str) -> Option<&str> {
+        self.settings
+            .iter()
+            .find(|p| &*p.key == key)
+            .and_then(|p| p.value.as_deref())
+    }
+}
+
+/// Everything the query captured in a file.
+#[derive(Default)]
+struct Captures<'tree> {
+    scopes: Vec<ScopeNode>,
+    locals: Vec<LocalCapture<'tree>>,
+    refs: HashMap<(usize, usize), RefCapture<'tree>>,
+    declarations: Vec<(Node<'tree>, Declared)>,
+}
+
+impl<'tree> RefCapture<'tree> {
+    fn new(
+        text: &str,
+        node: Node<'tree>,
+        context: Option<RefContext>,
+        receiver: Receiver,
+        pattern: usize,
+    ) -> Self {
+        Self {
+            node,
+            start: node.start_byte(),
+            end: node.end_byte(),
+            span: span(text, node),
+            context,
+            receiver,
+            pattern,
+        }
+    }
+}
+
 struct Builder<'a> {
     descriptor: &'a LanguageDescriptor,
     content: &'a str,
     model: FileModel,
     /// Definitions by scope, name and namespace, in file order.
     by_name: HashMap<(usize, String, String), Vec<usize>>,
+    /// Names scopes declare as the file's (`global`) or an enclosing
+    /// function's (`nonlocal`), by scope and name.
+    declared: HashMap<(usize, String), Declared>,
+}
+
+/// Where a `global` or `nonlocal` declaration sends a name.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Declared {
+    Global,
+    Nonlocal,
 }
 
 impl<'a> Builder<'a> {
@@ -329,95 +413,123 @@ impl<'a> Builder<'a> {
                 ..FileModel::default()
             },
             by_name: HashMap::new(),
+            declared: HashMap::new(),
         }
     }
 
     fn build(mut self, query: &tree_sitter::Query, tree: &Tree) -> FileModel {
         let names = query.capture_names();
-        let mut scopes: Vec<ScopeNode> = Vec::new();
-        let mut locals: Vec<LocalCapture<'_>> = Vec::new();
-        let mut refs: HashMap<(usize, usize), RefCapture<'_>> = HashMap::new();
+        let mut captures = Captures::default();
         let mut cursor = QueryCursor::new();
         let mut matches = cursor.matches(query, tree.root_node(), self.content.as_bytes());
         while let Some(m) = matches.next() {
             let settings = query.property_settings(m.pattern_index);
-            let set = |key: &str| settings.iter().any(|p| &*p.key == key);
-            let receiver = m
-                .captures()
-                .iter()
-                .find(|c| names[c.index as usize] == "local.receiver")
-                .map(|c| {
-                    let text = node_text(self.content, c.node);
-                    if self
-                        .descriptor
-                        .scopes
-                        .self_receivers
-                        .iter()
-                        .any(|s| s == text)
-                    {
-                        Receiver::Own
-                    } else {
-                        Receiver::Other
-                    }
-                });
-            let after = m
-                .captures()
-                .iter()
-                .find(|c| names[c.index as usize] == "local.after")
-                .map(|c| c.node.end_byte());
-            for capture in m.captures() {
-                let name = names[capture.index as usize];
-                let node = capture.node;
-                if let Some(kind) = name.strip_prefix("local.scope.") {
-                    scopes.push(ScopeNode {
-                        kind: kind.to_owned(),
-                        start: node.start_byte(),
-                        end: node.end_byte(),
-                        parent: None,
-                        opaque: set("local.opaque"),
-                    });
-                } else if let Some(kind) = name.strip_prefix("local.definition.") {
-                    locals.push(LocalCapture {
-                        node,
-                        start: node.start_byte(),
-                        end: node.end_byte(),
-                        span: span(self.content, node),
-                        kind: kind.to_owned(),
-                        reuse: set("local.reuse"),
-                        after,
-                    });
-                } else if let Some(context) = name.strip_prefix("local.reference.") {
-                    let capture = RefCapture {
-                        node,
-                        start: node.start_byte(),
-                        end: node.end_byte(),
-                        span: span(self.content, node),
-                        context: RefContext::parse(context),
-                        receiver: receiver.unwrap_or(Receiver::None),
-                        pattern: m.pattern_index,
-                    };
-                    keep_last(&mut refs, capture);
-                } else if name == "local.skip" {
-                    keep_last(
-                        &mut refs,
-                        RefCapture {
-                            node,
-                            start: node.start_byte(),
-                            end: node.end_byte(),
-                            span: span(self.content, node),
-                            context: None,
-                            receiver: Receiver::None,
-                            pattern: m.pattern_index,
-                        },
-                    );
+            let find = |name: &str| {
+                m.captures()
+                    .iter()
+                    .find(|c| names[c.index as usize] == name)
+                    .map(|c| c.node)
+            };
+            let receiver = find("local.receiver").map(|node| {
+                let text = node_text(self.content, node);
+                if self
+                    .descriptor
+                    .scopes
+                    .self_receivers
+                    .iter()
+                    .any(|s| s == text)
+                {
+                    Receiver::Own
+                } else {
+                    Receiver::Other
                 }
+            });
+            let pattern = Pattern {
+                index: m.pattern_index,
+                settings,
+                receiver: receiver.unwrap_or(Receiver::None),
+                after: find("local.after").map(|node| node.end_byte()),
+            };
+            for capture in m.captures() {
+                self.collect(
+                    names[capture.index as usize],
+                    capture.node,
+                    &pattern,
+                    &mut captures,
+                );
             }
         }
-        self.scopes(scopes);
-        self.definitions(locals, &mut refs);
-        self.references(refs);
+        self.scopes(captures.scopes);
+        for (node, declared) in captures.declarations {
+            let scope = self.scope_of(node.start_byte(), node.end_byte(), false);
+            self.declared
+                .insert((scope, node_text(self.content, node).to_owned()), declared);
+        }
+        self.definitions(captures.locals, &mut captures.refs, tree);
+        self.references(captures.refs);
         self.bind();
         self.model
+    }
+
+    /// Records one capture of a match.
+    fn collect<'tree>(
+        &self,
+        name: &str,
+        node: Node<'tree>,
+        pattern: &Pattern<'_>,
+        captures: &mut Captures<'tree>,
+    ) {
+        if let Some(kind) = name.strip_prefix("local.scope.") {
+            captures.scopes.push(ScopeNode {
+                kind: kind.to_owned(),
+                start: node.start_byte(),
+                end: node.end_byte(),
+                parent: None,
+                opacity: match pattern.value("local.opaque") {
+                    Some("members") => Opacity::Members,
+                    _ if pattern.set("local.opaque") => Opacity::All,
+                    _ => Opacity::Clear,
+                },
+            });
+        } else if let Some(kind) = name.strip_prefix("local.definition.") {
+            captures.locals.push(LocalCapture {
+                node,
+                start: node.start_byte(),
+                end: node.end_byte(),
+                span: span(self.content, node),
+                kind: kind.to_owned(),
+                reuse: pattern.set("local.reuse"),
+                after: pattern.after,
+                place_in: pattern.value("local.scope").map(str::to_owned),
+            });
+        } else if let Some(context) = name.strip_prefix("local.reference.") {
+            let capture = RefCapture::new(
+                self.content,
+                node,
+                RefContext::parse(context),
+                pattern.receiver,
+                pattern.index,
+            );
+            keep_last(&mut captures.refs, capture);
+        } else if name == "local.global" || name == "local.nonlocal" {
+            let declared = if name == "local.global" {
+                Declared::Global
+            } else {
+                Declared::Nonlocal
+            };
+            captures.declarations.push((node, declared));
+            let capture = RefCapture::new(
+                self.content,
+                node,
+                Some(RefContext::Write),
+                Receiver::None,
+                usize::MAX,
+            );
+            keep_last(&mut captures.refs, capture);
+        } else if name == "local.skip" {
+            let capture = RefCapture::new(self.content, node, None, Receiver::None, pattern.index);
+            keep_last(&mut captures.refs, capture);
+        }
     }
 
     /// Orders the scopes outermost first and links each to its parent.
@@ -426,7 +538,7 @@ impl<'a> Builder<'a> {
         captured.dedup_by(|b, a| {
             let same = (a.start, a.end) == (b.start, b.end);
             if same {
-                a.opaque |= b.opaque;
+                a.opacity = a.opacity.max(b.opacity);
             }
             same
         });
@@ -435,7 +547,7 @@ impl<'a> Builder<'a> {
             start: 0,
             end: self.content.len(),
             parent: None,
-            opaque: false,
+            opacity: Opacity::Clear,
         }];
         let mut open: Vec<usize> = vec![0];
         for mut scope in captured {
@@ -478,6 +590,7 @@ impl<'a> Builder<'a> {
         &mut self,
         mut locals: Vec<LocalCapture<'tree>>,
         refs: &mut HashMap<(usize, usize), RefCapture<'tree>>,
+        tree: &Tree,
     ) {
         let scopes = &self.descriptor.scopes;
         let mut taken: HashSet<(usize, usize)> = HashSet::new();
@@ -489,7 +602,17 @@ impl<'a> Builder<'a> {
             );
             taken.insert(name);
             refs.remove(&name);
-            let namespace = scopes.namespace_of(&symbol.kind).to_owned();
+            let named_as_member = !scopes.member_name_parents.is_empty()
+                && tree
+                    .root_node()
+                    .descendant_for_byte_range(name.0, name.1)
+                    .and_then(|n| n.parent())
+                    .is_some_and(|p| scopes.member_name_parents.iter().any(|k| k == p.kind()));
+            let namespace = if named_as_member {
+                codix_provider::descriptor::MEMBER_NAMESPACE.to_owned()
+            } else {
+                scopes.namespace_of(&symbol.kind).to_owned()
+            };
             let scope = self.scope_of(
                 symbol.range.start.byte as usize,
                 symbol.range.end.byte as usize,
@@ -516,11 +639,17 @@ impl<'a> Builder<'a> {
             if !taken.insert(range) {
                 continue;
             }
-            let scope = self.scope_of(local.start, local.end, false);
+            let mut scope = self.scope_of(local.start, local.end, false);
+            if let Some(kind) = &local.place_in {
+                while scope != 0 && self.model.scopes[scope].kind != *kind {
+                    scope = self.model.scopes[scope].parent.unwrap_or(0);
+                }
+            }
             let name = self.content[local.start..local.end].to_owned();
             let namespace = scopes.namespace_of(&local.kind).to_owned();
             let key = (scope, name.clone(), namespace.clone());
-            let earlier = local.reuse && self.by_name.contains_key(&key);
+            let earlier = (local.reuse && self.by_name.contains_key(&key))
+                || self.declared.contains_key(&(scope, name.clone()));
             if earlier {
                 // A redeclaration that reuses the variable: a write to it.
                 refs.insert(
@@ -605,29 +734,51 @@ impl<'a> Builder<'a> {
                 let Some(class) = self.enclosing_class(reference.scope) else {
                     return Binding::Free;
                 };
-                namespaces
+                rules
+                    .members_read_by(reference.context.as_str())
                     .iter()
                     .find_map(|ns| self.visible(class, &reference.name, ns, None))
                     .map_or(Binding::Free, Binding::Bound)
             }
             Receiver::None => {
                 for ns in namespaces {
-                    let mut crossed_opaque = false;
+                    let mut crossed = Opacity::Clear;
+                    let mut in_function = false;
                     let mut scope = Some(reference.scope);
-                    while let Some(s) = scope {
-                        if let Some(found) = self.visible(
-                            s,
-                            &reference.name,
-                            ns,
-                            Some(reference.range.start.byte as usize),
-                        ) {
-                            return if crossed_opaque {
-                                Binding::Uncertain
-                            } else {
-                                Binding::Bound(found)
-                            };
+                    while let Some(mut s) = scope {
+                        match self.declared.get(&(s, reference.name.clone())) {
+                            Some(Declared::Global) => s = 0,
+                            Some(Declared::Nonlocal) => {
+                                in_function = true;
+                                scope = self.model.scopes[s].parent;
+                                continue;
+                            }
+                            None => {}
                         }
                         let node = &self.model.scopes[s];
+                        let hidden =
+                            in_function && rules.hidden_from_functions.contains(&node.kind);
+                        if !hidden
+                            && let Some(found) = self.visible(
+                                s,
+                                &reference.name,
+                                ns,
+                                Some(reference.range.start.byte as usize),
+                            )
+                        {
+                            let is_symbol =
+                                matches!(self.model.definitions[found].defines, Defines::Symbol(_));
+                            return match crossed {
+                                Opacity::All => Binding::Uncertain,
+                                Opacity::Members if is_symbol => Binding::Uncertain,
+                                _ => Binding::Bound(found),
+                            };
+                        }
+                        in_function |= node.kind == FUNCTION_SCOPE;
+                        if hidden {
+                            scope = node.parent;
+                            continue;
+                        }
                         if node.kind == CLASS_SCOPE
                             && rules
                                 .implicit_members
@@ -637,7 +788,7 @@ impl<'a> Builder<'a> {
                             // An inherited member, defined in another file.
                             return Binding::Free;
                         }
-                        crossed_opaque |= node.opaque;
+                        crossed = crossed.max(node.opacity);
                         scope = node.parent;
                     }
                 }

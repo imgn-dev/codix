@@ -1,0 +1,58 @@
+1:10 import Shape
+1:25 import shapeArea
+2:15 import Options
+9:11 type_parameter T
+9:17 type T -> 9:11
+9:20 type T -> 9:11
+16:19 type_parameter T
+16:29 type Priced -> 4:11
+16:48 type Iterable -> free
+16:57 type T -> 16:19
+17:18 type T -> 16:19
+19:32 parameter options
+19:41 type Options -> 2:15
+21:7 parameter item
+21:13 type T -> 16:19
+21:16 parameter color
+21:23 type Color -> 11:6
+21:31 read Color -> 11:6
+21:37 read Red -> free
+21:43 type Pair -> 9:6
+22:10 read items -> 17:11
+22:16 call push -> free
+22:21 read item -> 21:7
+23:11 variable total
+23:32 call total -> 27:3
+24:13 read total -> 23:11
+24:20 read item -> 21:7
+24:25 read price -> free
+28:9 variable sum
+29:16 variable item
+29:29 read items -> 17:11
+30:7 write sum -> 28:9
+30:14 read item -> 29:16
+30:19 read price -> free
+32:12 read sum -> 28:9
+35:4 read Symbol -> free
+35:11 read iterator -> free
+35:24 type Iterator -> free
+35:33 type T -> 16:19
+36:17 read items -> 17:11
+36:23 read Symbol -> free
+36:30 read iterator -> free
+41:25 parameter shape
+41:32 type Shape -> 1:10
+41:39 parameter by
+42:12 call shapeArea -> 1:25
+42:22 read shape -> 41:25
+42:31 read by -> 41:39
+46:16 type_parameter U
+46:19 parameter values
+46:27 type U -> 46:16
+46:32 parameter fallback
+46:43 type U -> 46:16
+46:47 type U -> 46:16
+47:10 read values -> 46:19
+47:23 read fallback -> 46:32
+50:16 read Geometry -> 40:11
+50:25 read scale -> free

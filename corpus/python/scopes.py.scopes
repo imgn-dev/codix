@@ -1,0 +1,82 @@
+1:8 import os
+2:19 import osp
+3:25 import OrderedDict
+3:53 import dd
+9:11 parameter values
+9:19 parameter start
+9:29 parameter rest
+9:35 parameter scale
+9:42 type int -> free
+9:53 parameter options
+10:5 variable result
+10:14 read start -> 9:19
+11:9 variable value
+11:18 read values -> 9:11
+12:9 write result -> 10:5
+12:19 read value -> 11:9
+12:27 read scale -> 9:35
+13:5 variable squares
+13:16 read v -> 13:26
+13:20 read v -> 13:26
+13:26 variable v
+13:31 read values -> 9:11
+13:41 read v -> 13:26
+13:45 read LIMIT -> 5:1
+14:9 variable n
+14:14 call len -> free
+14:18 read squares -> 13:5
+14:30 read LIMIT -> 5:1
+15:9 write result -> 10:5
+15:18 read n -> 14:9
+16:12 read result -> 10:5
+16:21 call len -> free
+16:25 read rest -> 9:29
+16:33 call len -> free
+16:37 read options -> 9:53
+20:12 write counter -> 6:1
+21:5 write counter -> 6:1
+21:15 read counter -> 6:1
+22:12 read os -> 1:8
+22:15 call getcwd -> free
+26:5 variable count
+29:18 write count -> 26:5
+30:9 write count -> 26:5
+31:16 read count -> 26:5
+33:12 read inner -> 28:9
+39:18 parameter self
+39:24 parameter lines
+40:9 read self -> 39:18
+40:14 write lines -> free
+40:22 read lines -> 39:24
+41:9 read self -> 39:18
+41:14 write rate -> 37:5
+41:21 read rate -> free
+43:16 parameter self
+44:16 read self -> 43:16
+44:21 call total -> 46:9
+44:31 read self -> 43:16
+44:36 read rate -> 37:5
+46:15 parameter self
+47:16 call total -> 9:5
+47:22 read self -> 46:15
+47:27 read lines -> free
+47:34 read scale -> free
+47:40 read Invoice -> 36:7
+47:48 read rate -> free
+49:13 read rate -> 37:5
+52:12 parameter path
+54:14 call open -> free
+54:19 read path -> 52:12
+54:28 variable handle_file
+55:20 read handle_file -> 54:28
+55:32 call read -> free
+56:12 read OSError -> free
+56:23 variable error
+57:16 call str -> free
+57:20 read error -> 56:23
+58:5 call later -> 61:5
+62:12 call OrderedDict -> 3:25
+62:27 call dd -> 3:53
+62:30 read list -> free
+62:37 read osp -> 2:19
+62:41 read sep -> free

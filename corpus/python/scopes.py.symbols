@@ -1,0 +1,14 @@
+5:1 constant LIMIT | LIMIT
+6:1 variable counter | counter
+9:5 function total | def total(values, start=0, *rest, scale: int = 1, **options)
+19:5 function bump | def bump()
+25:5 function outer | def outer()
+28:9 function outer.inner | def inner()
+36:7 class Invoice | class Invoice
+37:5 field Invoice.rate | rate
+39:9 constructor Invoice.__init__ | def __init__(self, lines)
+43:9 method Invoice.amount | def amount(self)
+46:9 method Invoice.total | def total(self)
+49:5 field Invoice.shown | shown
+52:5 function handle | def handle(path)
+61:5 function later | def later()

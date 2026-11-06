@@ -1,0 +1,13 @@
+1:10 import useState
+5:27 variable label
+5:36 type Props -> 3:6
+6:10 variable count
+6:17 variable setCount
+6:29 call useState -> 1:10
+9:8 read Button -> 15:10
+9:30 call setCount -> 6:17
+9:39 read count -> 6:10
+10:8 read label -> 5:27
+15:17 parameter props
+16:27 read props -> 15:17
+16:33 read onClick -> free

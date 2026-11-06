@@ -1,0 +1,5 @@
+3:6 type_alias Props | type Props
+3:16 property Props.label | label: string
+5:17 function Counter | function Counter({ label }: Props)
+15:10 function Button | function Button(props: { onClick: () => void })
+15:26 property Button.onClick | onClick: () => void

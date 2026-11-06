@@ -13,3 +13,29 @@ body_fields = ["body", "value"]
 [symbols.visibility]
 node = "accessibility_modifier"
 values = ["public", "protected", "private"]
+
+# Interfaces, type aliases and type parameters are types only; classes and
+# enums are values and types. Members are reached through `this` or another
+# object, never by a plain name.
+[scopes]
+hoisted = ["function", "class", "block", "type"]
+self_receivers = ["this"]
+member_name_parents = ["member_expression", "pair", "public_field_definition"]
+
+[scopes.namespaces]
+interface = "type"
+type_alias = "type"
+type_parameter = "type"
+method = "member"
+constructor = "member"
+field = "member"
+property = "member"
+enum_member = "member"
+
+[scopes.contexts]
+type = ["type", "value"]
+
+[scopes.member_contexts]
+call = ["member"]
+read = ["member"]
+write = ["member"]

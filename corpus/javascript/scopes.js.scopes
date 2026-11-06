@@ -1,0 +1,66 @@
+1:8 import React
+1:29 import useLocal
+1:39 import useEffect
+2:13 import path
+6:16 parameter items
+6:23 parameter start
+6:37 parameter rest
+7:7 variable sum
+7:13 read start -> 6:23
+8:12 variable i
+8:19 read i -> 8:12
+8:23 read items -> 6:16
+8:29 read length -> free
+8:37 write i -> 8:12
+9:9 variable item
+9:16 read items -> 6:16
+9:22 read i -> 8:12
+10:5 write sum -> 7:7
+10:12 read item -> 9:9
+10:17 read price -> free
+12:7 read sum -> 7:7
+12:13 read LIMIT -> 4:7
+13:9 variable capped
+13:18 read LIMIT -> 4:7
+15:10 read capped -> 13:9
+15:20 read sum -> 7:7
+15:26 read rest -> 6:37
+15:31 read length -> free
+18:17 parameter x
+18:23 read x -> 18:17
+19:16 parameter x
+19:21 read x -> 19:16
+19:25 read x -> 19:16
+24:15 parameter items
+25:10 write items -> free
+25:18 read items -> 24:15
+29:12 call total -> 6:10
+29:23 read items -> free
+29:37 read count -> 22:3
+32:7 parameter item
+33:13 variable price
+33:26 variable label
+33:36 read item -> 32:7
+34:12 variable first
+34:19 variable second
+34:34 read price -> 33:13
+34:41 read label -> 33:26
+35:10 read items -> free
+35:16 call push -> free
+35:21 read item -> 32:7
+36:17 call total -> 28:3
+36:27 read first -> 34:12
+36:35 read second -> 34:19
+42:12 read path -> 2:13
+42:17 call join -> free
+45:12 read fetch -> free
+50:10 call later -> 53:10
+50:20 call useLocal -> 1:29
+50:34 read useEffect -> 1:39
+55:12 call double -> 18:7
+55:19 call square -> 19:7
+56:12 parameter error
+57:12 read error -> 56:12
+62:16 read Cart -> 21:7
+65:10 read total -> 6:10
+65:24 read Cart -> 21:7

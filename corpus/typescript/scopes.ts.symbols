@@ -1,0 +1,16 @@
+4:11 interface Priced | interface Priced
+5:3 property Priced.price | price: number
+6:3 property Priced.label | label?: string
+9:6 type_alias Pair | type Pair<T>
+11:6 enum Color | enum Color
+12:3 enum_member Color.Red | Red
+13:3 enum_member Color.Green | Green
+16:14 class Cart | class Cart<T extends Priced> implements Iterable<T>
+17:11 field Cart.items [private] | private items: T[]
+19:3 constructor Cart.constructor | constructor(private readonly options: Options)
+21:3 method Cart.add | add(item: T, color: Color = Color.Red): Pair<number>
+27:3 method Cart.total | total(): number
+40:11 namespace Geometry | namespace Geometry
+41:19 function Geometry.scale | function scale(shape: Shape, by: number): number
+46:10 function first | function first<U>(values: U[], fallback?: U): U | undefined
+50:7 constant scaled | scaled

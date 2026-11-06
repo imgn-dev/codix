@@ -24,7 +24,7 @@ pub use inventory;
 /// Registers a provider: `register!(Vcs, "git", "descriptor.toml")`, with
 /// paths relative to the calling crate's manifest directory. A language pack
 /// that parses adds its grammar and `tags` query, and for tier 2 its `locals`
-/// query:
+/// query, which may be several files concatenated:
 /// `register!(Language, "java", "descriptor.toml", tree_sitter_java::LANGUAGE, "queries/tags.scm", "queries/locals.scm")`;
 /// a build system adds its resolver: `register!(Build, "maven", "descriptor.toml", &Maven)`.
 #[macro_export]
@@ -66,7 +66,7 @@ macro_rules! register {
             }
         }
     };
-    (Language, $name:literal, $path:literal, $language:expr, $tags:literal, $locals:literal) => {
+    (Language, $name:literal, $path:literal, $language:expr, $tags:literal, $($locals:literal),+) => {
         $crate::inventory::submit! {
             $crate::ProviderEntry {
                 kind: $crate::ProviderKind::Language,
@@ -75,7 +75,7 @@ macro_rules! register {
                 grammar: Some($crate::Grammar {
                     language: $language,
                     tags: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $tags)),
-                    locals: Some(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $locals))),
+                    locals: Some(concat!($(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $locals))),+)),
                 }),
                 resolver: None,
             }

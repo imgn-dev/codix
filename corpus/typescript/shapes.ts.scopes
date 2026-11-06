@@ -1,0 +1,30 @@
+2:22 read Map -> free
+2:34 type Handler -> 10:6
+3:5 variable mutable
+10:17 parameter event
+18:29 type Point -> 28:14
+19:16 read Point -> 28:14
+23:39 type Shape -> 5:18
+28:28 read Base -> 23:23
+32:15 parameter x
+32:36 parameter y
+34:10 write x -> 30:19
+34:14 read x -> 32:15
+41:11 parameter dx
+42:10 read x -> 30:19
+42:15 read dx -> 41:11
+46:26 parameter a
+46:29 type Point -> 28:14
+46:36 parameter b
+46:39 type Point -> 28:14
+47:10 read Math -> free
+47:15 call hypot -> free
+47:21 read a -> 46:26
+47:23 read x -> free
+47:27 read b -> 46:36
+47:29 read x -> free
+50:14 parameter a
+50:25 parameter b
+50:39 read a -> 50:14
+50:43 read b -> 50:25
+52:27 parameter x

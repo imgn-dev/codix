@@ -1,0 +1,15 @@
+4:7 constant LIMIT | LIMIT
+6:10 function total | function total(items, start = 0, ...rest)
+18:7 function double | double
+19:7 function square | square
+21:7 class Cart | class Cart
+22:3 field Cart.count | count
+24:3 constructor Cart.constructor | constructor(items)
+28:3 method Cart.total | total()
+32:3 method Cart.add | add(item)
+40:7 constant api | api
+41:3 function api.fetch | fetch
+44:3 method api.helper | helper()
+49:10 function hoisted | function hoisted()
+53:10 function later | function later()
+61:10 function View | function View()
