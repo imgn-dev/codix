@@ -38,7 +38,7 @@
 59:14 type Color -> 57:10
 59:20 parameter color
 60:17 read color -> 59:20
-61:18 read RED -> free
+61:18 read RED -> uncertain
 64:24 read count -> 5:17
 68:6 type_parameter T
 68:16 type Comparable -> free

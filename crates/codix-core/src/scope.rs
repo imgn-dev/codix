@@ -7,11 +7,15 @@
 //!   `(#set! local.opaque)` marks one where a name not found may be a member
 //!   codix cannot see, such as an inherited one, and
 //!   `(#set! local.opaque "members")` one where such a member can hide
-//!   symbols but not locals, as with a Kotlin lambda's receiver.
+//!   symbols but not locals, as with a Kotlin lambda's receiver. A name
+//!   found nowhere in the file after crossing an opaque scope is uncertain.
+//!   `(#set! local.transparent)` marks a scope whose symbols belong to the
+//!   scope around it, as a C++ template's do.
 //! - `@local.definition.<kind>` marks the name of a local definition, such
 //!   as a `parameter` or `variable`. `(#set! local.reuse)` makes it a write
 //!   to an earlier definition of the name in the same scope, if there is
-//!   one, as Go's `:=` does. `@local.after` in the same match makes the
+//!   one, as Go's `:=` does; `(#set! local.reuse "visible")`, to any
+//!   definition visible from there, as a Ruby assignment in a block does. `@local.after` in the same match makes the
 //!   definition visible only after that node, as in Go's `x := x + 1`.
 //!   `(#set! local.scope "<kind>")` defines it in the nearest enclosing
 //!   scope of that kind rather than the innermost one, as JavaScript's `var`
@@ -128,6 +132,8 @@ pub struct ScopeNode {
     pub parent: Option<usize>,
     /// What members codix cannot see may hide here.
     pub opacity: Opacity,
+    /// Whether symbols defined directly in it belong to its parent.
+    pub transparent: bool,
 }
 
 /// What a definition defines.
@@ -318,10 +324,19 @@ struct LocalCapture<'tree> {
     end: usize,
     span: Span,
     kind: String,
-    reuse: bool,
+    reuse: Option<Reuse>,
     after: Option<usize>,
     /// The kind of enclosing scope to define it in, if not the innermost.
     place_in: Option<String>,
+}
+
+/// Which earlier definition a definition may write instead.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Reuse {
+    /// One in the same scope.
+    SameScope,
+    /// Any one visible from there.
+    Visible,
 }
 
 /// A reference captured by the query, with the pattern that captured it.
@@ -490,6 +505,7 @@ impl<'a> Builder<'a> {
                     _ if pattern.set("local.opaque") => Opacity::All,
                     _ => Opacity::Clear,
                 },
+                transparent: pattern.set("local.transparent"),
             });
         } else if let Some(kind) = name.strip_prefix("local.definition.") {
             captures.locals.push(LocalCapture {
@@ -498,7 +514,11 @@ impl<'a> Builder<'a> {
                 end: node.end_byte(),
                 span: span(self.content, node),
                 kind: kind.to_owned(),
-                reuse: pattern.set("local.reuse"),
+                reuse: match pattern.value("local.reuse") {
+                    Some("visible") => Some(Reuse::Visible),
+                    _ if pattern.set("local.reuse") => Some(Reuse::SameScope),
+                    _ => None,
+                },
                 after: pattern.after,
                 place_in: pattern.value("local.scope").map(str::to_owned),
             });
@@ -539,6 +559,7 @@ impl<'a> Builder<'a> {
             let same = (a.start, a.end) == (b.start, b.end);
             if same {
                 a.opacity = a.opacity.max(b.opacity);
+                a.transparent |= b.transparent;
             }
             same
         });
@@ -548,6 +569,7 @@ impl<'a> Builder<'a> {
             end: self.content.len(),
             parent: None,
             opacity: Opacity::Clear,
+            transparent: false,
         }];
         let mut open: Vec<usize> = vec![0];
         for mut scope in captured {
@@ -588,13 +610,27 @@ impl<'a> Builder<'a> {
 
     fn definitions<'tree>(
         &mut self,
-        mut locals: Vec<LocalCapture<'tree>>,
+        locals: Vec<LocalCapture<'tree>>,
         refs: &mut HashMap<(usize, usize), RefCapture<'tree>>,
         tree: &Tree,
     ) {
-        let scopes = &self.descriptor.scopes;
         let mut taken: HashSet<(usize, usize)> = HashSet::new();
         let mut definitions = Vec::new();
+        self.symbol_definitions(&mut definitions, &mut taken, refs, tree);
+        self.local_definitions(&mut definitions, &mut taken, locals, refs);
+        self.order(definitions);
+    }
+
+    /// The symbols of the `tags` query, as definitions; their names are no
+    /// references.
+    fn symbol_definitions(
+        &mut self,
+        definitions: &mut Vec<Definition>,
+        taken: &mut HashSet<(usize, usize)>,
+        refs: &mut HashMap<(usize, usize), RefCapture<'_>>,
+        tree: &Tree,
+    ) {
+        let scopes = &self.descriptor.scopes;
         for (i, symbol) in self.model.symbols.iter().enumerate() {
             let name = (
                 symbol.name_range.start.byte as usize,
@@ -613,11 +649,14 @@ impl<'a> Builder<'a> {
             } else {
                 scopes.namespace_of(&symbol.kind).to_owned()
             };
-            let scope = self.scope_of(
+            let mut scope = self.scope_of(
                 symbol.range.start.byte as usize,
                 symbol.range.end.byte as usize,
                 true,
             );
+            while scope != 0 && self.model.scopes[scope].transparent {
+                scope = self.model.scopes[scope].parent.unwrap_or(0);
+            }
             self.by_name
                 .entry((scope, symbol.name.clone(), namespace.clone()))
                 .or_default()
@@ -628,10 +667,22 @@ impl<'a> Builder<'a> {
                 namespace,
                 scope,
                 name_range: symbol.name_range,
-                visible_from: name.0,
+                visible_from: if scopes.symbols_hoisted { 0 } else { name.0 },
                 low: symbol.confidence == Confidence::Low,
             });
         }
+    }
+
+    /// The locals the query captured, or writes where one reuses an earlier
+    /// definition.
+    fn local_definitions<'tree>(
+        &mut self,
+        definitions: &mut Vec<Definition>,
+        taken: &mut HashSet<(usize, usize)>,
+        mut locals: Vec<LocalCapture<'tree>>,
+        refs: &mut HashMap<(usize, usize), RefCapture<'tree>>,
+    ) {
+        let scopes = &self.descriptor.scopes;
         locals.sort_by_key(|l| l.start);
         locals.dedup_by_key(|l| (l.start, l.end));
         for local in locals {
@@ -648,8 +699,13 @@ impl<'a> Builder<'a> {
             let name = self.content[local.start..local.end].to_owned();
             let namespace = scopes.namespace_of(&local.kind).to_owned();
             let key = (scope, name.clone(), namespace.clone());
-            let earlier = (local.reuse && self.by_name.contains_key(&key))
-                || self.declared.contains_key(&(scope, name.clone()));
+            let earlier = match local.reuse {
+                Some(Reuse::SameScope) => self.by_name.contains_key(&key),
+                Some(Reuse::Visible) => {
+                    self.visible_outward(definitions, scope, &name, &namespace, local.start)
+                }
+                None => false,
+            } || self.declared.contains_key(&(scope, name.clone()));
             if earlier {
                 // A redeclaration that reuses the variable: a write to it.
                 refs.insert(
@@ -678,6 +734,10 @@ impl<'a> Builder<'a> {
                 low: self.near_error(local.node),
             });
         }
+    }
+
+    /// Puts the definitions in file order, and their index with them.
+    fn order(&mut self, definitions: Vec<Definition>) {
         let mut order: Vec<usize> = (0..definitions.len()).collect();
         order.sort_by_key(|&i| definitions[i].name_range.start.byte);
         let mut new_index = vec![0; definitions.len()];
@@ -690,7 +750,8 @@ impl<'a> Builder<'a> {
             }
             indices.sort_unstable();
         }
-        self.model.definitions = order.into_iter().map(|i| definitions[i].clone()).collect();
+        let mut slots: Vec<Option<Definition>> = definitions.into_iter().map(Some).collect();
+        self.model.definitions = order.into_iter().filter_map(|i| slots[i].take()).collect();
     }
 
     fn references(&mut self, refs: HashMap<(usize, usize), RefCapture<'_>>) {
@@ -741,6 +802,9 @@ impl<'a> Builder<'a> {
                     .map_or(Binding::Free, Binding::Bound)
             }
             Receiver::None => {
+                // Whether a scope that may hide members was crossed on the
+                // way out: a name found nowhere may be one of those members.
+                let mut maybe_hidden = false;
                 for ns in namespaces {
                     let mut crossed = Opacity::Clear;
                     let mut in_function = false;
@@ -789,10 +853,22 @@ impl<'a> Builder<'a> {
                             return Binding::Free;
                         }
                         crossed = crossed.max(node.opacity);
+                        if rules
+                            .closed
+                            .get(&node.kind)
+                            .is_some_and(|closed| closed.iter().any(|c| c == ns))
+                        {
+                            break;
+                        }
                         scope = node.parent;
                     }
+                    maybe_hidden |= crossed == Opacity::All;
                 }
-                Binding::Free
+                if maybe_hidden {
+                    Binding::Uncertain
+                } else {
+                    Binding::Free
+                }
             }
         }
     }
@@ -824,6 +900,39 @@ impl<'a> Builder<'a> {
         false
     }
 
+    /// Whether a definition of `name` defined so far is visible at `at` from
+    /// `scope` or the scopes around it, up to a scope closed to `namespace`.
+    fn visible_outward(
+        &self,
+        definitions: &[Definition],
+        scope: usize,
+        name: &str,
+        namespace: &str,
+        at: usize,
+    ) -> bool {
+        let mut current = Some(scope);
+        while let Some(s) = current {
+            if self
+                .visible_among(definitions, s, name, namespace, Some(at))
+                .is_some()
+            {
+                return true;
+            }
+            let node = &self.model.scopes[s];
+            if self
+                .descriptor
+                .scopes
+                .closed
+                .get(&node.kind)
+                .is_some_and(|closed| closed.iter().any(|c| c == namespace))
+            {
+                return false;
+            }
+            current = node.parent;
+        }
+        false
+    }
+
     fn enclosing_class(&self, mut scope: usize) -> Option<usize> {
         loop {
             let node = &self.model.scopes[scope];
@@ -845,6 +954,18 @@ impl<'a> Builder<'a> {
         namespace: &str,
         at: Option<usize>,
     ) -> Option<usize> {
+        self.visible_among(&self.model.definitions, scope, name, namespace, at)
+    }
+
+    /// [`Builder::visible`] among `definitions`, which `by_name` indexes.
+    fn visible_among(
+        &self,
+        definitions: &[Definition],
+        scope: usize,
+        name: &str,
+        namespace: &str,
+        at: Option<usize>,
+    ) -> Option<usize> {
         let hoisted = scope == 0
             || self
                 .descriptor
@@ -860,7 +981,7 @@ impl<'a> Builder<'a> {
                 .iter()
                 .copied()
                 .rev()
-                .find(|&i| self.model.definitions[i].visible_from <= at),
+                .find(|&i| definitions[i].visible_from <= at),
             _ => candidates.first().copied(),
         }
     }

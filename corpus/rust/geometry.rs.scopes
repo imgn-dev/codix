@@ -1,0 +1,36 @@
+3:19 type Point -> 9:12
+3:27 type Point -> 9:12
+8:3 read derive -> free
+8:10 read Debug -> free
+10:12 type Coord -> 6:10
+11:8 type Coord -> 6:10
+23:27 type String -> free
+24:9 read String -> free
+24:17 call new -> free
+28:6 type Point -> 9:12
+31:16 parameter x
+31:19 type Coord -> 6:10
+31:26 parameter y
+31:29 type Coord -> 6:10
+31:39 type Self -> free
+32:9 type Self -> free
+32:16 read x -> 31:16
+32:19 read y -> 31:26
+36:6 type Area -> 20:11
+36:15 type Shape -> 14:17
+43:6 type_parameter T
+43:9 type Wrapper -> free
+43:17 type T -> 43:6
+44:23 type T -> 43:6
+50:19 parameter value
+51:9 read value -> 50:19
+66:13 parameter a
+66:17 type Point -> 9:12
+66:24 parameter b
+66:28 type Point -> 9:12
+67:7 read a -> 66:13
+67:9 read x -> free
+67:13 read b -> 66:24
+67:15 read x -> free
+67:18 call powi -> free
+67:27 call sqrt -> free

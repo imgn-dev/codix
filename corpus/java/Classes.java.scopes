@@ -20,9 +20,9 @@
 18:16 call total -> 13:17
 18:26 read discount -> 17:21
 25:20 read amount -> 22:22
-31:14 type Override -> free
-32:13 type String -> free
-36:16 type String -> free
+31:14 type Override -> uncertain
+32:13 type String -> uncertain
+36:16 type String -> uncertain
 36:23 parameter code
-37:9 type String -> free
-37:33 call name -> free
+37:9 type String -> uncertain
+37:33 call name -> uncertain

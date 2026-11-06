@@ -15,3 +15,37 @@ body_tokens = ["{"]
 [symbols.visibility]
 node = "visibility_modifier"
 values = ["pub"]
+
+# Types and values are separate namespaces; methods, fields and associated
+# items are reached through a value, `self`, `Self` or a path. Items are
+# visible in their whole block, and a module sees only its own names.
+[scopes]
+hoisted = ["class", "type", "module"]
+self_receivers = ["self", "Self"]
+symbols_hoisted = true
+
+[scopes.namespaces]
+struct = "type"
+enum = "type"
+trait = "type"
+interface = "type"
+class = "type"
+type_alias = "type"
+type_parameter = "type"
+module = "type"
+macro = "macro"
+method = "member"
+field = "member"
+enum_member = "member"
+
+[scopes.contexts]
+type = ["type", "value"]
+call = ["value", "type"]
+
+[scopes.member_contexts]
+call = ["member"]
+read = ["member"]
+write = ["member"]
+
+[scopes.closed]
+module = ["value", "type"]

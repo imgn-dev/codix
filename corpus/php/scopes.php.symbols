@@ -1,0 +1,8 @@
+3:11 namespace Acme\Billing | namespace Acme\Billing
+8:7 constant LIMIT | const LIMIT
+10:10 function total | function total(array $items, int $start = 0): int
+20:10 function helper | function helper(int $value): int
+31:7 class Cart | class Cart extends Base
+33:18 field Cart.count [private] | private int $count
+35:21 method Cart.add [public] | public function add(Amount $amount, Cur $currency): int
+43:28 method Cart.reset [public] | public static function reset(): void

@@ -1,0 +1,10 @@
+3:11 namespace geo | namespace geo
+6:7 class geo::Shape | class Shape
+8:14 constructor geo::Shape::Shape | explicit Shape(T scale)
+9:7 method geo::Shape::area | T area() const
+10:7 method geo::Shape::factor | T factor() const
+13:7 field geo::Shape::scale_ | T scale_
+17:13 method geo::Shape::factor | T Shape<T>::factor() const
+21:7 class geo::Square | class Square : public Shape<int>
+23:9 method geo::Square::side | int side() const
+26:5 function geo::total | int total(const std::vector<int>& values)

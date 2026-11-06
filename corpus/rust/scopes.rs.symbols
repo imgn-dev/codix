@@ -1,0 +1,15 @@
+4:7 constant LIMIT | const LIMIT: usize
+6:12 struct Cart [pub] | pub struct Cart<T>
+7:5 field Cart::items | items: Vec<T>
+8:5 field Cart::count | count: usize
+12:12 method Cart::new [pub] | pub fn new() -> Self
+16:8 method Cart::with_capacity | fn with_capacity(size: usize) -> Self
+20:12 method Cart::add [pub] | pub fn add(&mut self, item: T) -> usize
+29:4 function helper | fn helper(value: usize) -> usize
+45:4 function later | fn later(x: usize) -> usize
+50:5 module nested | mod nested
+51:12 function nested::inner [pub] | pub fn inner() -> usize
+56:4 function shapes | fn shapes(map: HashMap<String, usize>) -> Option<usize>
+61:8 struct Point | struct Point
+62:5 field Point::x | x: usize
+63:5 field Point::y | y: usize

@@ -5,5 +5,6 @@ codix_provider::register!(
     "ruby",
     "descriptor.toml",
     tree_sitter_ruby::LANGUAGE,
-    "queries/tags.scm"
+    "queries/tags.scm",
+    "queries/locals.scm"
 );

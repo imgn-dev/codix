@@ -1,0 +1,8 @@
+3:1 constant LIMIT | LIMIT
+5:8 module Billing | module Billing
+6:9 class Billing.Cart | class Cart < Base
+7:9 constructor Billing.Cart.initialize | def initialize(owner, items = [])
+13:9 method Billing.Cart.add | def add(item)
+19:9 method Billing.Cart.total | def total(extra = 0)
+28:9 method Billing.Cart.describe | def describe
+35:5 function build | def build

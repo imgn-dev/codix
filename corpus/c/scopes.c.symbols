@@ -1,0 +1,8 @@
+3:9 macro MAX | #define MAX(a, b)
+5:8 struct point | struct point
+6:9 field point.x | int x
+7:9 field point.y | int y
+10:22 type_alias point_t | typedef struct point point_t
+12:12 variable counter | static int counter
+16:5 function sum | int sum(const int *values, int count)
+29:5 function area | int area(struct point *p, point_t q)

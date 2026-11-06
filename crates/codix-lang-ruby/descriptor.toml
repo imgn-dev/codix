@@ -12,3 +12,32 @@ modelines = ["ruby"]
 separator = "."
 body_fields = ["body", "right"]
 # Ruby sets visibility with `private` sections, not on each method.
+
+# Local variables, methods, constants and instance variables are separate
+# namespaces. Methods and constants are visible in their whole class, and
+# past method bodies, which local variables do not cross.
+[scopes]
+self_receivers = ["self"]
+symbols_hoisted = true
+
+[scopes.namespaces]
+method = "method"
+function = "method"
+constructor = "method"
+class = "constant"
+module = "constant"
+constant = "constant"
+ivar = "ivar"
+
+[scopes.contexts]
+read = ["value", "method", "constant", "ivar"]
+write = ["value", "ivar"]
+call = ["method"]
+
+[scopes.member_contexts]
+read = ["method"]
+call = ["method"]
+
+[scopes.closed]
+function = ["value"]
+class = ["value"]

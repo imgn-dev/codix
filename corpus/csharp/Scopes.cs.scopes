@@ -1,0 +1,47 @@
+2:7 read System -> free
+2:14 read Collections -> free
+3:7 import Money
+7:23 type_parameter T
+7:32 read T -> 7:23
+7:36 read IComparable -> free
+7:48 read T -> 7:23
+9:26 read List -> free
+9:31 read T -> 7:23
+9:46 read List -> free
+9:51 read T -> 7:23
+12:24 read T -> 7:23
+12:26 parameter item
+14:13 read items -> 9:34
+14:19 call Add -> free
+14:23 read item -> 12:26
+15:18 read count -> 10:21
+16:13 write count -> 10:21
+16:21 read count -> 10:21
+17:20 call Total -> 20:20
+17:26 read count -> 10:21
+20:30 parameter extra
+22:17 variable sum
+22:23 read extra -> 20:30
+23:26 variable item
+23:34 read items -> 9:34
+25:17 write sum -> 22:17
+27:13 read Func -> free
+27:28 variable twice
+27:36 parameter x
+27:41 read x -> 27:36
+28:21 call TryParse -> free
+28:43 variable parsed
+30:17 write sum -> 22:17
+30:24 read parsed -> 28:43
+34:24 call twice -> 27:28
+34:30 read sum -> 22:17
+34:37 call ToString -> free
+34:48 read Length -> free
+36:20 read Exception -> free
+36:30 variable error
+38:27 read InvalidOperationException -> free
+38:53 read error -> 36:30
+38:59 read Message -> free
+43:28 read Cart -> 7:18
+45:31 call Total -> uncertain
+45:37 read extra -> free

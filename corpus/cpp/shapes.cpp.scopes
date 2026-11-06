@@ -1,0 +1,33 @@
+16:27 type Shape -> 11:7
+16:34 parameter other
+22:23 type Shape -> 11:7
+24:28 parameter r
+24:36 read r -> 24:28
+25:43 read PI -> uncertain
+25:48 read r_ -> 28:12
+25:53 read r_ -> 28:12
+31:21 type vector -> free
+31:28 type Shape -> 11:7
+35:20 type_parameter T
+38:5 type T -> 35:20
+41:20 type Shapes -> 31:7
+41:28 parameter shapes
+47:35 type Shape -> free
+47:42 parameter other
+47:64 read id_ -> uncertain
+47:71 read other -> uncertain
+47:77 read id_ -> free
+49:20 type_parameter T
+50:1 type T -> 49:20
+50:8 type Box -> free
+50:12 type T -> 49:20
+50:37 call T -> uncertain
+52:25 type Shapes -> free
+52:33 parameter shapes
+53:12 variable sum
+54:16 read s -> uncertain
+54:20 read shapes -> uncertain
+54:28 write sum -> 53:12
+54:35 read s -> uncertain
+54:38 call area -> free
+55:12 read sum -> 53:12

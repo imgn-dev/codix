@@ -1,0 +1,14 @@
+14:36 parameter message
+23:32 read Priced -> 7:11
+25:9 read Logs -> 12:7
+31:40 parameter lines
+33:16 write lines -> 28:20
+33:25 read lines -> 31:40
+38:16 call array_sum -> free
+38:33 read lines -> 28:20
+41:38 type self -> free
+43:20 type self -> free
+47:17 type Invoice -> 23:13
+47:26 parameter invoice
+49:22 read invoice -> 47:26
+49:31 call price -> free

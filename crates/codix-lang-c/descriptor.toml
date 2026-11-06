@@ -11,3 +11,16 @@ separator = "."
 body_fields = ["body", "value"]
 # Anonymous structs in a typedef come before the name.
 body_tokens = ["{"]
+
+# Struct, union and enum tags are a namespace of their own; members are
+# reached through a value only.
+[scopes]
+hoisted = ["class"]
+
+[scopes.namespaces]
+struct = "tag"
+enum = "tag"
+field = "member"
+
+[scopes.contexts]
+type = ["value", "tag"]

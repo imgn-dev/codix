@@ -1,0 +1,8 @@
+5:11 namespace Acme.Billing | namespace Acme.Billing
+7:18 class Acme.Billing.Cart [public] | public class Cart<T> where T : IComparable<T>
+9:34 field Acme.Billing.Cart.items [private] | private readonly List<T> items
+10:21 field Acme.Billing.Cart.count [private] | private int count
+12:20 method Acme.Billing.Cart.Add [public] | public int Add(T item)
+20:20 method Acme.Billing.Cart.Total [public] | public int Total(int extra = 0)
+43:18 class Acme.Billing.Special [public] | public class Special : Cart<string>
+45:20 method Acme.Billing.Special.Shout [public] | public int Shout()

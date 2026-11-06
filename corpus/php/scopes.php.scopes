@@ -1,0 +1,46 @@
+5:16 import Amount
+6:16 read Currency -> free
+6:28 import Cur
+10:23 parameter items
+10:35 parameter start
+12:6 variable sum
+12:13 read start -> 10:35
+13:15 read items -> 10:23
+13:25 variable key
+13:33 variable item
+14:10 write sum -> 12:6
+14:18 read item -> 13:33
+16:6 write sum -> 12:6
+16:13 read sum -> 12:6
+16:19 read LIMIT -> 8:7
+17:12 call helper -> 20:10
+17:20 read sum -> 12:6
+20:22 parameter value
+22:13 write counter -> free
+23:6 write counter -> free
+24:6 variable double
+24:26 parameter x
+24:35 write value -> 20:22
+25:17 read x -> 24:26
+25:26 read value -> 20:22
+27:6 variable triple
+27:20 parameter x
+27:27 read x -> 27:20
+27:36 read value -> 20:22
+28:13 read double -> 24:6
+28:21 read value -> 20:22
+28:31 read triple -> 27:6
+28:39 read value -> 20:22
+31:20 read Base -> free
+35:25 type Amount -> 5:16
+35:33 parameter amount
+35:41 type Cur -> 6:28
+35:46 parameter currency
+37:16 read count -> 33:18
+38:16 write count -> 33:18
+38:31 read count -> 33:18
+39:15 call reset -> 43:28
+40:16 call total -> 10:10
+40:24 read amount -> 35:33
+40:32 read value -> free
+40:54 read count -> 33:18

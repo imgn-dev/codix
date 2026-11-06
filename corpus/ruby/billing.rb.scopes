@@ -1,0 +1,17 @@
+9:21 read Base -> free
+10:7 call attr_reader -> free
+12:22 parameter lines
+13:9 ivar @lines
+13:18 read lines -> 12:22
+17:9 read lines -> free
+17:15 call sum -> free
+21:9 call new -> free
+25:20 parameter lines
+25:29 call new -> free
+25:33 read lines -> 25:20
+28:17 read total -> 16:11
+30:7 read private -> free
+37:12 parameter invoice
+38:3 read invoice -> 37:12
+38:11 call total -> free
+38:17 call to_s -> free

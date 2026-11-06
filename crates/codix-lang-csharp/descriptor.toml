@@ -16,3 +16,30 @@ body_tokens = ["="]
 [symbols.visibility]
 node = "modifier"
 values = ["public", "protected", "private", "internal"]
+
+# Types, methods and values are separate namespaces. A name read in an
+# expression is a variable when one is in scope, else a type.
+[scopes]
+hoisted = ["class", "type"]
+self_receivers = ["this"]
+
+[scopes.namespaces]
+class = "type"
+struct = "type"
+interface = "type"
+enum = "type"
+type_alias = "type"
+namespace = "type"
+module = "type"
+type_parameter = "type"
+method = "method"
+constructor = "constructor"
+
+[scopes.contexts]
+call = ["method", "value"]
+type = ["type"]
+read = ["value", "type"]
+
+# Every type inherits the methods of `object`.
+[scopes.implicit_members]
+method = ["Equals", "GetHashCode", "GetType", "MemberwiseClone", "ToString"]

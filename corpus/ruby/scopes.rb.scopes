@@ -1,0 +1,44 @@
+1:1 call require -> free
+6:16 read Base -> free
+7:20 parameter owner
+7:27 parameter items
+8:7 ivar @owner
+8:16 read owner -> 7:20
+9:7 ivar @items
+9:16 read items -> 7:27
+10:7 ivar @count
+13:13 parameter item
+14:7 read @items -> 9:7
+14:17 read item -> 13:13
+15:7 write @count -> 10:7
+16:7 call total -> 19:9
+16:13 read @count -> 10:7
+19:15 parameter extra
+20:7 variable sum
+20:13 read extra -> 19:15
+21:7 read @items -> 9:7
+21:14 call each -> free
+21:23 parameter item
+22:9 write sum -> 20:7
+22:16 read item -> 21:23
+22:21 call price -> free
+24:7 variable label
+24:15 read describe -> 28:9
+25:7 read sum -> 20:7
+25:13 read LIMIT -> 3:1
+25:21 read label -> 24:7
+25:27 call size -> free
+29:7 variable owner
+29:15 read @owner -> 8:7
+30:10 read owner -> 29:7
+30:24 call total -> 19:9
+36:3 variable cart
+36:10 read Billing -> 5:8
+36:19 read Cart -> free
+36:24 call new -> free
+37:3 read cart -> 36:3
+37:8 call add -> free
+38:8 read StandardError -> free
+38:25 variable error
+39:3 call raise -> free
+39:9 read error -> 38:25
