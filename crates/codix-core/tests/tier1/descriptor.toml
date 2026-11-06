@@ -1,0 +1,11 @@
+# A pack with a `tags` query and no `locals` query, for tests of tier 1.
+name = "tier1"
+version = 1
+id_prefix = "t1"
+
+[detect]
+extensions = ["t1"]
+
+[symbols]
+separator = "."
+body_fields = ["body", "value"]

@@ -73,6 +73,7 @@ use codix_core::query::{
     DefOp, DefRequest, FindOp, FindRequest, GrepOp, GrepRequest, OutlineOp, OutlineRequest, ShowOp,
     ShowRequest,
 };
+use codix_core::refs::{RefsOp, RefsRequest};
 use codix_core::render::{self, Style, TextRender};
 use codix_core::store::MatchMode;
 use codix_daemon::client::{self, Route};
@@ -132,6 +133,7 @@ enum Command {
         #[command(flatten)]
         narrow: NarrowArgs,
     },
+    Refs(RefsArgs),
     Outline {
         /// File or directory.
         path: String,
@@ -278,6 +280,19 @@ struct FindArgs {
     page: PageArgs,
 }
 
+#[derive(Args)]
+struct RefsArgs {
+    /// Symbol ID, its path part, `file:line:col`, or a name.
+    symbol: String,
+    /// Consider symbols of this kind only; repeatable.
+    #[arg(long = "kind", value_name = "KIND")]
+    kinds: Vec<String>,
+    #[command(flatten)]
+    scope: ScopeArgs,
+    #[command(flatten)]
+    page: PageArgs,
+}
+
 /// Narrowing an ambiguous name.
 #[derive(Args)]
 struct NarrowArgs {
@@ -340,6 +355,7 @@ impl PageArgs {
 }
 
 /// Where and how to write.
+#[derive(Clone)]
 struct Output {
     json: bool,
     /// `config --list --show-origin`.
@@ -606,25 +622,30 @@ fn main() -> ExitCode {
         warnings: ctx.warnings().to_vec(),
         ..output
     };
-    let code = match cli.command {
+    ExitCode::from(command(&output, &ctx, cli.command))
+}
+
+/// Runs a command; its exit code.
+fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
+    match command {
         Command::Init { agent_docs } => {
             output.progress("indexing");
-            run(&output, &InitOp, &ctx, Ok(InitRequest { agent_docs }))
+            run(output, &InitOp, ctx, Ok(InitRequest { agent_docs }))
         }
         Command::Index { full } => {
             output.progress("indexing");
-            run(&output, &IndexOp, &ctx, Ok(IndexRequest { full }))
+            run(output, &IndexOp, ctx, Ok(IndexRequest { full }))
         }
-        Command::Status => run(&output, &StatusOp, &ctx, Ok(StatusRequest {})),
-        Command::Capabilities => run(&output, &CapabilitiesOp, &ctx, Ok(CapabilitiesRequest {})),
-        Command::Languages => run(&output, &LanguagesOp, &ctx, Ok(LanguagesRequest {})),
+        Command::Status => run(output, &StatusOp, ctx, Ok(StatusRequest {})),
+        Command::Capabilities => run(output, &CapabilitiesOp, ctx, Ok(CapabilitiesRequest {})),
+        Command::Languages => run(output, &LanguagesOp, ctx, Ok(LanguagesRequest {})),
         Command::Config(args) => {
             let (request, show_origin) = args.request();
             let output = Output {
                 show_origin,
-                ..output
+                ..output.clone()
             };
-            run(&output, &ConfigOp, &ctx, Ok(request))
+            run(&output, &ConfigOp, ctx, Ok(request))
         }
         Command::Find(args) => {
             let request = args.page.page().map(|page| FindRequest {
@@ -635,7 +656,7 @@ fn main() -> ExitCode {
                 scope: args.scope.request(),
                 page,
             });
-            run(&output, &FindOp, &ctx, request)
+            run(output, &FindOp, ctx, request)
         }
         Command::Def { symbol, narrow } => {
             let request = DefRequest {
@@ -643,9 +664,18 @@ fn main() -> ExitCode {
                 kinds: narrow.kinds,
                 scope: narrow.scope.request(),
             };
-            run(&output, &DefOp, &ctx, Ok(request))
+            run(output, &DefOp, ctx, Ok(request))
         }
-        Command::Outline { path } => run(&output, &OutlineOp, &ctx, Ok(OutlineRequest { path })),
+        Command::Refs(args) => {
+            let request = args.page.page().map(|page| RefsRequest {
+                symbol: args.symbol,
+                kinds: args.kinds,
+                scope: args.scope.request(),
+                page,
+            });
+            run(output, &RefsOp, ctx, request)
+        }
+        Command::Outline { path } => run(output, &OutlineOp, ctx, Ok(OutlineRequest { path })),
         Command::Show {
             symbol,
             narrow,
@@ -657,10 +687,10 @@ fn main() -> ExitCode {
                 scope: narrow.scope.request(),
                 context,
             };
-            run(&output, &ShowOp, &ctx, Ok(request))
+            run(output, &ShowOp, ctx, Ok(request))
         }
-        Command::Daemon(command) => daemon(&output, &ctx, command),
-        Command::Watch => daemon(&output, &ctx, DaemonCommand::Run { log: None }),
+        Command::Daemon(command) => daemon(output, ctx, command),
+        Command::Watch => daemon(output, ctx, DaemonCommand::Run { log: None }),
         Command::Mcp => match env::current_exe()
             .map_err(|source| Error::Io {
                 path: "codix".into(),
@@ -679,10 +709,9 @@ fn main() -> ExitCode {
                 scope: args.scope.request(),
                 page,
             });
-            run(&output, &GrepOp, &ctx, request)
+            run(output, &GrepOp, ctx, request)
         }
-    };
-    ExitCode::from(code)
+    }
 }
 
 #[cfg(test)]

@@ -69,7 +69,7 @@
           "type": "integer"
         },
         "confidence": {
-          "description": "How it was found: `textual` for tier 1 symbols.",
+          "description": "How it was found: `scoped` when the name at a location binds to it\nwithin its file, `textual` when found by name, `low` in or around a\nparse error.",
           "type": "string"
         },
         "kind": {

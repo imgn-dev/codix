@@ -299,16 +299,16 @@ pub fn model(
 ) -> Result<FileModel, Error> {
     let tree = parse::parse(descriptor, grammar, path, content)?;
     let symbols = parse::symbols_of(descriptor, grammar, path, content, &tree)?;
-    match grammar.locals {
-        Some(locals) => {
-            let query = parse::query(&descriptor.name, "locals", grammar, locals)?;
-            Ok(Builder::new(descriptor, content, symbols).build(&query, &tree))
-        }
-        None => Ok(FileModel {
-            symbols,
-            ..FileModel::default()
-        }),
+    if let Some(locals) = grammar.locals {
+        let query = parse::query(&descriptor.name, "locals", grammar, locals)?;
+        return Ok(Builder::new(descriptor, content, symbols).build(&query, &tree));
     }
+    // Tier 1: the symbols are definitions of the file scope, and no
+    // reference is known.
+    let mut builder = Builder::new(descriptor, content, symbols);
+    builder.scopes(Vec::new());
+    builder.definitions(Vec::new(), &mut HashMap::new(), &tree);
+    Ok(builder.model)
 }
 
 /// A local definition captured by the query.

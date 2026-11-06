@@ -16,6 +16,7 @@ use crate::query::{
     DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse, ShowResponse,
     SymbolResult,
 };
+use crate::refs::{RefResult, RefsResponse};
 use crate::scan::ScanReport;
 use crate::store::MatchMode;
 
@@ -99,6 +100,30 @@ impl Row for SymbolResult {
         let mut columns = vec![self.kind.clone(), self.qualified_name.clone()];
         columns.extend(self.signature.clone());
         columns
+    }
+}
+
+impl Row for RefResult {
+    fn location(&self) -> &Location {
+        &self.location
+    }
+
+    fn columns(&self) -> Vec<String> {
+        vec![
+            self.context.clone(),
+            self.enclosing.clone().unwrap_or_else(|| "-".to_owned()),
+            self.confidence.clone(),
+        ]
+    }
+}
+
+impl TextRender for RefsResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        self.references.render_text(w, style)?;
+        if self.references.total > 0 {
+            writeln!(w, "{} scoped, {} textual", self.scoped, self.textual)?;
+        }
+        stale(w, self.possibly_stale)
     }
 }
 

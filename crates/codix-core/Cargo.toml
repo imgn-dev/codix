@@ -30,6 +30,7 @@ codix-lang-java.workspace = true
 codix-vcs-git.workspace = true
 codix-vcs-hg.workspace = true
 tempfile.workspace = true
+tree-sitter-java.workspace = true
 
 [lints]
 workspace = true

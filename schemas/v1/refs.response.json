@@ -1,0 +1,124 @@
+{
+  "$defs": {
+    "FileId": {
+      "description": "A file or directory identity: its root-relative path with `/` separators,\nthe case found on disk, and symlinks resolved. The root itself is `\"\"`.",
+      "type": "string"
+    },
+    "Paged": {
+      "description": "One page of results and the total they were taken from.",
+      "properties": {
+        "items": {
+          "description": "The results in this page.",
+          "items": {
+            "$ref": "#/$defs/RefResult"
+          },
+          "type": "array"
+        },
+        "offset": {
+          "description": "Number of results skipped.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "total": {
+          "description": "Number of results before paging.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "offset"
+      ],
+      "type": "object"
+    },
+    "RefResult": {
+      "description": "One reference, or the definition itself.",
+      "properties": {
+        "column": {
+          "description": "1-based column, in Unicode scalar values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "confidence": {
+          "description": "`scoped`: bound to the symbol by scope; `textual`: matched by name\nonly.",
+          "type": "string"
+        },
+        "context": {
+          "description": "`def` for the definition; otherwise `call`, `type`, `import`, `read`\nor `write`.",
+          "type": "string"
+        },
+        "enclosing": {
+          "description": "Qualified name of the innermost enclosing symbol.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "line": {
+          "description": "1-based line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Path relative to the cwd, with `/` separators.",
+          "type": "string"
+        },
+        "root_path": {
+          "$ref": "#/$defs/FileId",
+          "description": "Root-relative path."
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "line",
+        "column",
+        "context",
+        "confidence"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What [`RefsOp`] answers.",
+  "properties": {
+    "possibly_stale": {
+      "description": "See [`crate::query::FindResponse::possibly_stale`].",
+      "type": "boolean"
+    },
+    "references": {
+      "$ref": "#/$defs/Paged",
+      "description": "The definition first, then references in its file, then by path."
+    },
+    "scoped": {
+      "description": "References bound by scope, before paging.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "target": {
+      "description": "The symbol's ID, or a local's `file:line:col`.",
+      "type": "string"
+    },
+    "textual": {
+      "description": "References matched by name only, before paging.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    }
+  },
+  "required": [
+    "target",
+    "references",
+    "scoped",
+    "textual",
+    "possibly_stale"
+  ],
+  "title": "RefsResponse",
+  "type": "object"
+}
