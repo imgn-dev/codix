@@ -15,7 +15,7 @@ use crate::detect::Detector;
 use crate::op::{Context, Operation, Outcome};
 use crate::page::{Location, Page, Paged, Ranked, sort_results};
 use crate::project::{FileId, Project, ScopeRequest};
-use crate::query::{SymbolResult, complete, indexed};
+use crate::query::{Renamed, SymbolResult, complete, following, indexed};
 use crate::scope::{Binding, Defines, FileModel, Receiver};
 use crate::store::{FileStatus, RefState, Snapshot, Store, SymbolHit};
 use crate::symbol_id::{SymbolRef, resolve_overloads_where};
@@ -264,6 +264,9 @@ pub struct RefsResponse {
     pub textual: usize,
     /// See [`crate::query::FindResponse::possibly_stale`].
     pub possibly_stale: bool,
+    /// When the ID given was the symbol's before codix renamed it.
+    #[serde(default)]
+    pub renamed: Option<Renamed>,
 }
 
 impl Outcome for RefsResponse {
@@ -286,9 +289,11 @@ impl Operation for RefsOp {
         let possibly_stale = complete(ctx, project, &config)?;
         let mut store = Store::open(&project.index_path())?;
         let snapshot = store.snapshot()?;
-        let Target::Definitions { file, definitions } =
-            target(ctx, project, &config, &snapshot, &request.symbol, &|hit| {
-                request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind)
+        let (Target::Definitions { file, definitions }, renamed) =
+            following(&request.symbol, |input| {
+                target(ctx, project, &config, &snapshot, input, &|hit| {
+                    request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind)
+                })
             })?;
         let model = &file.model;
         let first = &model.definitions[definitions[0]];
@@ -365,6 +370,7 @@ impl Operation for RefsOp {
             scoped,
             textual,
             possibly_stale,
+            renamed,
         })
     }
 }

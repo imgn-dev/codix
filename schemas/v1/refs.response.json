@@ -82,6 +82,24 @@
         "confidence"
       ],
       "type": "object"
+    },
+    "Renamed": {
+      "description": "A symbol ID that codix renamed, followed to the symbol's ID now.",
+      "properties": {
+        "from": {
+          "description": "The ID as given.",
+          "type": "string"
+        },
+        "to": {
+          "description": "The ID the symbol has now.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -94,6 +112,18 @@
     "references": {
       "$ref": "#/$defs/Paged",
       "description": "The definition first, then references in its file, then by path."
+    },
+    "renamed": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Renamed"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the ID given was the symbol's before codix renamed it."
     },
     "scoped": {
       "description": "References bound by scope, before paging.",

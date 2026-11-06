@@ -257,6 +257,25 @@ fn candidates(
         }
         SymbolRef::Name(name) => snapshot.symbols_named(&name)?,
     };
+    // A live symbol wins over an alias with its ID.
+    if matches.is_empty()
+        && let SymbolRef::Id {
+            prefix,
+            path,
+            qualified_name,
+            hash,
+        } = SymbolRef::parse(input)?
+        && let Some(new) = snapshot.alias(&format!(
+            "{}{}",
+            path_part(&prefix, &path, &qualified_name),
+            hash.unwrap_or_default()
+        ))?
+    {
+        return Err(Error::SymbolRenamed {
+            old: input.to_owned(),
+            new,
+        });
+    }
     Ok(prefer_types(
         matches.into_iter().filter(|hit| keep(hit)).collect(),
     ))

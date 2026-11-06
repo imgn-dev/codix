@@ -69,8 +69,8 @@ fn open(dir: &Path) -> Store {
 #[test]
 fn migrates_an_empty_database_and_reopens() {
     let dir = tempfile::tempdir().unwrap();
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 7);
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 7);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 8);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 8);
 }
 
 #[test]
@@ -445,4 +445,49 @@ fn journal_entries_round_trip_and_only_the_newest_are_kept() {
     }
     assert_eq!(store.entry(first).unwrap(), None);
     assert_eq!(store.entries(EntryState::Writing).unwrap().len(), 20);
+}
+
+#[test]
+fn aliases_collapse_chains_follow_renames_back_and_expire() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = open(dir.path());
+    let day = 24 * 3600;
+    let pair = |a: &str, b: &str| (a.to_owned(), b.to_owned());
+    store
+        .add_aliases(&[pair("j:A::f#1111", "j:A::g#2222")], 1, 100 * day)
+        .unwrap();
+    store
+        .add_aliases(&[pair("j:A::g#2222", "j:A::h#3333")], 2, 101 * day)
+        .unwrap();
+    let alias = |store: &mut Store, id: &str| store.snapshot().unwrap().alias(id).unwrap();
+    assert_eq!(
+        alias(&mut store, "j:A::f#1111").as_deref(),
+        Some("j:A::h#3333")
+    );
+    assert_eq!(alias(&mut store, "j:A::f").as_deref(), Some("j:A::h#3333"));
+    assert_eq!(alias(&mut store, "j:A::f#").as_deref(), Some("j:A::h#3333"));
+
+    // Renamed back: the first ID is live again.
+    store
+        .add_aliases(&[pair("j:A::h#3333", "j:A::f#1111")], 3, 102 * day)
+        .unwrap();
+    assert_eq!(alias(&mut store, "j:A::f#1111"), None);
+    assert_eq!(
+        alias(&mut store, "j:A::g#2222").as_deref(),
+        Some("j:A::f#1111")
+    );
+
+    // Undoing an apply drops its aliases.
+    store.remove_aliases(3).unwrap();
+    assert_eq!(alias(&mut store, "j:A::h#3333"), None);
+
+    // Thirty days later, the oldest are gone.
+    store
+        .add_aliases(&[pair("j:B::x#4444", "j:B::y#5555")], 4, 132 * day)
+        .unwrap();
+    assert_eq!(alias(&mut store, "j:A::g#2222"), None);
+    assert_eq!(
+        alias(&mut store, "j:B::x#4444").as_deref(),
+        Some("j:B::y#5555")
+    );
 }

@@ -2,6 +2,7 @@
 //! read a consistent snapshot while one writer commits. Rows are keyed by file
 //! so a file's rows are replaced in one transaction.
 
+mod aliases;
 mod journal;
 mod previews;
 mod search;
@@ -33,6 +34,7 @@ const MIGRATIONS: &[&str] = &[
     MIGRATION_5,
     previews::MIGRATION,
     journal::MIGRATION,
+    aliases::MIGRATION,
 ];
 
 const MIGRATION_1: &str = "
