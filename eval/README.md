@@ -12,9 +12,12 @@ real codebase and only codix's MCP tools, with no instructions about codix.
 - **Models:** Claude Haiku, Sonnet and Opus, through Claude Code headless
   (`claude -p`) with every built-in tool off and codix as the only MCP server.
 - **Defects,** each a sign of a name or description to improve:
-  - *misused command:* a `usage` error, or an ambiguous symbol never resolved;
+  - *misused command:* a `usage` error, or an ambiguous symbol never resolved
+    (in a *locate* task, the candidates name the files, so they answer it);
   - *guessed flag:* an argument the tool does not take;
-  - *grep fallback:* `grep` called for a *locate* task.
+  - *grep fallback:* `grep` called for a *locate* task;
+  - *malformed call:* arguments that were not JSON, so the call never reached
+    codix: counted apart, as the model's slip rather than codix's.
 
 Run it from a terminal, not from a Claude Code session, whose sandbox has no
 access to the Claude Code login. Each run starts Claude Code without the user's

@@ -8,6 +8,9 @@ use serde::Serialize;
 use crate::task::{Category, Task};
 use crate::transcript::Transcript;
 
+/// The input Claude Code records for arguments that were not valid JSON.
+const UNPARSED: &str = "__unparsedToolInput";
+
 /// The tools that look up symbols, which resolve an ambiguous name.
 const LOOKUPS: &[&str] = &["find", "def", "show", "outline"];
 
@@ -21,6 +24,9 @@ pub(crate) enum DefectKind {
     GuessedFlag,
     /// `grep` called for a task that `find` or `def` answers.
     GrepFallback,
+    /// Arguments that were not valid JSON, so the call never reached codix:
+    /// the model's slip, not a sign about codix's names.
+    MalformedCall,
 }
 
 /// One defect, with the call it comes from.
@@ -56,9 +62,11 @@ pub(crate) fn defects(task: &Task, transcript: &Transcript, arguments: &Argument
                 detail: excerpt.clone(),
             });
         }
-        let resolved_later = transcript.calls[i + 1..]
-            .iter()
-            .any(|later| !later.is_error && LOOKUPS.contains(&later.tool.as_str()));
+        // For a locate task, the candidates name the files: the answer.
+        let resolved_later = task.category == Category::Locate
+            || transcript.calls[i + 1..]
+                .iter()
+                .any(|later| !later.is_error && LOOKUPS.contains(&later.tool.as_str()));
         if call.result.starts_with("error[ambiguous_symbol]") && !resolved_later {
             found.push(Defect {
                 kind: DefectKind::MisusedCommand,
@@ -66,7 +74,15 @@ pub(crate) fn defects(task: &Task, transcript: &Transcript, arguments: &Argument
                 detail: format!("left unresolved: {excerpt}"),
             });
         }
-        if let (Some(known), Some(given)) = (arguments.get(&call.tool), call.input.as_object()) {
+        if call.input.get(UNPARSED).is_some() {
+            found.push(Defect {
+                kind: DefectKind::MalformedCall,
+                tool: call.tool.clone(),
+                detail: excerpt.clone(),
+            });
+        } else if let (Some(known), Some(given)) =
+            (arguments.get(&call.tool), call.input.as_object())
+        {
             for name in given.keys().filter(|k| !known.contains(k.as_str())) {
                 found.push(Defect {
                     kind: DefectKind::GuessedFlag,
@@ -185,6 +201,37 @@ mod tests {
             ..Transcript::default()
         };
         assert_eq!(defects(&task(Category::Trace), &t, &arguments()), vec![]);
+    }
+
+    #[test]
+    fn ambiguity_is_an_answer_for_a_locate_task() {
+        let t = Transcript {
+            calls: vec![call(
+                "def",
+                json!({ "symbol": "B" }),
+                "error[ambiguous_symbol]: \"B\" matches 2",
+                true,
+            )],
+            ..Transcript::default()
+        };
+        assert_eq!(defects(&task(Category::Locate), &t, &arguments()), vec![]);
+    }
+
+    #[test]
+    fn arguments_that_are_not_json_are_malformed_calls() {
+        let t = Transcript {
+            calls: vec![call(
+                "def",
+                json!({ "__unparsedToolInput": { "raw": "{\"kind\": class}" } }),
+                "<tool_use_error>InputValidationError",
+                true,
+            )],
+            ..Transcript::default()
+        };
+        assert_eq!(
+            kinds(&defects(&task(Category::Trace), &t, &arguments())),
+            [DefectKind::MalformedCall]
+        );
     }
 
     #[test]

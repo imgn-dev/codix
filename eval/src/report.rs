@@ -71,21 +71,22 @@ pub(crate) fn summarize(runs: &[Run]) -> BTreeMap<String, Summary> {
 /// The summary as a Markdown table.
 pub(crate) fn table(summaries: &BTreeMap<String, Summary>) -> String {
     let mut out = String::from(
-        "| Model | Answered | Tool calls | Misused commands | Guessed flags | Grep fallbacks | Cost |\n\
-         | --- | --- | --- | --- | --- | --- | --- |\n",
+        "| Model | Answered | Tool calls | Misused commands | Guessed flags | Grep fallbacks | Malformed calls | Cost |\n\
+         | --- | --- | --- | --- | --- | --- | --- | --- |\n",
     );
     for (model, s) in summaries {
         let count = |kind| s.defects.get(&kind).copied().unwrap_or(0);
         // Writing to a String cannot fail.
         let _ = writeln!(
             out,
-            "| {model} | {}/{} | {} | {} | {} | {} | ${:.2} |",
+            "| {model} | {}/{} | {} | {} | {} | {} | {} | ${:.2} |",
             s.succeeded,
             s.tasks,
             s.tool_calls,
             count(DefectKind::MisusedCommand),
             count(DefectKind::GuessedFlag),
             count(DefectKind::GrepFallback),
+            count(DefectKind::MalformedCall),
             s.cost_usd
         );
     }
@@ -130,7 +131,7 @@ mod tests {
         assert_eq!(summaries["haiku"].defects[&DefectKind::GrepFallback], 2);
         assert_eq!(
             table(&summaries).lines().nth(2),
-            Some("| haiku | 1/2 | 6 | 0 | 0 | 2 | $1.00 |")
+            Some("| haiku | 1/2 | 6 | 0 | 0 | 2 | 0 | $1.00 |")
         );
     }
 }
