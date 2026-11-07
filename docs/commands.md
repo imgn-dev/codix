@@ -104,6 +104,42 @@ List every reference to a symbol or local variable, definition first.
 codix refs Invoice.total
 ```
 
+## `codix outline`
+
+Show the symbols of a file or directory as a tree, signatures only.
+
+- **When:** Instead of reading a whole file to learn its structure.
+- **Returns:** Nested symbols with kind, signature and line.
+- **Needs:** tier 1 (symbols)
+
+```
+codix outline src/billing/Invoice.java
+```
+
+## `codix show`
+
+Print the source of a symbol.
+
+- **When:** Instead of reading a file to see one class, method or function.
+- **Returns:** The symbol's lines, with --context lines around them.
+- **Needs:** tier 1 (symbols)
+
+```
+codix show Invoice.total --context 2
+```
+
+## `codix grep`
+
+Search file contents with a regular expression; each match names its enclosing symbol.
+
+- **When:** For text that is not a symbol name, such as strings, comments or call sites. For names, prefer find.
+- **Returns:** Matching lines with location and enclosing symbol.
+- **Needs:** any indexed text file
+
+```
+codix grep "TODO|FIXME" --lang java
+```
+
 ## `codix rename`
 
 Plan renaming a symbol or local variable within its file; returns a preview to apply.
@@ -158,42 +194,6 @@ Drop pending previews without applying them.
 
 ```
 codix discard 3f9a2c41
-```
-
-## `codix outline`
-
-Show the symbols of a file or directory as a tree, signatures only.
-
-- **When:** Instead of reading a whole file to learn its structure.
-- **Returns:** Nested symbols with kind, signature and line.
-- **Needs:** tier 1 (symbols)
-
-```
-codix outline src/billing/Invoice.java
-```
-
-## `codix show`
-
-Print the source of a symbol.
-
-- **When:** Instead of reading a file to see one class, method or function.
-- **Returns:** The symbol's lines, with --context lines around them.
-- **Needs:** tier 1 (symbols)
-
-```
-codix show Invoice.total --context 2
-```
-
-## `codix grep`
-
-Search file contents with a regular expression; each match names its enclosing symbol.
-
-- **When:** For text that is not a symbol name, such as strings, comments or call sites. For names, prefer find.
-- **Returns:** Matching lines with location and enclosing symbol.
-- **Needs:** any indexed text file
-
-```
-codix grep "TODO|FIXME" --lang java
 ```
 
 ## `codix watch`
