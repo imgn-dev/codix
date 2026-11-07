@@ -24,7 +24,7 @@ use std::process::{Command, Stdio};
 use codix_benches::{SPRING, build_codix, checkout, workspace};
 use serde::Serialize;
 
-use crate::report::{Run, summarize, table};
+use crate::report::{Redactions, Run, summarize, table};
 use crate::score::{Arguments, defects};
 use crate::task::{Category, Task, renamed_as_expected};
 
@@ -79,6 +79,11 @@ fn main() {
 
     let codix = build_codix();
     let repo = checkout(&root.join("target/bench-repos"), SPRING);
+    // The results are published: they must not name this machine's user.
+    let redactions = Redactions::new(
+        &root.join("target/bench-repos"),
+        std::env::home_dir().as_deref(),
+    );
     let out = root.join("target/eval");
     let mcp_config = prepare(&codix, &repo, &out);
 
@@ -104,7 +109,7 @@ fn main() {
                 task.id,
                 leaks.join("; ")
             );
-            let run = Run {
+            let mut run = Run {
                 model: model.clone(),
                 task: task.id.clone(),
                 category: task.category,
@@ -120,6 +125,7 @@ fn main() {
                 answer: transcript.answer.clone(),
                 error: transcript.error.clone(),
             };
+            run.redact(&redactions);
             let mut stdout = std::io::stdout().lock();
             writeln!(
                 stdout,

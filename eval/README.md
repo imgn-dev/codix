@@ -34,11 +34,11 @@ It writes `results/<version>.json`, raw transcripts to `target/eval/`, and the
 table below.
 
 <!-- results -->
-Results of codix 0.1.0 (`eval/results/0.1.0.json`):
+Results of codix 0.3.0 (`eval/results/0.3.0.json`):
 
-| Model | Answered | Tool calls | Misused commands | Guessed flags | Grep fallbacks | Cost |
-| --- | --- | --- | --- | --- | --- | --- |
-| haiku | 20/20 | 42 | 1 | 0 | 0 | $0.03 |
-| opus | 20/20 | 27 | 1 | 0 | 0 | $0.84 |
-| sonnet | 20/20 | 27 | 0 | 1 | 0 | $0.42 |
+| Model | Answered | Tool calls | Misused commands | Guessed flags | Grep fallbacks | Malformed calls | Cost |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| haiku | 27/27 | 79 | 0 | 0 | 0 | 0 | $0.04 |
+| opus | 26/27 | 58 | 0 | 0 | 1 | 0 | $1.06 |
+| sonnet | 27/27 | 55 | 0 | 0 | 0 | 0 | $0.49 |
 <!-- /results -->

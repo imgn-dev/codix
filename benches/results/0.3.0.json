@@ -1,0 +1,97 @@
+{
+  "version": "0.3.0",
+  "cpus": 10,
+  "os": "macos",
+  "cold_index": {
+    "repository": "spring-framework v6.2.0",
+    "files": 10860,
+    "lines": 1600036,
+    "seconds": 19.441
+  },
+  "no_change_scan": {
+    "repository": "linux v6.12",
+    "files": 86605,
+    "lines": 39626044,
+    "seconds": 0.545
+  },
+  "lookup_p95_ms": 19.0,
+  "daemon": {
+    "cli_p95_ms": 13.5,
+    "mcp_p95_ms": 8.5,
+    "memory_mb": 40,
+    "reindex_ms": 66
+  },
+  "index_mb": 255,
+  "edits": {
+    "refs_p95_ms": 85.6,
+    "rename_p95_ms": 220.3,
+    "apply_p95_ms": 145.2,
+    "round_trips": {
+      "repository": "spring-framework .",
+      "attempted": 1000,
+      "restored": 881,
+      "refused": {
+        "invalid_name": 2,
+        "renames_file": 38,
+        "shadowing": 1,
+        "tier_too_low": 78
+      },
+      "failed": []
+    }
+  },
+  "linux_round_trips": {
+    "repository": "linux kernel, mm, lib",
+    "attempted": 1000,
+    "restored": 774,
+    "refused": {
+      "invalid_name": 1,
+      "parse_error_region": 223,
+      "usage": 2
+    },
+    "failed": []
+  },
+  "targets": [
+    {
+      "name": "cold index",
+      "goal": "1M lines across 10k files in under 30 s",
+      "measured": "1600036 lines across 10860 files in 19.44 s",
+      "met": true
+    },
+    {
+      "name": "no-change scan",
+      "goal": "100k files in under 1 s",
+      "measured": "86605 files in 0.545 s",
+      "met": true
+    },
+    {
+      "name": "CLI lookup p95",
+      "goal": "under 150 ms",
+      "measured": "19.0 ms",
+      "met": true
+    },
+    {
+      "name": "query via daemon p95",
+      "goal": "under 10 ms, through the CLI",
+      "measured": "13.5 ms through the CLI, 8.5 ms through MCP",
+      "met": false
+    },
+    {
+      "name": "daemon memory",
+      "goal": "under 500 MB on a 1M-line project",
+      "measured": "40 MB on 1600036 lines, after 1,000 queries",
+      "met": true
+    },
+    {
+      "name": "reindex after one save",
+      "goal": "under 50 ms, from the end of the debounce",
+      "measured": "66 ms",
+      "met": false
+    },
+    {
+      "name": "rename round trips",
+      "goal": "renamed and back, every file as it was",
+      "measured": "spring-framework .: 881 of 1000 restored, 119 refused, 0 failed; linux kernel, mm, lib: 774 of 1000 restored, 226 refused, 0 failed",
+      "met": true
+    }
+  ]
+}

@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::path::Path;
 
 use serde::Serialize;
 
@@ -35,6 +36,43 @@ pub(crate) struct Run {
     pub(crate) answer: String,
     /// Why the run failed, if Claude Code says it did.
     pub(crate) error: Option<String>,
+}
+
+impl Run {
+    /// Replaces this machine's paths in what the model wrote.
+    pub(crate) fn redact(&mut self, redactions: &Redactions) {
+        self.answer = redactions.apply(&self.answer);
+        self.error = self.error.as_deref().map(|e| redactions.apply(e));
+        for defect in &mut self.defects {
+            defect.detail = redactions.apply(&defect.detail);
+        }
+    }
+}
+
+/// Paths of this machine that a model may quote, which name its user, each
+/// with the placeholder the published results show instead.
+#[derive(Debug)]
+pub(crate) struct Redactions(Vec<(String, &'static str)>);
+
+impl Redactions {
+    /// Redacts the benchmark checkouts' directory, then the home directory.
+    /// A home directory of `/` is left alone: it would replace every slash.
+    pub(crate) fn new(bench_repos: &Path, home: Option<&Path>) -> Self {
+        let mut paths = vec![(bench_repos.display().to_string(), "<bench-repos>")];
+        if let Some(home) = home.filter(|h| h.parent().is_some()) {
+            paths.push((home.display().to_string(), "~"));
+        }
+        Self(paths)
+    }
+
+    /// `text` with each path replaced, most specific first.
+    pub(crate) fn apply(&self, text: &str) -> String {
+        self.0
+            .iter()
+            .fold(text.to_owned(), |text, (path, placeholder)| {
+                text.replace(path.as_str(), placeholder)
+            })
+    }
 }
 
 /// One model's totals.
@@ -133,5 +171,33 @@ mod tests {
             table(&summaries).lines().nth(2),
             Some("| haiku | 1/2 | 6 | 0 | 0 | 2 | 0 | $1.00 |")
         );
+    }
+
+    #[test]
+    fn paths_of_this_machine_are_redacted() {
+        let home = Path::new("/home/someone");
+        let redactions = Redactions::new(&home.join("codix/target/bench-repos"), Some(home));
+        let mut run = run(
+            "haiku",
+            true,
+            vec![Defect {
+                kind: DefectKind::GrepFallback,
+                tool: "grep".to_owned(),
+                detail: "in /home/someone/codix/target/bench-repos/spring-framework".to_owned(),
+            }],
+        );
+        run.answer =
+            "See `/home/someone/codix/target/bench-repos/spring-framework/A.java`.".to_owned();
+        run.error = Some("cannot read /home/someone/.config".to_owned());
+        run.redact(&redactions);
+        assert_eq!(run.answer, "See `<bench-repos>/spring-framework/A.java`.");
+        assert_eq!(run.error.as_deref(), Some("cannot read ~/.config"));
+        assert_eq!(run.defects[0].detail, "in <bench-repos>/spring-framework");
+    }
+
+    #[test]
+    fn a_root_home_directory_is_not_redacted() {
+        let redactions = Redactions::new(Path::new("/bench-repos"), Some(Path::new("/")));
+        assert_eq!(redactions.apply("/a/b"), "/a/b");
     }
 }
