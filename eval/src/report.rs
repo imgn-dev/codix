@@ -175,8 +175,11 @@ mod tests {
 
     #[test]
     fn paths_of_this_machine_are_redacted() {
-        let home = Path::new("/home/someone");
-        let redactions = Redactions::new(&home.join("codix/target/bench-repos"), Some(home));
+        // Literal paths: `join` would add a backslash on Windows.
+        let redactions = Redactions::new(
+            Path::new("/home/someone/codix/target/bench-repos"),
+            Some(Path::new("/home/someone")),
+        );
         let mut run = run(
             "haiku",
             true,
