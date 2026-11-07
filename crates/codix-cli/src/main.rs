@@ -139,6 +139,20 @@ enum Command {
         narrow: NarrowArgs,
     },
     Refs(RefsArgs),
+    Outline {
+        /// File or directory.
+        path: String,
+    },
+    Show {
+        /// Symbol ID, its path part, `file:line:col`, or a name.
+        symbol: String,
+        #[command(flatten)]
+        narrow: NarrowArgs,
+        /// Lines shown before and after the symbol.
+        #[arg(long, default_value_t = 0, value_name = "N")]
+        context: usize,
+    },
+    Grep(GrepArgs),
     Rename(RenameArgs),
     Apply {
         /// The preview ID, as `rename` or `undo` returned it.
@@ -154,20 +168,6 @@ enum Command {
         #[arg(long)]
         all: bool,
     },
-    Outline {
-        /// File or directory.
-        path: String,
-    },
-    Show {
-        /// Symbol ID, its path part, `file:line:col`, or a name.
-        symbol: String,
-        #[command(flatten)]
-        narrow: NarrowArgs,
-        /// Lines shown before and after the symbol.
-        #[arg(long, default_value_t = 0, value_name = "N")]
-        context: usize,
-    },
-    Grep(GrepArgs),
     Watch,
     #[command(subcommand)]
     Daemon(DaemonCommand),
