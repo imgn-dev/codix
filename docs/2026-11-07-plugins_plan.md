@@ -9,10 +9,9 @@ test suite green on the three CI platforms.
 
 ## Goal
 
-- **One small core.** The `full` build is 38.8 MB, and compiled grammars are
-  about 26 MB of it (C# 5.2, Kotlin 3.4, C++ 3.4, TypeScript 2.8, SQL 2.4,
-  PHP 2.1, Ruby 2.1, Rust 1.1, the rest under 1 MB each). A user who works in
-  Java should not carry C#.
+- **One small core.** With the release profile, the `full` build is 33.4 MB
+  and the core with git only 8.4 MB: compiled grammars are about 25 MB of it
+  (see P.1 findings). A user who works in Java should not carry C#.
 - **codix does not download anything.** Homebrew, or whichever package manager
   ships codix, installs plugins. codix finds what is installed and loads it
   when a project needs it.
@@ -136,15 +135,17 @@ Checked on 2026-11-07 against the pinned crates and crates.io.
 
 ### Crate versions
 
-New: `libloading` 0.9.0 in `codix-plugin`, and `cc` (current release, checked
-when P.8 starts) in `xtask`. `codix-resolver` uses `rusqlite` and `serde_json`,
+New: `libloading` 0.9.0 in `codix-plugin`, and `cc` 1.2.67 in `xtask`, the
+version already in `Cargo.lock`. The latest release, 1.11.1, cannot be used:
+`tree-sitter-sequel` 0.3.11 requires `cc ~1.2`, and Cargo allows one `cc` 1.x
+in a lockfile. `codix-resolver` uses `rusqlite` and `serde_json`,
 already in the workspace. If a task turns out to need another crate, it is
 added then, at its latest release, and this table gains a row.
 
 ### Sandbox
 
 Loading a library, starting a process and opening the index read-only from a
-second process are allowed in the sandbox; P.1 confirms all three. Tests
+second process are allowed in the sandbox: P.1 checked all three. Tests
 through a daemon keep the `live_` prefix and run on CI.
 
 ## New crates
@@ -235,6 +236,67 @@ then amended and submitted again if any choice changes.
 
 **Done when** the three platforms load the plugin and the figures are in
 this plan.
+
+#### P.1 findings
+
+On 2026-11-09, on branch `plugins-spike` (crate `codix-plugin-spike`, not
+merged). Figures are from the benchmark Mac (10 cores, macOS), release
+profile.
+
+- **Native grammar.** `tree-sitter-java`'s `parser.c`, compiled at run time
+  with `cc` and linked with the same compiler (`-shared`, or `/LD` with MSVC),
+  loads with `libloading` and gives the same trees and the same captures of
+  the pack's `tags` and `locals` queries as the compiled-in grammar on every
+  file of `corpus/java`. A missing library or symbol is an error, not a crash.
+  Passed on macOS, Linux and Windows CI (run 42682230688).
+- **Speed.** Modelling the 8,965 Java files of spring-framework on one
+  thread: 17.35 to 17.49 s compiled in, 17.44 to 17.70 s through the plugin
+  (three runs each), the same definitions. The difference is noise.
+- **Resolver path**, on spring-framework's index (1,498,575 refs, 143,418
+  symbols), a process binding each reference to the first symbol of its name:
+
+  | Step | Time |
+  | --- | --- |
+  | Create the views | 2 ms |
+  | Start the process, `hello` | 2 to 5 ms |
+  | Read every ref and look up its name (read-only, through the views) | 1.5 s |
+  | Write 958,531 targets to the scratch database | 0.8 to 1.0 s |
+  | Check the scratch rows (refs and symbols exist) | 1.0 s |
+  | Merge them in one transaction | 1.1 s |
+  | **Total** | **4.6 to 4.8 s** |
+
+  Checking in the merge itself (`UPDATE … FROM scratch JOIN symbols`, and
+  rejecting when fewer rows change than the scratch holds) saves about 1 s.
+  The plumbing then costs about 3.5 s on a cold index of 19.4 s (0.3.0),
+  which leaves about 7 s for phase 4's resolution logic within the 30 s
+  target. An incremental scan pays it in proportion to the changed files.
+- **WAL.** The index is in WAL mode: a second process can open it read-only
+  only while the `-wal` and `-shm` files exist, that is while the core holds
+  it open. The core keeps its connection open while a resolver runs.
+- **Sizes**, stripped:
+
+  | Artifact | Size |
+  | --- | --- |
+  | Core, git only (`--no-default-features --features vcs-git`) | 8.4 MB |
+  | `default` (Java, Go, Maven, Gradle, git) | 9.2 MB |
+  | `full` | 33.4 MB |
+  | Grammar libraries, all 22 | 26.8 MB |
+  | C#, Kotlin, C++, SQL, Ruby | 5.4, 3.5, 3.5, 2.5, 2.1 MB |
+  | TypeScript, TSX, Rust, PHP, PHP only | 1.5, 1.5, 1.1, 1.1, 1.0 MB |
+  | C, Python, Java, JavaScript, Markdown, Markdown inline | 0.4 to 0.7 MB each |
+  | Go, YAML, XML, DTD, TOML, JSON | under 0.25 MB each |
+  | A build plugin executable (Maven) | 0.45 MB |
+  | A resolver executable, without its grammar | 2.2 MB, mostly its own SQLite |
+
+  The core without grammars is most of a small install: the plugins save
+  space for `full`, not for `default`.
+- **Sandbox.** The three operations above ran inside the sandbox.
+- **Lints.** `codix-plugin-spike` repeats the workspace lint table without
+  `unsafe_code` and with `undocumented_unsafe_blocks` and
+  `unsafe_op_in_unsafe_fn` as errors; clippy passes with a `SAFETY` comment on
+  each of the three `unsafe` blocks.
+
+No choice changes.
 
 ### P.2 Lazy, fallible grammar access
 
