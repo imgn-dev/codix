@@ -16,7 +16,7 @@ pub use descriptor::{
     BuildDescriptor, Descriptor, Detect, IgnoreStrategy, LanguageDescriptor, ProviderKind, Scopes,
     VcsDescriptor,
 };
-pub use registry::{Grammar, ProviderEntry, Registry, registry};
+pub use registry::{CompiledGrammar, Grammar, PluginError, ProviderEntry, Registry, registry};
 
 #[doc(hidden)]
 pub use inventory;
@@ -57,7 +57,7 @@ macro_rules! register {
                 kind: $crate::ProviderKind::Language,
                 name: $name,
                 descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
-                grammar: Some($crate::Grammar {
+                grammar: Some($crate::CompiledGrammar {
                     language: $language,
                     tags: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $tags)),
                     locals: None,
@@ -72,7 +72,7 @@ macro_rules! register {
                 kind: $crate::ProviderKind::Language,
                 name: $name,
                 descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
-                grammar: Some($crate::Grammar {
+                grammar: Some($crate::CompiledGrammar {
                     language: $language,
                     tags: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $tags)),
                     locals: Some(concat!($(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $locals))),+)),

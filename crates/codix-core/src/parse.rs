@@ -43,16 +43,22 @@ pub(crate) fn query(
     if let Some(query) = cache.get(&key) {
         return Ok(Arc::clone(query));
     }
-    let query =
-        Query::new(&Language::new(grammar.language), source).map_err(|e| Error::Internal {
-            message: format!("the {name} {which} query does not compile: {e}"),
-        })?;
+    let query = Query::new(language(name, grammar)?, source).map_err(|e| Error::Internal {
+        message: format!("the {name} {which} query does not compile: {e}"),
+    })?;
     let query = Arc::new(query);
     cache.insert(key, Arc::clone(&query));
     Ok(query)
 }
 
-/// A definition captured by the `tags` query.
+/// A pack's grammar, loaded on first use.
+fn language<'g>(name: &str, grammar: &'g Grammar) -> Result<&'g Language, Error> {
+    grammar.language().map_err(|e| Error::PluginInvalid {
+        provider: name.to_owned(),
+        cause: e.to_string(),
+    })
+}
+
 /// A definition captured by the `tags` query. `@parent` names the enclosing
 /// type of a definition written outside it, such as a Go method's receiver,
 /// the type of a Rust `impl` block, or the scopes of a C++ `geo::Shape::area`.
@@ -89,7 +95,7 @@ pub(crate) fn parse(
         if !parsers.contains_key(&descriptor.name) {
             let mut parser = Parser::new();
             parser
-                .set_language(&Language::new(grammar.language))
+                .set_language(language(&descriptor.name, grammar)?)
                 .map_err(|e| Error::Internal {
                     message: format!("the {} grammar does not load: {e}", descriptor.name),
                 })?;
@@ -493,25 +499,18 @@ fn point(content: &str, byte: usize, position: tree_sitter::Point) -> Point {
 #[derive(Debug)]
 pub struct PackIndexer {
     detector: Detector,
-    versions: HashMap<String, String>,
+    /// Parser versions by language, each computed on first use: it loads the
+    /// grammar.
+    versions: HashMap<String, OnceLock<String>>,
 }
 
 impl PackIndexer {
     /// An indexer for a project's configuration.
     pub fn new(config: &Config) -> Self {
-        let registry = registry();
-        let versions = registry
+        let versions = registry()
             .languages
             .iter()
-            .map(|d| {
-                let version = match registry.grammars.get(&d.name) {
-                    Some(grammar) => {
-                        format!("{}-{}-{}", d.name, d.version, grammar_fingerprint(grammar))
-                    }
-                    None => format!("{}-{}", d.name, d.version),
-                };
-                (d.name.clone(), version)
-            })
+            .map(|d| (d.name.clone(), OnceLock::new()))
             .collect();
         Self {
             detector: Detector::new(config),
@@ -520,10 +519,31 @@ impl PackIndexer {
     }
 }
 
+/// The parser version of a compiled-in language: its name, its pack's
+/// version and its grammar's fingerprint. A grammar that does not load gives
+/// the version of text, which changes when it loads again.
+fn parser_version(language: &str) -> String {
+    let registry = registry();
+    let Some(descriptor) = registry.languages.iter().find(|d| d.name == language) else {
+        return TEXT_VERSION.to_owned();
+    };
+    match registry.grammars.get(language) {
+        Some(grammar) => match grammar_fingerprint(grammar) {
+            Some(fingerprint) => format!("{language}-{}-{fingerprint}", descriptor.version),
+            None => TEXT_VERSION.to_owned(),
+        },
+        None => format!("{language}-{}", descriptor.version),
+    }
+}
+
+/// The parser version of files searched as text.
+const TEXT_VERSION: &str = "text-1";
+
 /// Changes whenever the grammar or the query does: a hash of the query text
-/// and of what the grammar exposes about itself.
-fn grammar_fingerprint(grammar: &Grammar) -> String {
-    let language = Language::new(grammar.language);
+/// and of what the grammar exposes about itself. `None` when the grammar does
+/// not load.
+fn grammar_fingerprint(grammar: &Grammar) -> Option<String> {
+    let language = grammar.language().ok()?;
     let mut hasher = blake3::Hasher::new();
     hasher.update(grammar.tags.as_bytes());
     if let Some(locals) = grammar.locals {
@@ -536,15 +556,15 @@ fn grammar_fingerprint(grammar: &Grammar) -> String {
     if let Some(m) = language.metadata() {
         hasher.update(&[m.major_version, m.minor_version, m.patch_version]);
     }
-    hasher.finalize().to_hex()[..8].to_owned()
+    Some(hasher.finalize().to_hex()[..8].to_owned())
 }
 
 impl Indexer for PackIndexer {
     fn parser_version(&self, language: &str) -> String {
-        self.versions
-            .get(language)
-            .cloned()
-            .unwrap_or_else(|| "text-1".to_owned())
+        match self.versions.get(language) {
+            Some(version) => version.get_or_init(|| parser_version(language)).clone(),
+            None => TEXT_VERSION.to_owned(),
+        }
     }
 
     fn index(&self, id: &FileId, content: &[u8]) -> Indexed {
@@ -575,6 +595,9 @@ impl Indexer for PackIndexer {
         let Ok(text) = std::str::from_utf8(content) else {
             return search_only(FileStatus::SearchOnly);
         };
+        if grammar.language().is_err() {
+            return search_only(FileStatus::SearchOnly);
+        }
         match crate::scope::model(descriptor, grammar, id.as_str(), text) {
             Ok(model) => Indexed {
                 language: detection.language,

@@ -66,6 +66,14 @@ pub enum Error {
         /// The file that needs it.
         path: String,
     },
+    /// The provider is installed but cannot be used: its grammar does not
+    /// load.
+    PluginInvalid {
+        /// Provider name, such as `kotlin`.
+        provider: String,
+        /// Why it cannot be used.
+        cause: String,
+    },
     /// The command line is not valid.
     Usage {
         /// What is wrong.
@@ -160,6 +168,7 @@ impl Error {
             Self::UnknownSymbol { .. } => "unknown_symbol",
             Self::InvalidConfig { .. } => "invalid_config",
             Self::NotSupportedInBuild { .. } => "not_supported_in_build",
+            Self::PluginInvalid { .. } => "plugin_invalid",
             Self::Usage { .. } => "usage",
             Self::Io { .. } => "io",
             Self::FileExists { .. } => "file_exists",
@@ -191,6 +200,9 @@ impl Error {
             | Self::Refused { cause, .. } => cause.clone(),
             Self::NotSupportedInBuild { provider, path } => {
                 format!("{path}: {provider} is not supported in this build")
+            }
+            Self::PluginInvalid { provider, cause } => {
+                format!("the {provider} provider cannot be used: {cause}")
             }
             Self::Io { path, source } => format!("{}: {source}", path.display()),
             Self::FileExists { path } => {
@@ -240,6 +252,7 @@ impl Error {
             Self::NothingToUndo => {
                 "undo reverts the last 20 applies codix made, newest first".to_owned()
             }
+            Self::PluginInvalid { .. } => "reinstall codix and its plugins".to_owned(),
             Self::Internal { .. } => "this is a bug in codix; please report it".to_owned(),
         }
     }
@@ -276,7 +289,7 @@ impl Error {
             | Self::FileExists { .. }
             | Self::Refused { .. }
             | Self::SymbolRenamed { .. } => exit::REFUSED,
-            Self::Io { .. } | Self::Internal { .. } => exit::INTERNAL,
+            Self::Io { .. } | Self::PluginInvalid { .. } | Self::Internal { .. } => exit::INTERNAL,
         }
     }
 }

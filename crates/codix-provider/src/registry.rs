@@ -16,16 +16,34 @@ pub struct ProviderEntry {
     /// Descriptor TOML, validated by the provider's build script.
     pub descriptor: &'static str,
     /// A language pack's grammar, if it parses.
-    pub grammar: Option<Grammar>,
+    pub grammar: Option<CompiledGrammar>,
     /// A build system's logic.
     pub resolver: Option<&'static dyn crate::BuildResolver>,
 }
 
-/// A compiled-in tree-sitter grammar and the pack's queries for it.
+/// A grammar compiled into this binary and the pack's queries for it, as
+/// [`crate::register!`] records them.
 #[derive(Clone, Copy)]
-pub struct Grammar {
+pub struct CompiledGrammar {
     /// The grammar.
     pub language: tree_sitter_language::LanguageFn,
+    /// The pack's `tags` query.
+    pub tags: &'static str,
+    /// The pack's `locals` query.
+    pub locals: Option<&'static str>,
+}
+
+impl std::fmt::Debug for CompiledGrammar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CompiledGrammar").finish_non_exhaustive()
+    }
+}
+
+/// A language pack's tree-sitter grammar and its queries. The grammar is
+/// loaded on first use, once per process.
+pub struct Grammar {
+    source: GrammarSource,
+    language: OnceLock<Result<tree_sitter::Language, PluginError>>,
     /// The pack's `tags` query.
     pub tags: &'static str,
     /// The pack's `locals` query, for tier 2: scopes, local definitions and
@@ -33,11 +51,66 @@ pub struct Grammar {
     pub locals: Option<&'static str>,
 }
 
+/// Where a grammar comes from.
+#[derive(Clone, Copy)]
+enum GrammarSource {
+    /// Compiled into this binary.
+    Compiled(tree_sitter_language::LanguageFn),
+}
+
+impl Grammar {
+    fn compiled(grammar: CompiledGrammar) -> Self {
+        Self {
+            source: GrammarSource::Compiled(grammar.language),
+            language: OnceLock::new(),
+            tags: grammar.tags,
+            locals: grammar.locals,
+        }
+    }
+
+    /// The grammar, loaded on the first call; an error when it cannot be
+    /// loaded or its ABI is not one this tree-sitter reads.
+    pub fn language(&self) -> Result<&tree_sitter::Language, PluginError> {
+        self.language
+            .get_or_init(|| {
+                let language = match self.source {
+                    GrammarSource::Compiled(function) => tree_sitter::Language::new(function),
+                };
+                let abi = language.abi_version();
+                let supported =
+                    tree_sitter::MIN_COMPATIBLE_LANGUAGE_VERSION..=tree_sitter::LANGUAGE_VERSION;
+                if supported.contains(&abi) {
+                    Ok(language)
+                } else {
+                    Err(PluginError(format!(
+                        "grammar ABI {abi}, this build reads {} to {}",
+                        supported.start(),
+                        supported.end()
+                    )))
+                }
+            })
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+}
+
 impl std::fmt::Debug for Grammar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Grammar").finish_non_exhaustive()
     }
 }
+
+/// Why a provider cannot be used.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PluginError(String);
+
+impl std::fmt::Display for PluginError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+impl std::error::Error for PluginError {}
 
 inventory::collect!(ProviderEntry);
 
@@ -108,7 +181,9 @@ pub fn registry() -> &'static Registry {
             match descriptor {
                 Descriptor::Language(d) => {
                     if let Some(grammar) = entry.grammar {
-                        registry.grammars.insert(d.name.clone(), grammar);
+                        registry
+                            .grammars
+                            .insert(d.name.clone(), Grammar::compiled(grammar));
                     }
                     registry.languages.push(*d);
                 }

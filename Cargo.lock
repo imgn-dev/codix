@@ -501,6 +501,7 @@ dependencies = [
  "schemars",
  "serde",
  "toml",
+ "tree-sitter",
  "tree-sitter-language",
 ]
 
