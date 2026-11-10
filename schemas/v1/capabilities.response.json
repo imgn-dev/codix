@@ -33,6 +33,11 @@
           "minimum": 0,
           "type": "integer"
         },
+        "plugins": {
+          "default": "",
+          "description": "A fingerprint of the plugins it found when it started: a client that\nfinds other plugins replaces it. Empty without plugins.",
+          "type": "string"
+        },
         "protocol": {
           "description": "Its protocol version.",
           "format": "uint32",

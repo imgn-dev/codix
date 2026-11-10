@@ -321,3 +321,72 @@ fn kill(pid: u64) {
     let status = Command::new("taskkill").args(["/F", "/PID", &pid]).status();
     assert!(status.expect("kill").success());
 }
+
+/// Installing a plugin under a running daemon: the next command finds the
+/// daemon runs with other plugins, stops it and uses the plugin, and the
+/// next daemon starts with it.
+#[cfg(all(feature = "plugins", not(with_vcs_hg)))]
+#[test]
+fn live_a_plugin_installed_under_a_running_daemon_is_used_next() {
+    let runtime = Runtime::new();
+    let (_guard, root) = project();
+    std::fs::create_dir(root.join(".hg")).expect(".hg");
+    let plugins = tempfile::tempdir().expect("plugins");
+    let path = plugins.path().to_str().expect("UTF-8").to_owned();
+    let data = plugins.path().join("no-user-plugins");
+    let data = data.to_str().expect("UTF-8").to_owned();
+    let env = [
+        ("CODIX_PLUGIN_PATH", path.as_str()),
+        ("XDG_DATA_HOME", data.as_str()),
+        ("LOCALAPPDATA", data.as_str()),
+    ];
+    let json = |args: &[&str]| -> Value {
+        let out = runtime.codix_with(&root, args, &env);
+        assert_eq!(out.code, Some(0), "{args:?}: {}", out.stderr);
+        serde_json::from_str(&out.stdout).expect("JSON")
+    };
+    let mercurial_missing = |status: &Value| {
+        status["result"]["missing"]
+            .as_array()
+            .expect("missing")
+            .iter()
+            .any(|m| m["name"] == "mercurial")
+    };
+
+    let first = json(&["daemon", "start", "--json"])["result"]["daemon"]["pid"]
+        .as_u64()
+        .expect("pid");
+    let status = json(&["status", "--json"]);
+    assert_eq!(daemon_pid(&status), Some(first), "{status}");
+    assert!(mercurial_missing(&status), "{status}");
+
+    let hg = plugins.path().join("vcs").join("mercurial");
+    std::fs::create_dir_all(&hg).expect("plugin dir");
+    std::fs::write(
+        hg.join("plugin.toml"),
+        "schema = 1\nkind = \"vcs\"\nname = \"mercurial\"\nversion = \"1.0.0\"\n",
+    )
+    .expect("manifest");
+    std::fs::write(
+        hg.join("descriptor.toml"),
+        include_str!("../../codix-vcs-hg/descriptor.toml"),
+    )
+    .expect("descriptor");
+
+    let status = json(&["status", "--json"]);
+    assert!(!mercurial_missing(&status), "{status}");
+    assert_eq!(status["warnings"][0]["code"], "daemon_stopped", "{status}");
+    assert_eq!(daemon_pid(&status), None, "{status}");
+
+    let second = json(&["daemon", "start", "--json"])["result"]["daemon"]["pid"]
+        .as_u64()
+        .expect("pid");
+    assert_ne!(second, first);
+    let status = json(&["status", "--json"]);
+    assert_eq!(daemon_pid(&status), Some(second), "{status}");
+    assert!(!mercurial_missing(&status), "{status}");
+    assert!(
+        status["warnings"].as_array().is_some_and(Vec::is_empty),
+        "{status}"
+    );
+}

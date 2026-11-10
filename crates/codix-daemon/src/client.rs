@@ -4,7 +4,7 @@
 use std::io::BufReader;
 
 use codix_core::Error;
-use codix_core::daemon::{DaemonRecord, running};
+use codix_core::daemon::{DaemonRecord, PROTOCOL, running};
 use codix_core::op::{Context, Operation, Warning};
 use codix_core::project::Project;
 use interprocess::local_socket::{GenericFilePath, Stream, prelude::*};
@@ -85,10 +85,19 @@ fn replace<T>(project: &Project, record: &DaemonRecord, ctx: &Context) -> Route<
         Ok(_) => Route::InProcess {
             warnings: vec![Warning {
                 code: "daemon_stopped".to_owned(),
-                message: format!(
-                    "stopped the codix {} daemon (pid {}), which this codix cannot talk to; `codix daemon start` starts one of this version",
-                    record.version, record.pid
-                ),
+                message: if record.protocol == PROTOCOL
+                    && record.version == env!("CARGO_PKG_VERSION")
+                {
+                    format!(
+                        "stopped the codix {} daemon (pid {}), which runs with other plugins; `codix daemon start` starts one with the plugins installed now",
+                        record.version, record.pid
+                    )
+                } else {
+                    format!(
+                        "stopped the codix {} daemon (pid {}), which this codix cannot talk to; `codix daemon start` starts one of this version",
+                        record.version, record.pid
+                    )
+                },
             }],
         },
         Err(error) => Route::Daemon {

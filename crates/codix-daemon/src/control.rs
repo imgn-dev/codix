@@ -56,9 +56,12 @@ pub fn hello(socket: &str) -> Option<DaemonRecord> {
     }
 }
 
-/// Whether this codix can talk to the daemon described by `record`.
+/// Whether this codix can talk to the daemon described by `record`: the same
+/// protocol, codix version and plugins.
 pub fn compatible(record: &DaemonRecord) -> bool {
-    record.protocol == PROTOCOL && record.version == env!("CARGO_PKG_VERSION")
+    record.protocol == PROTOCOL
+        && record.version == env!("CARGO_PKG_VERSION")
+        && record.plugins == codix_core::providers::plugins_fingerprint()
 }
 
 /// What `daemon start` did.

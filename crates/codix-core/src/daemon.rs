@@ -21,7 +21,7 @@ pub const SOCKET_FILE: &str = "daemon.sock";
 pub const LOG_FILE: &str = "daemon.log";
 
 /// Version of the daemon protocol; a client talks only to a daemon with the
-/// same protocol and codix version.
+/// same protocol, codix version and plugins.
 pub const PROTOCOL: u32 = 1;
 
 /// A running daemon, as recorded in `.codix/daemon.json` and in the runtime
@@ -38,6 +38,10 @@ pub struct DaemonRecord {
     pub version: String,
     /// Its protocol version.
     pub protocol: u32,
+    /// A fingerprint of the plugins it found when it started: a client that
+    /// finds other plugins replaces it. Empty without plugins.
+    #[serde(default)]
+    pub plugins: String,
     /// When it started, in seconds since the Unix epoch.
     pub started_at: u64,
 }

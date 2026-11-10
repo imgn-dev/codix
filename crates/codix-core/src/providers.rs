@@ -2,8 +2,9 @@
 //! a project misses when one it needs is not.
 
 use std::path::Path;
+use std::sync::OnceLock;
 
-use codix_provider::{LanguageDescriptor, ProviderKind, Rejection, known, registry};
+use codix_provider::{LanguageDescriptor, ProviderKind, Rejection, Source, known, registry};
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
@@ -160,6 +161,67 @@ pub fn missing(root: &Path, search_only: &[(String, usize)]) -> Vec<MissingProvi
     missing.extend(marked(ProviderKind::Vcs, known::VCS_MARKERS, &ancestors));
     missing.sort_by(|a, b| (a.kind, &a.name).cmp(&(b.kind, &b.name)));
     missing
+}
+
+/// A fingerprint of the plugins this process found, used or not: their
+/// directories, and the path, size and modification time of every file in
+/// them. Installing, removing or updating a plugin changes it. Empty when
+/// there are none.
+pub fn plugins_fingerprint() -> &'static str {
+    static FINGERPRINT: OnceLock<String> = OnceLock::new();
+    FINGERPRINT.get_or_init(|| {
+        let registry = registry();
+        let mut dirs: Vec<&Path> = registry
+            .sources
+            .values()
+            .filter_map(|(source, _)| match source {
+                Source::Plugin(dir) => Some(dir.as_path()),
+                Source::CompiledIn => None,
+            })
+            .chain(registry.rejected.iter().map(|r| r.dir.as_path()))
+            .collect();
+        if dirs.is_empty() {
+            return String::new();
+        }
+        dirs.sort_unstable();
+        dirs.dedup();
+        let mut hasher = blake3::Hasher::new();
+        for dir in dirs {
+            hasher.update(dir.to_string_lossy().as_bytes());
+            hasher.update(&[0]);
+            hash_files(&mut hasher, dir, dir);
+        }
+        hasher.finalize().to_hex()[..16].to_owned()
+    })
+}
+
+/// Hashes the path, size and modification time of every file under `dir`,
+/// in name order.
+fn hash_files(hasher: &mut blake3::Hasher, base: &Path, dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut entries: Vec<_> = entries.filter_map(Result::ok).collect();
+    entries.sort_by_key(std::fs::DirEntry::file_name);
+    for entry in entries {
+        let path = entry.path();
+        let Ok(metadata) = std::fs::metadata(&path) else {
+            continue;
+        };
+        if metadata.is_dir() {
+            hash_files(hasher, base, &path);
+            continue;
+        }
+        let relative = path.strip_prefix(base).unwrap_or(&path);
+        let modified = metadata
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |d| d.as_nanos());
+        hasher.update(relative.to_string_lossy().as_bytes());
+        hasher.update(&metadata.len().to_le_bytes());
+        hasher.update(&modified.to_le_bytes());
+    }
 }
 
 /// Why a provider is not there: `plugin not installed` or `not in this build`.

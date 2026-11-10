@@ -150,6 +150,7 @@ fn serve_project(root: &Path) -> Result<(), Error> {
         pid: std::process::id(),
         version: reported_version(),
         protocol: PROTOCOL,
+        plugins: codix_core::providers::plugins_fingerprint().to_owned(),
         started_at: SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map_or(0, |d| d.as_secs()),
@@ -357,6 +358,7 @@ mod tests {
                 pid: 1,
                 version: "test".to_owned(),
                 protocol: PROTOCOL,
+                plugins: String::new(),
                 started_at: 0,
             },
             project,
