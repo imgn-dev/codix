@@ -14,9 +14,12 @@ mod registry;
 pub use build::{BuildModel, BuildResolver, Module, Unsupported};
 pub use descriptor::{
     BuildDescriptor, Descriptor, Detect, IgnoreStrategy, LanguageDescriptor, ProviderKind, Scopes,
-    VcsDescriptor,
+    VcsDescriptor, toml_error,
 };
-pub use registry::{CompiledGrammar, Grammar, PluginError, ProviderEntry, Registry, registry};
+pub use registry::{
+    CompiledGrammar, Grammar, Plugin, PluginError, PluginSource, ProviderEntry, Registry, Rejected,
+    Rejection, Source, registry,
+};
 
 #[doc(hidden)]
 pub use inventory;
@@ -34,6 +37,7 @@ macro_rules! register {
             $crate::ProviderEntry {
                 kind: $crate::ProviderKind::$kind,
                 name: $name,
+                version: env!("CARGO_PKG_VERSION"),
                 descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
                 grammar: None,
                 resolver: None,
@@ -45,6 +49,7 @@ macro_rules! register {
             $crate::ProviderEntry {
                 kind: $crate::ProviderKind::Build,
                 name: $name,
+                version: env!("CARGO_PKG_VERSION"),
                 descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
                 grammar: None,
                 resolver: Some($resolver),
@@ -56,6 +61,7 @@ macro_rules! register {
             $crate::ProviderEntry {
                 kind: $crate::ProviderKind::Language,
                 name: $name,
+                version: env!("CARGO_PKG_VERSION"),
                 descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
                 grammar: Some($crate::CompiledGrammar {
                     language: $language,
@@ -71,6 +77,7 @@ macro_rules! register {
             $crate::ProviderEntry {
                 kind: $crate::ProviderKind::Language,
                 name: $name,
+                version: env!("CARGO_PKG_VERSION"),
                 descriptor: include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/", $path)),
                 grammar: Some($crate::CompiledGrammar {
                     language: $language,

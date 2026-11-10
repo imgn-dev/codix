@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-use codix_provider::{ProviderKind, known, registry};
+use codix_provider::{ProviderKind, Rejection, Source, known, registry};
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
@@ -220,6 +220,114 @@ pub struct LanguageInfo {
 pub struct LanguagesResponse {
     /// Every known language, sorted by name.
     pub languages: Vec<LanguageInfo>,
+    /// Every provider known, available or found as a plugin, sorted by kind
+    /// and name; one name may be listed more than once, used or not.
+    pub providers: Vec<ProviderInfo>,
+}
+
+/// One provider: where it comes from and whether it is used.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ProviderInfo {
+    /// Provider kind.
+    pub kind: ProviderKind,
+    /// Provider name.
+    pub name: String,
+    /// Its version, when it is used.
+    pub version: Option<String>,
+    /// Where it comes from; none when it is not there.
+    pub source: Option<ProviderSource>,
+    /// Whether it is used.
+    pub status: ProviderStatus,
+    /// Why it is not used, when it was found.
+    pub reason: Option<String>,
+}
+
+/// Where a provider comes from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderSource {
+    /// Compiled into this binary.
+    CompiledIn,
+    /// A plugin, in this directory.
+    Plugin(PathBuf),
+}
+
+/// Whether a provider is used.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderStatus {
+    /// Used.
+    Available,
+    /// Known to codix, but no plugin provides it.
+    NotInstalled,
+    /// Known to codix, but left out of this build.
+    NotInBuild,
+    /// Found as a plugin that cannot be used.
+    Invalid,
+    /// Found as a plugin, but another provider of the same name is used.
+    LeftOut,
+}
+
+/// Every provider: those available, those known but not there, and the
+/// plugins found but not used.
+pub fn providers() -> Vec<ProviderInfo> {
+    let registry = registry();
+    let mut providers: Vec<ProviderInfo> = registry
+        .sources
+        .iter()
+        .map(|((kind, name), (source, version))| ProviderInfo {
+            kind: *kind,
+            name: name.clone(),
+            version: Some(version.clone()),
+            source: Some(match source {
+                Source::CompiledIn => ProviderSource::CompiledIn,
+                Source::Plugin(dir) => ProviderSource::Plugin(dir.clone()),
+            }),
+            status: ProviderStatus::Available,
+            reason: None,
+        })
+        .collect();
+    let absent = if crate::providers::MODULAR {
+        ProviderStatus::NotInstalled
+    } else {
+        ProviderStatus::NotInBuild
+    };
+    for (kind, names) in [
+        (ProviderKind::Language, known::LANGUAGES),
+        (ProviderKind::Build, known::BUILDS),
+        (ProviderKind::Vcs, known::VCS),
+    ] {
+        for name in names {
+            if *name != crate::detect::TEXT && !registry.contains(kind, name) {
+                providers.push(ProviderInfo {
+                    kind,
+                    name: (*name).to_owned(),
+                    version: None,
+                    source: None,
+                    status: absent,
+                    reason: None,
+                });
+            }
+        }
+    }
+    for rejected in &registry.rejected {
+        let (status, reason) = match &rejected.rejection {
+            Rejection::Invalid(reason) => (ProviderStatus::Invalid, reason),
+            Rejection::LeftOut(reason) => (ProviderStatus::LeftOut, reason),
+        };
+        providers.push(ProviderInfo {
+            kind: rejected.kind,
+            name: rejected.name.clone(),
+            version: None,
+            source: Some(ProviderSource::Plugin(rejected.dir.clone())),
+            status,
+            reason: Some(reason.clone()),
+        });
+    }
+    // Stable: for one name, the provider used comes first, then the plugins
+    // in search order.
+    providers.sort_by(|a, b| (a.kind, &a.name).cmp(&(b.kind, &b.name)));
+    providers
 }
 
 impl Outcome for LanguagesResponse {
@@ -253,6 +361,9 @@ impl Operation for LanguagesOp {
                 }
             })
             .collect();
-        Ok(LanguagesResponse { languages })
+        Ok(LanguagesResponse {
+            languages,
+            providers: providers(),
+        })
     }
 }

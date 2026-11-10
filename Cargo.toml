@@ -36,6 +36,7 @@ codix-lang-toml = { path = "crates/codix-lang-toml" }
 codix-lang-typescript = { path = "crates/codix-lang-typescript" }
 codix-lang-xml = { path = "crates/codix-lang-xml" }
 codix-lang-yaml = { path = "crates/codix-lang-yaml" }
+codix-plugin = { path = "crates/codix-plugin" }
 codix-provider = { path = "crates/codix-provider" }
 codix-testkit = { path = "crates/codix-testkit" }
 codix-vcs-git = { path = "crates/codix-vcs-git" }

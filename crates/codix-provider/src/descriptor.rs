@@ -381,6 +381,18 @@ pub enum IgnoreStrategy {
     None,
 }
 
+/// A TOML error on one line, with the line it is on, such as
+/// ``line 3: unknown field `x` ``.
+pub fn toml_error(text: &str, error: &toml::de::Error) -> String {
+    match error.span() {
+        Some(span) => {
+            let line = text[..span.start.min(text.len())].matches('\n').count() + 1;
+            format!("line {line}: {}", error.message())
+        }
+        None => error.message().to_owned(),
+    }
+}
+
 /// A descriptor of any kind.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Descriptor {
@@ -396,12 +408,13 @@ impl Descriptor {
     /// Parses descriptor TOML of the given kind, and checks what the schema
     /// cannot express.
     pub fn parse(kind: ProviderKind, text: &str) -> Result<Self, String> {
+        let error = |e| toml_error(text, &e);
         let descriptor = match kind {
             ProviderKind::Language => {
-                Self::Language(Box::new(toml::from_str(text).map_err(|e| e.to_string())?))
+                Self::Language(Box::new(toml::from_str(text).map_err(error)?))
             }
-            ProviderKind::Build => Self::Build(toml::from_str(text).map_err(|e| e.to_string())?),
-            ProviderKind::Vcs => Self::Vcs(toml::from_str(text).map_err(|e| e.to_string())?),
+            ProviderKind::Build => Self::Build(toml::from_str(text).map_err(error)?),
+            ProviderKind::Vcs => Self::Vcs(toml::from_str(text).map_err(error)?),
         };
         if let Self::Language(language) = &descriptor {
             for (capture, kind) in &language.symbols.kinds {
@@ -439,6 +452,15 @@ impl Descriptor {
             }
         }
         Ok(descriptor)
+    }
+
+    /// The kind of provider it describes.
+    pub fn kind(&self) -> ProviderKind {
+        match self {
+            Self::Language(_) => ProviderKind::Language,
+            Self::Build(_) => ProviderKind::Build,
+            Self::Vcs(_) => ProviderKind::Vcs,
+        }
     }
 
     /// The provider name the descriptor declares.

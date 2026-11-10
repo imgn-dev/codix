@@ -260,14 +260,20 @@ mod with_java {
 #[test]
 fn not_supported_in_build() {
     let (_guard, root) = indexed(&[("src/Main.kt", "fun main() {}\n")]);
+    let modular = cfg!(feature = "plugins");
+    let cause = if modular {
+        "the kotlin plugin is not installed"
+    } else {
+        "kotlin is not supported in this build"
+    };
+    let (_, hint) = codix_testkit::missing_provider(modular, "lang", "kotlin");
     check(
         &root,
         &root,
         &["outline", "src/Main.kt"],
         "not_supported_in_build",
         2,
-        "error[not_supported_in_build]: src/Main.kt: kotlin is not supported in this build\n\
-         hint: use the full codix build, which includes every provider\n",
+        &format!("error[not_supported_in_build]: src/Main.kt: {cause}\nhint: {hint}\n"),
     );
 }
 

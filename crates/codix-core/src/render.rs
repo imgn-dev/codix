@@ -7,7 +7,9 @@ use serde::Serialize;
 
 use crate::Error;
 use crate::apply::ApplyResponse;
-use crate::capabilities::{Capabilities, LanguagesResponse, Tier};
+use crate::capabilities::{
+    Capabilities, LanguagesResponse, ProviderInfo, ProviderSource, ProviderStatus, Tier,
+};
 use crate::config::{ConfigResponse, Setting};
 use crate::edit::{Exclusion, PreviewResponse};
 use crate::indexing::{InitResponse, StatusResponse};
@@ -663,8 +665,41 @@ impl TextRender for LanguagesResponse {
                 )?;
             }
         }
-        Ok(())
+        render_providers(w, &self.providers)
     }
+}
+
+fn render_providers(w: &mut dyn Write, providers: &[ProviderInfo]) -> io::Result<()> {
+    writeln!(w, "providers:")?;
+    let name_width = providers.iter().map(|p| p.name.len()).max().unwrap_or(0);
+    let version_width = providers
+        .iter()
+        .map(|p| p.version.as_deref().map_or(0, str::len))
+        .max()
+        .unwrap_or(0);
+    for provider in providers {
+        let dir = match &provider.source {
+            Some(ProviderSource::Plugin(dir)) => dir.display().to_string(),
+            Some(ProviderSource::CompiledIn) => "compiled in".to_owned(),
+            None => String::new(),
+        };
+        let reason = provider.reason.as_deref().unwrap_or_default();
+        let status = match provider.status {
+            ProviderStatus::Available => dir,
+            ProviderStatus::NotInstalled => "not installed".to_owned(),
+            ProviderStatus::NotInBuild => "not in this build".to_owned(),
+            ProviderStatus::Invalid => format!("invalid: {reason} ({dir})"),
+            ProviderStatus::LeftOut => format!("left out: {reason} ({dir})"),
+        };
+        writeln!(
+            w,
+            "  {:8}{COLUMN_GAP}{:name_width$}{COLUMN_GAP}{:version_width$}{COLUMN_GAP}{status}",
+            provider.kind,
+            provider.name,
+            provider.version.as_deref().unwrap_or_default(),
+        )?;
+    }
+    Ok(())
 }
 
 impl TextRender for ScanReport {

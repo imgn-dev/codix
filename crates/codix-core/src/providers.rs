@@ -10,7 +10,7 @@ use crate::Error;
 
 /// Whether this build finds providers as plugins, rather than having every
 /// provider it can use compiled in.
-const MODULAR: bool = cfg!(feature = "plugins");
+pub(crate) const MODULAR: bool = cfg!(feature = "plugins");
 
 /// The command a packager sets to install a plugin, with `{kind}` and
 /// `{name}` placeholders, such as `brew install codix-{kind}-{name}`.

@@ -12,7 +12,8 @@ publish = false
 name = "codix"
 path = "src/main.rs"
 
-# Features are strictly additive: each one only adds a provider.
+# Features are strictly additive: each one only adds a provider, or with
+# `plugins`, the providers installed as plugins.
 [features]
 default = ["build-gradle", "build-maven", "lang-go", "lang-java", "vcs-git"]
 full = ["default", "all-builds", "all-langs", "all-vcs"]
@@ -43,6 +44,7 @@ lang-java = ["dep:codix-lang-java"]
 vcs-git = ["dep:codix-vcs-git"]
 vcs-hg = ["dep:codix-vcs-hg"]
 vcs-svn = ["dep:codix-vcs-svn"]
+plugins = ["dep:codix-plugin", "codix-core/plugins"]
 
 [dependencies]
 clap.workspace = true
@@ -51,6 +53,7 @@ codix-build-maven = { workspace = true, optional = true }
 codix-core.workspace = true
 codix-daemon.workspace = true
 codix-mcp.workspace = true
+codix-plugin = { workspace = true, optional = true }
 codix-lang-java = { workspace = true, optional = true }
 codix-lang-go = { workspace = true, optional = true }
 codix-lang-typescript = { workspace = true, optional = true }

@@ -39,6 +39,25 @@ pub fn assert_golden(path: impl AsRef<Path>, actual: &str) {
     );
 }
 
+/// How codix words a provider the build lacks, as (why, hint): in a build
+/// with plugins (`modular`), and without an install command set at build
+/// time; `kind` is `lang`, `build` or `vcs`.
+pub fn missing_provider(modular: bool, kind: &str, name: &str) -> (String, String) {
+    if modular {
+        (
+            "plugin not installed".to_owned(),
+            format!(
+                "install the codix-{kind}-{name} plugin: see https://github.com/imgn-dev/codix#plugins"
+            ),
+        )
+    } else {
+        (
+            "not in this build".to_owned(),
+            "use the full codix build, which includes every provider".to_owned(),
+        )
+    }
+}
+
 /// The result of running a binary.
 #[derive(Debug)]
 pub struct Run {

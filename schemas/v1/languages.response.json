@@ -34,6 +34,127 @@
       ],
       "type": "object"
     },
+    "ProviderInfo": {
+      "description": "One provider: where it comes from and whether it is used.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ProviderKind",
+          "description": "Provider kind."
+        },
+        "name": {
+          "description": "Provider name.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why it is not used, when it was found.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProviderSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Where it comes from; none when it is not there."
+        },
+        "status": {
+          "$ref": "#/$defs/ProviderStatus",
+          "description": "Whether it is used."
+        },
+        "version": {
+          "description": "Its version, when it is used.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "status"
+      ],
+      "type": "object"
+    },
+    "ProviderKind": {
+      "description": "The three kinds of provider.",
+      "oneOf": [
+        {
+          "const": "language",
+          "description": "A language pack.",
+          "type": "string"
+        },
+        {
+          "const": "build",
+          "description": "A build system.",
+          "type": "string"
+        },
+        {
+          "const": "vcs",
+          "description": "A version control system.",
+          "type": "string"
+        }
+      ]
+    },
+    "ProviderSource": {
+      "description": "Where a provider comes from.",
+      "oneOf": [
+        {
+          "const": "compiled_in",
+          "description": "Compiled into this binary.",
+          "type": "string"
+        },
+        {
+          "additionalProperties": false,
+          "description": "A plugin, in this directory.",
+          "properties": {
+            "plugin": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "plugin"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "ProviderStatus": {
+      "description": "Whether a provider is used.",
+      "oneOf": [
+        {
+          "const": "available",
+          "description": "Used.",
+          "type": "string"
+        },
+        {
+          "const": "not_installed",
+          "description": "Known to codix, but no plugin provides it.",
+          "type": "string"
+        },
+        {
+          "const": "not_in_build",
+          "description": "Known to codix, but left out of this build.",
+          "type": "string"
+        },
+        {
+          "const": "invalid",
+          "description": "Found as a plugin that cannot be used.",
+          "type": "string"
+        },
+        {
+          "const": "left_out",
+          "description": "Found as a plugin, but another provider of the same name is used.",
+          "type": "string"
+        }
+      ]
+    },
     "Tier": {
       "description": "How deep support for a language goes.",
       "oneOf": [
@@ -69,10 +190,18 @@
         "$ref": "#/$defs/LanguageInfo"
       },
       "type": "array"
+    },
+    "providers": {
+      "description": "Every provider known, available or found as a plugin, sorted by kind\nand name; one name may be listed more than once, used or not.",
+      "items": {
+        "$ref": "#/$defs/ProviderInfo"
+      },
+      "type": "array"
     }
   },
   "required": [
-    "languages"
+    "languages",
+    "providers"
   ],
   "title": "LanguagesResponse",
   "type": "object"

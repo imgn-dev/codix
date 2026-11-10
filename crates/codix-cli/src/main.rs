@@ -49,6 +49,9 @@ use codix_vcs_git as _;
 use codix_vcs_hg as _;
 #[cfg(feature = "vcs-svn")]
 use codix_vcs_svn as _;
+// Likewise for the plugins found on the machine.
+#[cfg(feature = "plugins")]
+use codix_plugin as _;
 
 use std::env;
 use std::ffi::OsString;

@@ -253,6 +253,7 @@ dependencies = [
  "codix-lang-xml",
  "codix-lang-yaml",
  "codix-mcp",
+ "codix-plugin",
  "codix-provider",
  "codix-testkit",
  "codix-vcs-git",
@@ -490,6 +491,16 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "codix-plugin"
+version = "0.3.0"
+dependencies = [
+ "codix-provider",
+ "serde",
+ "tempfile",
+ "toml",
 ]
 
 [[package]]

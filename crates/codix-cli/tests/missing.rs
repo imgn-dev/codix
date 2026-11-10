@@ -2,11 +2,19 @@
 //! with what is lost and how to get them, by `init`, `index` and `status`.
 
 use codix_testkit::fixture::{codix_in, files_only};
-use serde_json::Value;
 
 const CODIX: &str = env!("CARGO_BIN_EXE_codix");
 
-const HINT: &str = "not in this build (use the full codix build, which includes every provider)";
+/// The end of a missing provider's line: why it is missing, and the hint.
+#[cfg(any(
+    not(feature = "lang-kotlin"),
+    not(feature = "build-maven"),
+    not(feature = "vcs-hg")
+))]
+fn absent(kind: &str, name: &str) -> String {
+    let (why, hint) = codix_testkit::missing_provider(cfg!(feature = "plugins"), kind, name);
+    format!("{why} ({hint})")
+}
 
 /// `init`, `index` and `status` output, in that order.
 fn reports(files: &[(&str, &str)], dirs: &[&str]) -> [String; 3] {
@@ -29,7 +37,10 @@ fn a_language_without_its_pack_is_indexed_as_text_and_reported() {
         ("src/Main.kt", "fun main() {}\n"),
         ("src/Util.kt", "fun util() {}\n"),
     ];
-    let line = format!("kotlin: 2 files indexed as text; {HINT}\n");
+    let line = format!(
+        "kotlin: 2 files indexed as text; {}\n",
+        absent("lang", "kotlin")
+    );
     for report in reports(&files, &[]) {
         assert_eq!(report.matches(&line).count(), 1, "{report}");
     }
@@ -37,7 +48,7 @@ fn a_language_without_its_pack_is_indexed_as_text_and_reported() {
     let (_guard, root) = files_only(&files);
     codix_in(CODIX, &root, &root, &["init"]);
     let out = codix_in(CODIX, &root, &root, &["index", "--json"]);
-    let json: Value = serde_json::from_str(&out.stdout).expect("JSON");
+    let json: serde_json::Value = serde_json::from_str(&out.stdout).expect("JSON");
     assert_eq!(
         json["result"]["missing"],
         serde_json::json!([{
@@ -45,7 +56,7 @@ fn a_language_without_its_pack_is_indexed_as_text_and_reported() {
             "name": "kotlin",
             "files": 2,
             "marker": null,
-            "hint": "use the full codix build, which includes every provider",
+            "hint": codix_testkit::missing_provider(cfg!(feature = "plugins"), "lang", "kotlin").1,
         }])
     );
 }
@@ -53,7 +64,10 @@ fn a_language_without_its_pack_is_indexed_as_text_and_reported() {
 #[cfg(not(feature = "build-maven"))]
 #[test]
 fn a_build_system_without_its_provider_is_reported() {
-    let line = format!("maven: pom.xml found, modules not read; {HINT}\n");
+    let line = format!(
+        "maven: pom.xml found, modules not read; {}\n",
+        absent("build", "maven")
+    );
     for report in reports(&[("pom.xml", "<project/>\n")], &[]) {
         assert!(report.contains(&line), "{report}");
     }
@@ -62,7 +76,10 @@ fn a_build_system_without_its_provider_is_reported() {
 #[cfg(not(feature = "vcs-hg"))]
 #[test]
 fn a_version_control_system_without_its_provider_is_reported() {
-    let line = format!("mercurial: .hg found, ignore rules not applied; {HINT}\n");
+    let line = format!(
+        "mercurial: .hg found, ignore rules not applied; {}\n",
+        absent("vcs", "mercurial")
+    );
     for report in reports(&[("notes.txt", "hello\n")], &[".hg"]) {
         assert!(report.contains(&line), "{report}");
     }
@@ -71,6 +88,7 @@ fn a_version_control_system_without_its_provider_is_reported() {
 #[test]
 fn nothing_is_reported_when_every_provider_is_there() {
     for report in reports(&[("notes.txt", "hello\n")], &[]) {
-        assert!(!report.contains(HINT), "{report}");
+        assert!(!report.contains(" found, "), "{report}");
+        assert!(!report.contains(" indexed as text; "), "{report}");
     }
 }

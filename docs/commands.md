@@ -48,10 +48,10 @@ codix capabilities --json
 
 ## `codix languages`
 
-List every language codix knows, with its tier and file names.
+List every language codix knows, with its tier and file names, and every provider.
 
-- **When:** To check how a kind of file is handled, or whether this build includes a language.
-- **Returns:** Each language with its tier, extensions, file names, and whether it is in this build.
+- **When:** To check how a kind of file is handled, or whether a language, build system or version control system is available.
+- **Returns:** Each language with its tier, extensions, file names, and whether it is in this build; each provider with its version, where it comes from, and whether it is used.
 
 ```
 codix languages

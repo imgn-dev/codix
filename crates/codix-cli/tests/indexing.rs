@@ -66,10 +66,9 @@ fn expected_missing() -> Vec<String> {
     .into_iter()
     .filter(|(_, compiled_in)| !compiled_in)
     .map(|(language, _)| {
-        format!(
-            "{language}: 1 file indexed as text; not in this build \
-             (use the full codix build, which includes every provider)"
-        )
+        let (why, hint) =
+            codix_testkit::missing_provider(cfg!(feature = "plugins"), "lang", language);
+        format!("{language}: 1 file indexed as text; {why} ({hint})")
     })
     .collect()
 }
