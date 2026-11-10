@@ -177,3 +177,31 @@ pub fn build_codix() -> PathBuf {
         .join("target/release")
         .join(format!("codix{}", std::env::consts::EXE_SUFFIX))
 }
+
+/// Builds the modular flavour with every plugin, as it installs, into
+/// `target/bench-dist`, and returns its binary: `bin/codix`, which finds the
+/// plugins in `lib/codix/plugins` beside it.
+///
+/// # Panics
+///
+/// When cargo cannot run or the build fails.
+pub fn build_modular() -> PathBuf {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_owned());
+    let dist = workspace().join("target/bench-dist");
+    if dist.exists() {
+        std::fs::remove_dir_all(&dist).expect("remove the previous build");
+    }
+    let output = Command::new(cargo)
+        .args(["xtask", "dist"])
+        .arg(&dist)
+        .current_dir(workspace())
+        .output()
+        .expect("run cargo xtask dist");
+    assert!(
+        output.status.success(),
+        "building the modular flavour failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    dist.join("bin")
+        .join(format!("codix{}", std::env::consts::EXE_SUFFIX))
+}

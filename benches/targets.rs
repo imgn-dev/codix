@@ -2,11 +2,14 @@
 //! about 1M lines in 10k files under 30 s, no-change scan of a very large
 //! tree under 1 s, CLI lookup p95 under 150 ms; and with a daemon, query p95
 //! under 10 ms, memory under 500 MB, reindex after a save under 50 ms; and
-//! renames that, applied and renamed back, leave every file as it was.
+//! renames that, applied and renamed back, leave every file as it was; and
+//! the modular flavour, with every plugin, as fast to index as the
+//! monolithic build, within 5 %.
 //!
 //! Run with `cargo bench -p codix-benches` from a terminal, not from a Claude
 //! Code session, whose sandbox lets no daemon bind its socket. Builds the
-//! release binary with every provider, downloads the repositories into
+//! release binary with every provider and the modular flavour with every
+//! plugin (`cargo xtask dist`), downloads the repositories into
 //! `target/bench-repos` once, and writes `benches/results/<version>.json`.
 
 use std::io::Write as _;
@@ -15,9 +18,11 @@ use std::time::Duration;
 
 mod daemon;
 mod edits;
+mod plugins;
 
 use codix_benches::{
-    Pinned, SPRING, build_codix, checkout, files_and_lines, percentile, time, workspace,
+    Pinned, SPRING, build_codix, build_modular, checkout, files_and_lines, percentile, time,
+    workspace,
 };
 use serde::Serialize;
 
@@ -67,6 +72,8 @@ struct Results {
     index_mb: u64,
     edits: edits::EditMeasures,
     linux_round_trips: edits::RoundTrips,
+    /// The modular flavour, with every plugin.
+    plugins: plugins::PluginMeasures,
     targets: Vec<Target>,
 }
 
@@ -102,6 +109,7 @@ struct Measured {
     served: daemon::DaemonMeasures,
     edited: edits::EditMeasures,
     linux_trips: edits::RoundTrips,
+    modular: plugins::PluginMeasures,
 }
 
 fn targets(m: &Measured) -> Vec<Target> {
@@ -115,6 +123,7 @@ fn targets(m: &Measured) -> Vec<Target> {
         ref served,
         ref edited,
         ref linux_trips,
+        ref modular,
     } = m;
     let trips = [&edited.round_trips, linux_trips];
     vec![
@@ -182,6 +191,21 @@ fn targets(m: &Measured) -> Vec<Target> {
                 .join("; "),
             met: trips.iter().all(|t| t.failed.is_empty()),
         },
+        Target {
+            name: "modular cold index",
+            goal: "within 5 % of the monolithic build",
+            measured: format!(
+                "{:.2} s modular, {:.2} s monolithic (medians of 3)",
+                modular.cold_modular_seconds, modular.cold_full_seconds
+            ),
+            met: modular.cold_modular_seconds <= modular.cold_full_seconds * 1.05,
+        },
+        Target {
+            name: "modular CLI lookup p95",
+            goal: "under 150 ms",
+            measured: format!("{:.1} ms", modular.lookup_p95_ms),
+            met: modular.lookup_p95_ms < 150.0,
+        },
     ]
 }
 
@@ -232,6 +256,23 @@ fn linux(codix: &Path, repos: &Path, out: &mut impl std::io::Write) -> Linux {
         scan,
         trips: linux_trips,
     }
+}
+
+/// The modular flavour, with every plugin, against the monolithic `codix`.
+fn modular(codix: &Path, spring: &Path, out: &mut impl std::io::Write) -> plugins::PluginMeasures {
+    let modular_codix = build_modular();
+    let modular = plugins::measure(codix, &modular_codix, spring, LOOKUPS, LOOKUP_RUNS);
+    writeln!(
+        out,
+        "modular: cold index {:.2} s (monolithic {:.2} s), lookup p95 {} ms, first command after installing {}: {} ms",
+        modular.cold_modular_seconds,
+        modular.cold_full_seconds,
+        modular.lookup_p95_ms,
+        modular.installed,
+        modular.first_command_after_install_ms
+    )
+    .expect("write");
+    modular
 }
 
 fn main() {
@@ -287,6 +328,8 @@ fn main() {
         trips: linux_trips,
     } = linux(&codix, &repos, &mut out);
 
+    let modular = modular(&codix, &spring, &mut out);
+
     let measured = Measured {
         spring_files,
         spring_lines,
@@ -297,6 +340,7 @@ fn main() {
         served,
         edited,
         linux_trips,
+        modular,
     };
     let targets = targets(&measured);
     let results = Results {
@@ -321,6 +365,7 @@ fn main() {
         index_mb,
         edits: measured.edited,
         linux_round_trips: measured.linux_trips,
+        plugins: measured.modular,
     };
     let path = workspace().join(format!(
         "benches/results/{}.json",
