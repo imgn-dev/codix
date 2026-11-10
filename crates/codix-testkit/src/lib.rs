@@ -3,6 +3,7 @@
 
 pub mod fixture;
 pub mod plugin;
+pub mod resolver;
 pub mod schema;
 
 use std::fs;

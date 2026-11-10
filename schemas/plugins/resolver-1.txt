@@ -1,0 +1,14 @@
+v1_files: id, path, language, status
+v1_symbols: id, symbol_id, file_id, name, kind, qualified_name, parent, start_byte, end_byte, name_start_byte, name_end_byte, visibility
+v1_refs: id, file_id, name, context, start_byte, end_byte, enclosing, target, state
+v1_modules: name, build, root, source_roots, test_roots, parent
+
+scratch:
+CREATE TABLE resolved (
+    ref INTEGER PRIMARY KEY,
+    target INTEGER,
+    state TEXT NOT NULL CHECK (
+        (state = 'bound' AND target IS NOT NULL)
+        OR (state = 'external' AND target IS NULL)
+    )
+);

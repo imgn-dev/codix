@@ -276,6 +276,8 @@ dependencies = [
  "codix-lang-go",
  "codix-lang-java",
  "codix-provider",
+ "codix-resolver",
+ "codix-testkit",
  "codix-vcs-git",
  "codix-vcs-hg",
  "globset",
@@ -501,6 +503,7 @@ version = "0.3.0"
 dependencies = [
  "codix-lang-java",
  "codix-provider",
+ "codix-resolver",
  "codix-testkit",
  "libloading",
  "schemars",
@@ -527,12 +530,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "codix-resolver"
+version = "0.3.0"
+dependencies = [
+ "inventory",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "codix-testkit"
 version = "0.3.0"
 dependencies = [
  "cc",
  "codix-core",
+ "codix-lang-java",
+ "codix-plugin",
  "codix-provider",
+ "codix-resolver",
+ "rusqlite",
  "serde_json",
  "tempfile",
 ]

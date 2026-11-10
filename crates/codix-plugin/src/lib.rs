@@ -62,6 +62,20 @@ struct Manifest {
     /// A build plugin's executable, relative to its directory, such as
     /// `bin/codix-build-maven`.
     executable: Option<String>,
+    /// A language plugin's resolver.
+    resolver: Option<ResolverManifest>,
+}
+
+/// The `[resolver]` table of a language plugin's manifest.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ResolverManifest {
+    /// Its executable, relative to the plugin's directory.
+    executable: String,
+    /// The protocol it speaks.
+    protocol: u32,
+    /// The version of the views it reads.
+    views: u32,
 }
 
 /// The directories searched for plugins, in order: each directory of
@@ -216,6 +230,13 @@ fn check(kind: ProviderKind, name: &str, dir: &Path) -> Result<Plugin, String> {
         }
         _ => None,
     };
+    let resolver = match (kind, manifest.resolver) {
+        (ProviderKind::Language, Some(resolver)) => Some(resolver_executable(dir, &resolver)?),
+        (_, Some(_)) => {
+            return Err(format!("{MANIFEST}: resolver is for language plugins"));
+        }
+        (_, None) => None,
+    };
     let build = match (kind, manifest.executable) {
         (ProviderKind::Build, Some(executable)) => Some(build(dir, &executable)?),
         (ProviderKind::Build, None) => {
@@ -232,11 +253,36 @@ fn check(kind: ProviderKind, name: &str, dir: &Path) -> Result<Plugin, String> {
         descriptor,
         grammar,
         build,
+        resolver,
     })
+}
+
+/// A language plugin's resolver executable, which must speak this codix's
+/// protocol and views.
+fn resolver_executable(dir: &Path, resolver: &ResolverManifest) -> Result<PathBuf, String> {
+    if resolver.protocol != codix_resolver::PROTOCOL || resolver.views != codix_resolver::VIEWS {
+        return Err(format!(
+            "{MANIFEST}: resolver protocol {} and views {}, this codix speaks protocol {} and views {}",
+            resolver.protocol,
+            resolver.views,
+            codix_resolver::PROTOCOL,
+            codix_resolver::VIEWS
+        ));
+    }
+    executable_in(dir, &resolver.executable)
 }
 
 /// A build plugin's executable, which must be in its directory.
 fn build(dir: &Path, executable: &str) -> Result<PluginBuild, String> {
+    Ok(PluginBuild {
+        executable: executable_in(dir, executable)?,
+        run: build::run,
+    })
+}
+
+/// An executable named in the manifest, which must be in the plugin's
+/// directory.
+fn executable_in(dir: &Path, executable: &str) -> Result<PathBuf, String> {
     let relative = Path::new(executable);
     if !relative
         .components()
@@ -250,10 +296,7 @@ fn build(dir: &Path, executable: &str) -> Result<PluginBuild, String> {
     if !executable.is_file() {
         return Err(format!("{}: not found", executable.display()));
     }
-    Ok(PluginBuild {
-        executable,
-        run: build::run,
-    })
+    Ok(executable)
 }
 
 /// A language plugin's grammar and queries. The library is only checked to
@@ -424,6 +467,13 @@ mod tests {
                 HG,
                 "plugin.toml: library and symbol are for language plugins",
             ),
+        ];
+        assert_rejected(cases);
+    }
+
+    #[test]
+    fn executables_are_checked_and_belong_to_their_kind() {
+        let cases: &[(&str, &str, String, &str, &str)] = &[
             (
                 "build",
                 "maven",
@@ -448,11 +498,25 @@ mod tests {
             (
                 "vcs",
                 "mercurial",
+                manifest("vcs", "mercurial")
+                    + "[resolver]\nexecutable = \"x\"\nprotocol = 1\nviews = 1\n",
+                HG,
+                "plugin.toml: resolver is for language plugins",
+            ),
+            (
+                "vcs",
+                "mercurial",
                 manifest("vcs", "mercurial") + "executable = \"x\"\n",
                 HG,
                 "plugin.toml: executable is for build plugins",
             ),
         ];
+        assert_rejected(cases);
+    }
+
+    /// Each case, as (kind, name, manifest, descriptor, reason), is
+    /// rejected with a reason starting or ending as given.
+    fn assert_rejected(cases: &[(&str, &str, String, &str, &str)]) {
         for (kind, name, manifest, descriptor, expected) in cases {
             let root = tempfile::tempdir().expect("temp dir");
             let mut files = vec![(DESCRIPTOR, *descriptor)];
@@ -524,6 +588,33 @@ mod tests {
         assert_eq!(grammar.symbol, "tree_sitter_kotlin");
         assert_eq!(grammar.tags, "(identifier) @name");
         assert_eq!(grammar.locals, None);
+        assert_eq!(plugin.resolver, None);
+    }
+
+    #[test]
+    fn a_language_plugin_may_have_a_resolver() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let manifest = language_manifest("kotlin.so")
+            + "[resolver]\nexecutable = \"bin/resolve\"\nprotocol = 1\nviews = 1\n";
+        let dir = plugin(
+            root.path(),
+            "language",
+            "kotlin",
+            &[
+                (MANIFEST, &manifest),
+                (DESCRIPTOR, KOTLIN),
+                ("kotlin.so", ""),
+            ],
+        );
+        fs::create_dir_all(dir.join("queries")).expect("queries");
+        fs::write(dir.join(TAGS), "").expect("tags");
+        fs::create_dir(dir.join("bin")).expect("bin");
+        fs::write(dir.join("bin/resolve"), "").expect("resolver");
+        let found = discover(&[root.path().to_path_buf()]);
+        let [Ok(plugin)] = found.as_slice() else {
+            panic!("{found:?}");
+        };
+        assert_eq!(plugin.resolver, Some(dir.join("bin/resolve")));
     }
 
     #[test]
@@ -549,6 +640,18 @@ mod tests {
                 &["kotlin.so"],
                 "queries/tags.scm: ",
             ),
+            (
+                language_manifest("kotlin.so")
+                    + "[resolver]\nexecutable = \"bin/r\"\nprotocol = 2\nviews = 1\n",
+                &["kotlin.so", TAGS, "bin/r"],
+                "plugin.toml: resolver protocol 2 and views 1, this codix speaks protocol 1 and views 1",
+            ),
+            (
+                language_manifest("kotlin.so")
+                    + "[resolver]\nexecutable = \"bin/r\"\nprotocol = 1\nviews = 1\n",
+                &["kotlin.so", TAGS],
+                "r: not found",
+            ),
         ];
         for (manifest, files, expected) in cases {
             let root = tempfile::tempdir().expect("temp dir");
@@ -559,6 +662,7 @@ mod tests {
                 &[(MANIFEST, manifest), (DESCRIPTOR, KOTLIN)],
             );
             fs::create_dir(dir.join("queries")).expect("queries");
+            fs::create_dir(dir.join("bin")).expect("bin");
             for file in *files {
                 fs::write(dir.join(file), "").expect("write");
             }

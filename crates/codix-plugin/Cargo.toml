@@ -10,6 +10,7 @@ publish = false
 
 [dependencies]
 codix-provider.workspace = true
+codix-resolver.workspace = true
 libloading.workspace = true
 serde.workspace = true
 serde_json.workspace = true

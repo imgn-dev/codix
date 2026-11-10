@@ -5,6 +5,7 @@
 mod aliases;
 mod journal;
 mod previews;
+mod resolutions;
 mod search;
 
 use std::collections::HashSet;
@@ -16,6 +17,7 @@ use serde::{Deserialize, Serialize};
 
 pub use journal::{EntryState, JournalEntry, JournalFile};
 pub use previews::PreviewRow;
+pub use resolutions::Resolution;
 pub use search::{MatchMode, NameQuery};
 
 use crate::Error;
@@ -35,6 +37,8 @@ const MIGRATIONS: &[&str] = &[
     previews::MIGRATION,
     journal::MIGRATION,
     aliases::MIGRATION,
+    codix_resolver::VIEWS_SQL,
+    resolutions::MIGRATION,
 ];
 
 const MIGRATION_1: &str = "

@@ -69,8 +69,8 @@ fn open(dir: &Path) -> Store {
 #[test]
 fn migrates_an_empty_database_and_reopens() {
     let dir = tempfile::tempdir().unwrap();
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 8);
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 8);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 10);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 10);
 }
 
 #[test]

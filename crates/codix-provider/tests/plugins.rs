@@ -19,6 +19,7 @@ fn vcs(name: &str, dir: &str) -> Plugin {
         descriptor: Descriptor::parse(ProviderKind::Vcs, &text).expect("descriptor"),
         grammar: None,
         build: None,
+        resolver: None,
     }
 }
 

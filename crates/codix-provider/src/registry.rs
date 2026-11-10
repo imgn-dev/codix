@@ -264,6 +264,8 @@ pub struct Plugin {
     pub grammar: Option<PluginGrammar>,
     /// A build plugin's executable.
     pub build: Option<PluginBuild>,
+    /// A language plugin's resolver executable.
+    pub resolver: Option<PathBuf>,
 }
 
 /// A plugin the registry does not use, and why.
@@ -319,6 +321,8 @@ pub struct Registry {
     pub grammars: BTreeMap<String, Grammar>,
     /// Logic of build systems, by build system name.
     pub resolvers: BTreeMap<String, BuildLogic>,
+    /// Resolver executables of language plugins, by language name.
+    pub language_resolvers: BTreeMap<String, PathBuf>,
     /// Where each provider comes from, and its version.
     pub sources: BTreeMap<(ProviderKind, String), (Source, String)>,
     /// Plugins found but not used, in search order.
@@ -422,7 +426,11 @@ impl Registry {
                 self.grammars.insert(name.clone(), Grammar::plugin(grammar));
             }
             if let Some(build) = plugin.build {
-                self.resolvers.insert(name, BuildLogic::Plugin(build));
+                self.resolvers
+                    .insert(name.clone(), BuildLogic::Plugin(build));
+            }
+            if let Some(resolver) = plugin.resolver {
+                self.language_resolvers.insert(name, resolver);
             }
             self.add(
                 plugin.descriptor,

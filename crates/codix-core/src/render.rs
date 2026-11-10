@@ -703,7 +703,7 @@ fn render_providers(w: &mut dyn Write, providers: &[ProviderInfo]) -> io::Result
 }
 
 impl TextRender for ScanReport {
-    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
         writeln!(
             w,
             "indexed: {} parsed, {} touched, {} deleted, {} unchanged",
@@ -719,7 +719,8 @@ impl TextRender for ScanReport {
         for (path, error) in &self.errors {
             writeln!(w, "error: {path}: {error}")?;
         }
-        render_missing(w, &self.missing)
+        render_missing(w, &self.missing)?;
+        text_warnings(w, &self.warnings, style)
     }
 }
 

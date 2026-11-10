@@ -24,6 +24,7 @@ pub mod query;
 pub mod refs;
 pub mod rename;
 pub mod render;
+pub mod resolve;
 pub mod scan;
 pub mod scope;
 pub mod store;

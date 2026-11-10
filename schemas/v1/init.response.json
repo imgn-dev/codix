@@ -139,6 +139,13 @@
           "format": "uint",
           "minimum": 0,
           "type": "integer"
+        },
+        "warnings": {
+          "description": "What went wrong without stopping the scan, such as a resolver that\nfailed.",
+          "items": {
+            "$ref": "#/$defs/Warning"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -149,7 +156,8 @@
         "pending",
         "skipped",
         "errors",
-        "missing"
+        "missing",
+        "warnings"
       ],
       "type": "object"
     },
@@ -172,6 +180,24 @@
           "type": "string"
         }
       ]
+    },
+    "Warning": {
+      "description": "Something the user should know about a response that does not stop it,\nsuch as an index on a network filesystem.",
+      "properties": {
+        "code": {
+          "description": "Stable code, such as `network_filesystem`.",
+          "type": "string"
+        },
+        "message": {
+          "description": "One line describing the risk.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "type": "object"
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",

@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::Error;
 use crate::config::Config;
 use crate::lock::WriteGate;
+use crate::op::Warning;
 use crate::project::{FileId, Project};
 use crate::providers::{MissingProvider, missing};
 use crate::store::{FileRow, FileStatus, FileUpdate, RefRow, Store, SymbolRow};
@@ -97,6 +98,9 @@ pub struct ScanReport {
     pub errors: Vec<(String, String)>,
     /// Providers the project needs and this build lacks.
     pub missing: Vec<MissingProvider>,
+    /// What went wrong without stopping the scan, such as a resolver that
+    /// failed.
+    pub warnings: Vec<Warning>,
 }
 
 /// Scans the project and brings the index up to date, waiting for the write
@@ -193,7 +197,7 @@ pub fn scan_within(
     )
     .into_iter()
     .collect();
-    store.commit_scan(&updates, &deleted, Some(&dirs))?;
+    report.warnings = commit_and_resolve(project, &mut store, &updates, &deleted, Some(&dirs))?;
     store.replace_build(&crate::build::discover(project, config))?;
     report.missing = missing(
         project.root(),
@@ -314,7 +318,7 @@ pub fn scan_dirs(
     recheck(project, indexer, &mut outcomes, start_ns);
     let fresh = rows_by_path(store.snapshot()?.files()?);
     let updates = tally(outcomes, &fresh, &mut report, &mut Vec::new());
-    store.commit(&updates, &deleted)?;
+    report.warnings = commit_and_resolve(project, &mut store, &updates, &deleted, None)?;
     let build_changed = updates
         .iter()
         .map(|u| u.file.path.as_str())
@@ -375,7 +379,7 @@ pub fn rescan(
     let fresh = rows_by_path(store.snapshot()?.files()?);
     let updates = tally(outcomes, &fresh, &mut report, &mut Vec::new());
     report.deleted = deleted.len();
-    store.commit(&updates, &deleted)?;
+    report.warnings = commit_and_resolve(project, &mut store, &updates, &deleted, None)?;
     report.errors.sort();
     Ok(Some(report))
 }
@@ -407,7 +411,36 @@ pub(crate) fn record_written(
             }
         }
     }
-    store.commit(&updates, &[])
+    // Warnings are for scans: the caller reports what it wrote.
+    commit_and_resolve(project, store, &updates, &[], None).map(|_| ())
+}
+
+/// Commits a scan's changes, then resolves the files whose references
+/// changed; returns the resolvers' warnings.
+fn commit_and_resolve(
+    project: &Project,
+    store: &mut Store,
+    updates: &[FileUpdate],
+    deleted: &[String],
+    dirs: Option<&[(String, [u8; 32])]>,
+) -> Result<Vec<Warning>, Error> {
+    let mut changed: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    {
+        let snapshot = store.snapshot()?;
+        for path in deleted {
+            if let Some(row) = snapshot.file(path)? {
+                changed.entry(row.language).or_default().push(path.clone());
+            }
+        }
+    }
+    for update in updates.iter().filter(|u| u.symbols.is_some()) {
+        changed
+            .entry(update.file.language.clone())
+            .or_default()
+            .push(update.file.path.clone());
+    }
+    store.commit_scan(updates, deleted, dirs)?;
+    crate::resolve::run(project, store, &changed)
 }
 
 fn rows_by_path(rows: Vec<FileRow>) -> HashMap<String, FileRow> {
