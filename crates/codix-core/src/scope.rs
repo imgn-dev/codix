@@ -305,9 +305,11 @@ pub fn model(
 ) -> Result<FileModel, Error> {
     let tree = parse::parse(descriptor, grammar, path, content)?;
     let symbols = parse::symbols_of(descriptor, grammar, path, content, &tree)?;
-    if let Some(locals) = grammar.locals {
-        let query = parse::query(&descriptor.name, "locals", grammar, locals)?;
-        return Ok(Builder::new(descriptor, content, symbols).build(&query, &tree));
+    if let Some(query) = grammar
+        .locals_query()
+        .map_err(parse::unusable(&descriptor.name))?
+    {
+        return Ok(Builder::new(descriptor, content, symbols).build(query, &tree));
     }
     // Tier 1: the symbols are definitions of the file scope, and no
     // reference is known.

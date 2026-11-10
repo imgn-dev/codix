@@ -397,12 +397,13 @@ impl Operation for OutlineOp {
         let (project, config) = indexed(ctx)?;
         let target = project.file_id(ctx.cwd(), &request.path)?;
         {
-            // A file of a language this build leaves out has no outline here.
+            // A file of a language this build leaves out, or whose plugin
+            // cannot be used, has no outline here.
             let mut store = Store::open(&project.index_path())?;
             if let Some(row) = store.snapshot()?.file(target.as_str())?
                 && row.language != crate::detect::TEXT
                 && row.status != FileStatus::Indexed
-                && let Err(e @ Error::NotSupportedInBuild { .. }) =
+                && let Err(e @ (Error::NotSupportedInBuild { .. } | Error::PluginInvalid { .. })) =
                     crate::providers::require_language(&row.language, &request.path)
             {
                 return Err(e);

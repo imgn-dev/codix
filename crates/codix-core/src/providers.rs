@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use codix_provider::{LanguageDescriptor, ProviderKind, known, registry};
+use codix_provider::{LanguageDescriptor, ProviderKind, Rejection, known, registry};
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
@@ -20,8 +20,15 @@ const INSTALL_HINT: Option<&str> = option_env!("CODIX_INSTALL_HINT");
 const PLUGINS_URL: &str = "https://github.com/imgn-dev/codix#plugins";
 
 /// The language pack named `language`, needed for `path`. A language codix
-/// knows but this build lacks is `not_supported_in_build`.
+/// knows but this build lacks is `not_supported_in_build`, and one whose
+/// plugin cannot be used `plugin_invalid`.
 pub fn require_language(language: &str, path: &str) -> Result<&'static LanguageDescriptor, Error> {
+    if let Some(cause) = invalid(ProviderKind::Language, language) {
+        return Err(Error::PluginInvalid {
+            provider: language.to_owned(),
+            cause,
+        });
+    }
     if let Some(descriptor) = registry().languages.iter().find(|d| d.name == language) {
         return Ok(descriptor);
     }
@@ -51,6 +58,8 @@ pub struct MissingProvider {
     pub marker: Option<String>,
     /// How to get the provider.
     pub hint: String,
+    /// Why its plugin, installed, cannot be used.
+    pub invalid: Option<String>,
 }
 
 impl MissingProvider {
@@ -65,6 +74,36 @@ impl MissingProvider {
             (None, files) => format!("{files} files indexed as text"),
         }
     }
+
+    /// Why the provider is not used: its plugin is not installed or cannot
+    /// be used, or it is not in this build.
+    pub fn absence(&self) -> String {
+        match &self.invalid {
+            Some(cause) => format!("plugin invalid: {cause}"),
+            None => absence().to_owned(),
+        }
+    }
+}
+
+/// Why the provider of this kind and name, installed as a plugin, cannot be
+/// used: its plugin was rejected, or its grammar does not load. `None` when
+/// it is usable or not installed.
+fn invalid(kind: ProviderKind, name: &str) -> Option<String> {
+    let registry = registry();
+    if registry.contains(kind, name) {
+        return match kind {
+            ProviderKind::Language => registry
+                .grammars
+                .get(name)
+                .and_then(|g| g.language().err())
+                .map(|e| e.to_string()),
+            ProviderKind::Build | ProviderKind::Vcs => None,
+        };
+    }
+    registry.rejected.iter().find_map(|r| match &r.rejection {
+        Rejection::Invalid(cause) if r.kind == kind && r.name == name => Some(cause.clone()),
+        _ => None,
+    })
 }
 
 /// The providers the project at `root` needs and this build lacks: the
@@ -75,16 +114,18 @@ pub fn missing(root: &Path, search_only: &[(String, usize)]) -> Vec<MissingProvi
     let registry = registry();
     let mut missing: Vec<MissingProvider> = Vec::new();
     for (language, files) in search_only {
-        if known::is_known(ProviderKind::Language, language)
-            && language != crate::detect::TEXT
-            && !registry.contains(ProviderKind::Language, language)
-        {
+        if !known::is_known(ProviderKind::Language, language) || language == crate::detect::TEXT {
+            continue;
+        }
+        let invalid = invalid(ProviderKind::Language, language);
+        if invalid.is_some() || !registry.contains(ProviderKind::Language, language) {
             missing.push(MissingProvider {
                 kind: ProviderKind::Language,
                 name: language.clone(),
                 files: Some(*files),
                 marker: None,
                 hint: hint(ProviderKind::Language, language),
+                invalid,
             });
         }
     }
@@ -104,6 +145,7 @@ pub fn missing(root: &Path, search_only: &[(String, usize)]) -> Vec<MissingProvi
                     files: None,
                     marker: Some((*marker).to_owned()),
                     hint: hint(kind, name),
+                    invalid: invalid(kind, name),
                 });
             }
         }
@@ -229,8 +271,18 @@ mod tests {
             files: Some(214),
             marker: None,
             hint: String::new(),
+            invalid: None,
         };
         assert_eq!(language.effect(), "214 files indexed as text");
+        assert_eq!(language.absence(), absence());
+        let invalid = MissingProvider {
+            invalid: Some("symbol tree_sitter_kotlin: not found".to_owned()),
+            ..language.clone()
+        };
+        assert_eq!(
+            invalid.absence(),
+            "plugin invalid: symbol tree_sitter_kotlin: not found"
+        );
         let build = MissingProvider {
             kind: ProviderKind::Build,
             files: None,

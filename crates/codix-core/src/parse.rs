@@ -3,9 +3,9 @@
 
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, OnceLock, PoisonError};
+use std::sync::OnceLock;
 
-use codix_provider::{Grammar, LanguageDescriptor, registry};
+use codix_provider::{Grammar, LanguageDescriptor, PluginError, registry};
 use streaming_iterator::StreamingIterator;
 use tree_sitter::{Language, Node, Parser, Query, QueryCursor, Tree};
 
@@ -22,41 +22,21 @@ use crate::walk::{ContentClass, classify};
 const MAX_SIGNATURE: usize = 300;
 
 thread_local! {
-    // One parser per thread per language, reused across files.
-    static PARSERS: RefCell<HashMap<String, Parser>> = RefCell::new(HashMap::new());
-}
-
-fn queries() -> &'static Mutex<HashMap<String, Arc<Query>>> {
-    static QUERIES: OnceLock<Mutex<HashMap<String, Arc<Query>>>> = OnceLock::new();
-    QUERIES.get_or_init(|| Mutex::new(HashMap::new()))
-}
-
-/// One of a pack's queries, `tags` or `locals`, compiled once per process.
-pub(crate) fn query(
-    name: &str,
-    which: &str,
-    grammar: &Grammar,
-    source: &str,
-) -> Result<Arc<Query>, Error> {
-    let key = format!("{name}/{which}");
-    let mut cache = queries().lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some(query) = cache.get(&key) {
-        return Ok(Arc::clone(query));
-    }
-    let query = Query::new(language(name, grammar)?, source).map_err(|e| Error::Internal {
-        message: format!("the {name} {which} query does not compile: {e}"),
-    })?;
-    let query = Arc::new(query);
-    cache.insert(key, Arc::clone(&query));
-    Ok(query)
+    // One parser per thread per grammar, reused across files.
+    static PARSERS: RefCell<HashMap<Language, Parser>> = RefCell::new(HashMap::new());
 }
 
 /// A pack's grammar, loaded on first use.
 fn language<'g>(name: &str, grammar: &'g Grammar) -> Result<&'g Language, Error> {
-    grammar.language().map_err(|e| Error::PluginInvalid {
+    grammar.language().map_err(unusable(name))
+}
+
+/// The error for a pack whose grammar or queries cannot be used.
+pub(crate) fn unusable(name: &str) -> impl Fn(PluginError) -> Error + '_ {
+    move |e| Error::PluginInvalid {
         provider: name.to_owned(),
         cause: e.to_string(),
-    })
+    }
 }
 
 /// A definition captured by the `tags` query. `@parent` names the enclosing
@@ -90,22 +70,19 @@ pub(crate) fn parse(
     path: &str,
     content: &str,
 ) -> Result<Tree, Error> {
+    let language = language(&descriptor.name, grammar)?;
     PARSERS.with(|parsers| {
         let mut parsers = parsers.borrow_mut();
-        if !parsers.contains_key(&descriptor.name) {
+        if !parsers.contains_key(language) {
             let mut parser = Parser::new();
-            parser
-                .set_language(language(&descriptor.name, grammar)?)
-                .map_err(|e| Error::Internal {
-                    message: format!("the {} grammar does not load: {e}", descriptor.name),
-                })?;
-            parsers.insert(descriptor.name.clone(), parser);
-        }
-        let parser = parsers
-            .get_mut(&descriptor.name)
-            .ok_or_else(|| Error::Internal {
-                message: format!("no {} parser", descriptor.name),
+            parser.set_language(language).map_err(|e| Error::Internal {
+                message: format!("the {} grammar does not load: {e}", descriptor.name),
             })?;
+            parsers.insert(language.clone(), parser);
+        }
+        let parser = parsers.get_mut(language).ok_or_else(|| Error::Internal {
+            message: format!("no {} parser", descriptor.name),
+        })?;
         parser.parse(content, None).ok_or_else(|| Error::Internal {
             message: format!("{path}: the {} parser gave up", descriptor.name),
         })
@@ -120,8 +97,8 @@ pub(crate) fn symbols_of(
     content: &str,
     tree: &Tree,
 ) -> Result<Vec<SymbolRow>, Error> {
-    let query = query(&descriptor.name, "tags", grammar, grammar.tags)?;
-    let definitions = definitions(descriptor, &query, tree.root_node(), content);
+    let query = grammar.tags_query().map_err(unusable(&descriptor.name))?;
+    let definitions = definitions(descriptor, query, tree.root_node(), content);
     let (mut rows, parents) = symbols(descriptor, path, content, &definitions);
     symbol_id::disambiguate(&mut rows, &descriptor.id_prefix, path);
     // Parents by position, now that every ID is final.
@@ -539,14 +516,19 @@ fn parser_version(language: &str) -> String {
 /// The parser version of files searched as text.
 const TEXT_VERSION: &str = "text-1";
 
-/// Changes whenever the grammar or the query does: a hash of the query text
-/// and of what the grammar exposes about itself. `None` when the grammar does
-/// not load.
+/// Changes whenever the grammar or the query does: a hash of the query text,
+/// of what the grammar exposes about itself, and of a plugin's library.
+/// `None` when the grammar does not load.
 fn grammar_fingerprint(grammar: &Grammar) -> Option<String> {
     let language = grammar.language().ok()?;
     let mut hasher = blake3::Hasher::new();
+    if let Some(library) = grammar.library() {
+        hasher
+            .update_reader(std::fs::File::open(library).ok()?)
+            .ok()?;
+    }
     hasher.update(grammar.tags.as_bytes());
-    if let Some(locals) = grammar.locals {
+    if let Some(locals) = &grammar.locals {
         hasher.update(&[0]);
         hasher.update(locals.as_bytes());
     }

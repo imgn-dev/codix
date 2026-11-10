@@ -1,18 +1,22 @@
-//! Plugins: where they are found, their manifests, and their checks.
+//! Plugins: where they are found, their manifests, their checks, and the
+//! native loader of their grammars.
 //!
 //! Linking this crate adds the plugins installed on the machine to the
 //! registry of `codix-provider`. A plugin is a directory
-//! `<search dir>/<kind>/<name>/` holding `plugin.toml` and `descriptor.toml`;
-//! one that fails its checks is listed with the reason and otherwise ignored.
+//! `<search dir>/<kind>/<name>/` holding `plugin.toml` and `descriptor.toml`,
+//! and for a language its queries and its grammar as a shared library; one
+//! that fails its checks is listed with the reason and otherwise ignored.
 
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use codix_provider::{
-    Descriptor, Plugin, PluginSource, ProviderKind, Rejected, Rejection, toml_error,
+    Descriptor, Plugin, PluginGrammar, PluginSource, ProviderKind, Rejected, Rejection, toml_error,
 };
 use serde::Deserialize;
+
+mod native;
 
 /// The manifest schema this codix reads.
 pub const SCHEMA: u32 = 1;
@@ -22,6 +26,12 @@ pub const MANIFEST: &str = "plugin.toml";
 
 /// The descriptor's file name.
 pub const DESCRIPTOR: &str = "descriptor.toml";
+
+/// A language plugin's `tags` query.
+pub const TAGS: &str = "queries/tags.scm";
+
+/// A language plugin's `locals` query, if it has scopes.
+pub const LOCALS: &str = "queries/locals.scm";
 
 /// Directories listed in this variable are searched first.
 pub const PATH_VAR: &str = "CODIX_PLUGIN_PATH";
@@ -42,6 +52,11 @@ struct Manifest {
     kind: ProviderKind,
     name: String,
     version: String,
+    /// A language plugin's grammar library: a file name in its directory.
+    library: Option<String>,
+    /// The function the library exports that returns the grammar, such as
+    /// `tree_sitter_java`.
+    symbol: Option<String>,
 }
 
 /// The directories searched for plugins, in order: each directory of
@@ -179,7 +194,7 @@ fn check(kind: ProviderKind, name: &str, dir: &Path) -> Result<Plugin, String> {
             manifest.name
         ));
     }
-    if kind != ProviderKind::Vcs {
+    if kind == ProviderKind::Build {
         return Err(format!("this codix cannot load {kind} plugins yet"));
     }
     let descriptor = Descriptor::parse(kind, &read(dir, DESCRIPTOR)?)
@@ -190,10 +205,55 @@ fn check(kind: ProviderKind, name: &str, dir: &Path) -> Result<Plugin, String> {
             descriptor.name()
         ));
     }
+    let grammar = match kind {
+        ProviderKind::Language => Some(grammar(dir, manifest.library, manifest.symbol)?),
+        _ if manifest.library.is_some() || manifest.symbol.is_some() => {
+            return Err(format!(
+                "{MANIFEST}: library and symbol are for language plugins"
+            ));
+        }
+        _ => None,
+    };
     Ok(Plugin {
         version: manifest.version,
         dir: dir.to_path_buf(),
         descriptor,
+        grammar,
+    })
+}
+
+/// A language plugin's grammar and queries. The library is only checked to
+/// be there: it is loaded on the first file of the language.
+fn grammar(
+    dir: &Path,
+    library: Option<String>,
+    symbol: Option<String>,
+) -> Result<PluginGrammar, String> {
+    let (Some(library), Some(symbol)) = (library, symbol) else {
+        return Err(format!(
+            "{MANIFEST}: a language plugin names its library and symbol"
+        ));
+    };
+    if Path::new(&library).file_name() != Some(library.as_ref()) {
+        return Err(format!(
+            "{MANIFEST}: library {library} is not a file name in the plugin's directory"
+        ));
+    }
+    let library = dir.join(library);
+    if !library.is_file() {
+        return Err(format!("{}: not found", library.display()));
+    }
+    let locals = match fs::read_to_string(dir.join(LOCALS)) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) => return Err(format!("{LOCALS}: {e}")),
+    };
+    Ok(PluginGrammar {
+        library,
+        symbol,
+        tags: read(dir, TAGS)?,
+        locals,
+        load: native::load,
     })
 }
 
@@ -324,11 +384,11 @@ mod tests {
                 "descriptor.toml: name mercurial, in a directory named hg",
             ),
             (
-                "language",
-                "kotlin",
-                manifest("language", "kotlin"),
-                "",
-                "this codix cannot load language plugins yet",
+                "vcs",
+                "mercurial",
+                manifest("vcs", "mercurial") + "symbol = \"x\"\n",
+                HG,
+                "plugin.toml: library and symbol are for language plugins",
             ),
             (
                 "build",
@@ -349,6 +409,82 @@ mod tests {
             assert_eq!(found.len(), 1, "{expected}");
             let reason = reason(&found[0]);
             assert!(reason.starts_with(expected), "{reason} / {expected}");
+        }
+    }
+
+    const KOTLIN: &str = "name = \"kotlin\"\nversion = 1\nid_prefix = \"kotlin\"\n";
+
+    fn language_manifest(library: &str) -> String {
+        manifest("language", "kotlin")
+            + &format!("library = \"{library}\"\nsymbol = \"tree_sitter_kotlin\"\n")
+    }
+
+    #[test]
+    fn a_language_plugin_is_found_with_its_grammar_unloaded() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let manifest = language_manifest("kotlin.so");
+        let dir = plugin(
+            root.path(),
+            "language",
+            "kotlin",
+            &[
+                (MANIFEST, &manifest),
+                (DESCRIPTOR, KOTLIN),
+                ("kotlin.so", "not a library: discovery does not open it"),
+            ],
+        );
+        fs::create_dir(dir.join("queries")).expect("queries");
+        fs::write(dir.join(TAGS), "(identifier) @name").expect("tags");
+        let found = discover(&[root.path().to_path_buf()]);
+        let [Ok(plugin)] = found.as_slice() else {
+            panic!("{found:?}");
+        };
+        let grammar = plugin.grammar.as_ref().expect("grammar");
+        assert_eq!(grammar.library, dir.join("kotlin.so"));
+        assert_eq!(grammar.symbol, "tree_sitter_kotlin");
+        assert_eq!(grammar.tags, "(identifier) @name");
+        assert_eq!(grammar.locals, None);
+    }
+
+    #[test]
+    fn invalid_language_plugins_are_rejected_with_the_reason() {
+        let cases: &[(String, &[&str], &str)] = &[
+            (
+                manifest("language", "kotlin"),
+                &["kotlin.so", TAGS],
+                "plugin.toml: a language plugin names its library and symbol",
+            ),
+            (
+                language_manifest("../kotlin.so"),
+                &["kotlin.so", TAGS],
+                "plugin.toml: library ../kotlin.so is not a file name in the plugin's directory",
+            ),
+            (
+                language_manifest("kotlin.so"),
+                &[TAGS],
+                "kotlin.so: not found",
+            ),
+            (
+                language_manifest("kotlin.so"),
+                &["kotlin.so"],
+                "queries/tags.scm: ",
+            ),
+        ];
+        for (manifest, files, expected) in cases {
+            let root = tempfile::tempdir().expect("temp dir");
+            let dir = plugin(
+                root.path(),
+                "language",
+                "kotlin",
+                &[(MANIFEST, manifest), (DESCRIPTOR, KOTLIN)],
+            );
+            fs::create_dir(dir.join("queries")).expect("queries");
+            for file in *files {
+                fs::write(dir.join(file), "").expect("write");
+            }
+            let found = discover(&[root.path().to_path_buf()]);
+            let reason = reason(&found[0]);
+            assert!(reason.contains(expected), "{reason} / {expected}");
         }
     }
 

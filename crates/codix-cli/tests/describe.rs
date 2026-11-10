@@ -4,7 +4,9 @@
 use std::fs;
 use std::path::PathBuf;
 
-use codix_testkit::fixture::{codix_in, files_only, indexed};
+#[cfg(feature = "lang-java")]
+use codix_testkit::fixture::indexed;
+use codix_testkit::fixture::{codix_in, files_only};
 use codix_testkit::{assert_golden, run};
 
 const CODIX: &str = env!("CARGO_BIN_EXE_codix");

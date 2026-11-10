@@ -10,11 +10,33 @@ publish = false
 
 [dependencies]
 codix-provider.workspace = true
+libloading.workspace = true
 serde.workspace = true
 toml.workspace = true
+tree-sitter.workspace = true
+tree-sitter-language.workspace = true
 
 [dev-dependencies]
+codix-lang-java.workspace = true
+codix-testkit.workspace = true
 tempfile.workspace = true
 
-[lints]
-workspace = true
+# The workspace lints, but for `unsafe_code`: this crate holds the native
+# grammar loader, and states why each `unsafe` block is sound. Cargo does not
+# allow `workspace = true` with one lint changed.
+[lints.rust]
+missing_docs = "warn"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+print_stdout = "warn"
+print_stderr = "warn"
+undocumented_unsafe_blocks = "deny"

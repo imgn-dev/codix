@@ -17,6 +17,7 @@ fn vcs(name: &str, dir: &str) -> Plugin {
         version: "2.0.0".to_owned(),
         dir: PathBuf::from(dir),
         descriptor: Descriptor::parse(ProviderKind::Vcs, &text).expect("descriptor"),
+        grammar: None,
     }
 }
 

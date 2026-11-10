@@ -2,11 +2,14 @@
 //! and golden-output helpers.
 
 pub mod fixture;
+pub mod plugin;
 pub mod schema;
 
 use std::fs;
 use std::path::Path;
 use std::process::Command;
+
+use codix_provider::{Grammar, LanguageDescriptor};
 
 /// Environment variable that makes [`assert_golden`] rewrite golden files.
 pub const BLESS_VAR: &str = "CODIX_BLESS";
@@ -164,8 +167,12 @@ pub fn check_corpus_as(
 ///
 /// When the language is not compiled in, or its corpus differs.
 pub fn check_language_corpus(language: &str) {
-    use codix_core::store::Confidence;
+    let (descriptor, grammar) = compiled_in(language);
+    check_pack_corpus(descriptor, grammar);
+}
 
+/// The descriptor and grammar of a compiled-in language.
+fn compiled_in(language: &str) -> (&'static LanguageDescriptor, &'static Grammar) {
     let registry = codix_provider::registry();
     let descriptor = registry
         .languages
@@ -176,9 +183,21 @@ pub fn check_language_corpus(language: &str) {
         .grammars
         .get(language)
         .unwrap_or_else(|| panic!("{language} has no grammar"));
+    (descriptor, grammar)
+}
+
+/// Like [`check_language_corpus`], with this descriptor and grammar, such as
+/// a plugin's.
+///
+/// # Panics
+///
+/// When the corpus differs.
+pub fn check_pack_corpus(descriptor: &LanguageDescriptor, grammar: &Grammar) {
+    use codix_core::store::Confidence;
+
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../corpus")
-        .join(language);
+        .join(&descriptor.name);
     check_corpus(dir, |name, content| {
         codix_core::parse::extract(descriptor, grammar, name, content)
             .expect("extract")
@@ -219,18 +238,20 @@ pub fn check_language_corpus(language: &str) {
 /// When the language is not compiled in, has no `locals` query, or its
 /// corpus differs.
 pub fn check_language_scopes(language: &str) {
+    let (descriptor, grammar) = compiled_in(language);
+    check_pack_scopes(descriptor, grammar);
+}
+
+/// Like [`check_language_scopes`], with this descriptor and grammar, such as
+/// a plugin's.
+///
+/// # Panics
+///
+/// When the grammar has no `locals` query, or the corpus differs.
+pub fn check_pack_scopes(descriptor: &LanguageDescriptor, grammar: &Grammar) {
     use codix_core::scope::{Binding, Defines};
 
-    let registry = codix_provider::registry();
-    let descriptor = registry
-        .languages
-        .iter()
-        .find(|d| d.name == language)
-        .unwrap_or_else(|| panic!("{language} is not compiled in"));
-    let grammar = registry
-        .grammars
-        .get(language)
-        .unwrap_or_else(|| panic!("{language} has no grammar"));
+    let language = &descriptor.name;
     assert!(grammar.locals.is_some(), "{language} has no locals query");
     let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../corpus")

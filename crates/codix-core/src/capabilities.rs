@@ -275,16 +275,28 @@ pub fn providers() -> Vec<ProviderInfo> {
     let mut providers: Vec<ProviderInfo> = registry
         .sources
         .iter()
-        .map(|((kind, name), (source, version))| ProviderInfo {
-            kind: *kind,
-            name: name.clone(),
-            version: Some(version.clone()),
-            source: Some(match source {
-                Source::CompiledIn => ProviderSource::CompiledIn,
-                Source::Plugin(dir) => ProviderSource::Plugin(dir.clone()),
-            }),
-            status: ProviderStatus::Available,
-            reason: None,
+        .map(|((kind, name), (source, version))| {
+            // A plugin's grammar is only known to be usable once loaded.
+            let unusable = registry
+                .grammars
+                .get(name)
+                .filter(|_| *kind == ProviderKind::Language && *source != Source::CompiledIn)
+                .and_then(|g| g.language().err());
+            ProviderInfo {
+                kind: *kind,
+                name: name.clone(),
+                version: Some(version.clone()),
+                source: Some(match source {
+                    Source::CompiledIn => ProviderSource::CompiledIn,
+                    Source::Plugin(dir) => ProviderSource::Plugin(dir.clone()),
+                }),
+                status: if unusable.is_some() {
+                    ProviderStatus::Invalid
+                } else {
+                    ProviderStatus::Available
+                },
+                reason: unusable.map(|e| e.to_string()),
+            }
         })
         .collect();
     let absent = if crate::providers::MODULAR {

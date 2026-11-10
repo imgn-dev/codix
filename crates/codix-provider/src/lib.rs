@@ -17,8 +17,8 @@ pub use descriptor::{
     VcsDescriptor, toml_error,
 };
 pub use registry::{
-    CompiledGrammar, Grammar, Plugin, PluginError, PluginSource, ProviderEntry, Registry, Rejected,
-    Rejection, Source, registry,
+    CompiledGrammar, Grammar, LoadLibrary, Plugin, PluginError, PluginGrammar, PluginSource,
+    ProviderEntry, Registry, Rejected, Rejection, Source, registry,
 };
 
 #[doc(hidden)]

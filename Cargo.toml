@@ -12,6 +12,7 @@ repository = "https://github.com/imgn-dev/codix"
 [workspace.dependencies]
 # `linux-tmpfs`: a tmpfs is local; without it sysinfo leaves tmpfs mounts out.
 blake3 = "1.8.7"
+cc = "1.2.67"
 clap = { version = "4.6.7", features = ["derive"] }
 codix-build-gradle = { path = "crates/codix-build-gradle" }
 codix-build-maven = { path = "crates/codix-build-maven" }
@@ -45,6 +46,7 @@ codix-vcs-svn = { path = "crates/codix-vcs-svn" }
 globset = "0.4.21"
 ignore = "0.4.34"
 interprocess = "2.4.7"
+libloading = "0.9.0"
 inventory = "0.3.25"
 notify = "8.2.1"
 rayon = "1.12.0"

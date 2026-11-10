@@ -16,6 +16,13 @@
           "description": "How to get the provider.",
           "type": "string"
         },
+        "invalid": {
+          "description": "Why its plugin, installed, cannot be used.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "kind": {
           "$ref": "#/$defs/ProviderKind",
           "description": "Provider kind."

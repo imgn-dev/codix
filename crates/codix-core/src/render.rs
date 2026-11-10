@@ -731,7 +731,7 @@ fn render_missing(w: &mut dyn Write, missing: &[MissingProvider]) -> io::Result<
             "{}: {}; {} ({})",
             provider.name,
             provider.effect(),
-            crate::providers::absence(),
+            provider.absence(),
             provider.hint
         )?;
     }

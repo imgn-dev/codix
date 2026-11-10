@@ -38,7 +38,7 @@ jobs:
       # each one links exactly its providers.
       - run: cargo test -p codix-cli --no-default-features --features minimal
       - run: cargo test -p codix-cli --features full
-      # Plugin discovery, with the default providers compiled in.
-      - run: cargo test -p codix-cli --features plugins
+      # The core with git only, every other provider as a plugin.
+      - run: cargo test -p codix-cli --no-default-features --features plugins,vcs-git
       # Each feature alone, which covers the presets and every provider feature.
       - run: cargo hack --each-feature --no-dev-deps check

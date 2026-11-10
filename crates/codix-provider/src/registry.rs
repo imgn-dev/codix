@@ -1,7 +1,8 @@
 //! Providers registered at link time.
 
+use std::borrow::Cow;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
 use crate::descriptor::{
@@ -44,57 +45,149 @@ impl std::fmt::Debug for CompiledGrammar {
 }
 
 /// A language pack's tree-sitter grammar and its queries. The grammar is
-/// loaded on first use, once per process.
+/// loaded, and its queries compiled, on first use, once per process.
 pub struct Grammar {
     source: GrammarSource,
-    language: OnceLock<Result<tree_sitter::Language, PluginError>>,
+    loaded: OnceLock<Result<Loaded, PluginError>>,
     /// The pack's `tags` query.
-    pub tags: &'static str,
+    pub tags: Cow<'static, str>,
     /// The pack's `locals` query, for tier 2: scopes, local definitions and
     /// references.
-    pub locals: Option<&'static str>,
+    pub locals: Option<Cow<'static, str>>,
+}
+
+/// A grammar and its queries, ready to parse.
+struct Loaded {
+    language: tree_sitter::Language,
+    tags: tree_sitter::Query,
+    locals: Option<tree_sitter::Query>,
 }
 
 /// Where a grammar comes from.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 enum GrammarSource {
     /// Compiled into this binary.
     Compiled(tree_sitter_language::LanguageFn),
+    /// A plugin's shared library.
+    Plugin {
+        library: PathBuf,
+        symbol: String,
+        load: LoadLibrary,
+    },
+}
+
+/// Loads the grammar a plugin's shared library exports under a symbol:
+/// `codix-plugin`'s native loader.
+pub type LoadLibrary = fn(&Path, &str) -> Result<tree_sitter::Language, PluginError>;
+
+/// A language plugin's grammar, found but not loaded.
+#[derive(Debug, Clone)]
+pub struct PluginGrammar {
+    /// The shared library.
+    pub library: PathBuf,
+    /// The function it exports that returns the grammar.
+    pub symbol: String,
+    /// Its `tags` query.
+    pub tags: String,
+    /// Its `locals` query, if it has scopes.
+    pub locals: Option<String>,
+    /// How to load the library.
+    pub load: LoadLibrary,
 }
 
 impl Grammar {
     fn compiled(grammar: CompiledGrammar) -> Self {
         Self {
             source: GrammarSource::Compiled(grammar.language),
-            language: OnceLock::new(),
-            tags: grammar.tags,
-            locals: grammar.locals,
+            loaded: OnceLock::new(),
+            tags: Cow::Borrowed(grammar.tags),
+            locals: grammar.locals.map(Cow::Borrowed),
+        }
+    }
+
+    /// The grammar of a language plugin, loaded on first use.
+    pub fn plugin(grammar: PluginGrammar) -> Self {
+        Self {
+            source: GrammarSource::Plugin {
+                library: grammar.library,
+                symbol: grammar.symbol,
+                load: grammar.load,
+            },
+            loaded: OnceLock::new(),
+            tags: Cow::Owned(grammar.tags),
+            locals: grammar.locals.map(Cow::Owned),
         }
     }
 
     /// The grammar, loaded on the first call; an error when it cannot be
-    /// loaded or its ABI is not one this tree-sitter reads.
+    /// loaded, its ABI is not one this tree-sitter reads, or one of its
+    /// queries does not compile.
     pub fn language(&self) -> Result<&tree_sitter::Language, PluginError> {
-        self.language
-            .get_or_init(|| {
-                let language = match self.source {
-                    GrammarSource::Compiled(function) => tree_sitter::Language::new(function),
-                };
-                let abi = language.abi_version();
-                let supported =
-                    tree_sitter::MIN_COMPATIBLE_LANGUAGE_VERSION..=tree_sitter::LANGUAGE_VERSION;
-                if supported.contains(&abi) {
-                    Ok(language)
-                } else {
-                    Err(PluginError(format!(
-                        "grammar ABI {abi}, this build reads {} to {}",
-                        supported.start(),
-                        supported.end()
-                    )))
-                }
-            })
+        self.loaded().map(|l| &l.language)
+    }
+
+    /// The compiled `tags` query.
+    pub fn tags_query(&self) -> Result<&tree_sitter::Query, PluginError> {
+        self.loaded().map(|l| &l.tags)
+    }
+
+    /// The compiled `locals` query, if the pack has one.
+    pub fn locals_query(&self) -> Result<Option<&tree_sitter::Query>, PluginError> {
+        self.loaded().map(|l| l.locals.as_ref())
+    }
+
+    /// The shared library of a plugin's grammar; `None` when compiled in.
+    pub fn library(&self) -> Option<&Path> {
+        match &self.source {
+            GrammarSource::Compiled(_) => None,
+            GrammarSource::Plugin { library, .. } => Some(library),
+        }
+    }
+
+    fn loaded(&self) -> Result<&Loaded, PluginError> {
+        self.loaded
+            .get_or_init(|| self.load())
             .as_ref()
             .map_err(Clone::clone)
+    }
+
+    fn load(&self) -> Result<Loaded, PluginError> {
+        let language = match &self.source {
+            GrammarSource::Compiled(function) => tree_sitter::Language::new(*function),
+            GrammarSource::Plugin {
+                library,
+                symbol,
+                load,
+            } => load(library, symbol)?,
+        };
+        let abi = language.abi_version();
+        let supported =
+            tree_sitter::MIN_COMPATIBLE_LANGUAGE_VERSION..=tree_sitter::LANGUAGE_VERSION;
+        if !supported.contains(&abi) {
+            return Err(PluginError(format!(
+                "grammar ABI {abi}, this build reads {} to {}",
+                supported.start(),
+                supported.end()
+            )));
+        }
+        tree_sitter::Parser::new()
+            .set_language(&language)
+            .map_err(|e| PluginError(format!("the grammar does not load: {e}")))?;
+        let query = |which: &str, source: &str| {
+            tree_sitter::Query::new(&language, source)
+                .map_err(|e| PluginError(format!("the {which} query does not compile: {e}")))
+        };
+        let tags = query("tags", &self.tags)?;
+        let locals = self
+            .locals
+            .as_deref()
+            .map(|source| query("locals", source))
+            .transpose()?;
+        Ok(Loaded {
+            language,
+            tags,
+            locals,
+        })
     }
 }
 
@@ -107,6 +200,13 @@ impl std::fmt::Debug for Grammar {
 /// Why a provider cannot be used.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PluginError(String);
+
+impl PluginError {
+    /// An error with this cause.
+    pub fn new(cause: impl Into<String>) -> Self {
+        Self(cause.into())
+    }
+}
 
 impl std::fmt::Display for PluginError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -127,6 +227,8 @@ pub struct Plugin {
     pub dir: PathBuf,
     /// Its descriptor.
     pub descriptor: Descriptor,
+    /// A language plugin's grammar.
+    pub grammar: Option<PluginGrammar>,
 }
 
 /// A plugin the registry does not use, and why.
@@ -279,6 +381,9 @@ impl Registry {
         let kind = plugin.descriptor.kind();
         let name = plugin.descriptor.name().to_owned();
         let Some((used, _)) = self.sources.get(&(kind, name.clone())) else {
+            if let Some(grammar) = plugin.grammar {
+                self.grammars.insert(name, Grammar::plugin(grammar));
+            }
             self.add(
                 plugin.descriptor,
                 Source::Plugin(plugin.dir),

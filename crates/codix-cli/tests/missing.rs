@@ -57,6 +57,7 @@ fn a_language_without_its_pack_is_indexed_as_text_and_reported() {
             "files": 2,
             "marker": null,
             "hint": codix_testkit::missing_provider(cfg!(feature = "plugins"), "lang", "kotlin").1,
+            "invalid": null,
         }])
     );
 }
