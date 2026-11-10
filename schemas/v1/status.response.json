@@ -130,6 +130,45 @@
       ],
       "type": "object"
     },
+    "MissingProvider": {
+      "description": "A provider the project needs and this build lacks, reported once.",
+      "properties": {
+        "files": {
+          "description": "For a language, its files, indexed as text.",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "hint": {
+          "description": "How to get the provider.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ProviderKind",
+          "description": "Provider kind."
+        },
+        "marker": {
+          "description": "For a build system or version control system, the file or directory\nthat shows it is in use, such as `pom.xml`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Provider name, such as `kotlin`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "hint"
+      ],
+      "type": "object"
+    },
     "Module": {
       "description": "One module of a build.",
       "properties": {
@@ -183,6 +222,26 @@
         "notes"
       ],
       "type": "object"
+    },
+    "ProviderKind": {
+      "description": "The three kinds of provider.",
+      "oneOf": [
+        {
+          "const": "language",
+          "description": "A language pack.",
+          "type": "string"
+        },
+        {
+          "const": "build",
+          "description": "A build system.",
+          "type": "string"
+        },
+        {
+          "const": "vcs",
+          "description": "A version control system.",
+          "type": "string"
+        }
+      ]
     },
     "Unsupported": {
       "description": "A build construct codix does not interpret.",
@@ -289,6 +348,13 @@
       "$ref": "#/$defs/FileCounts",
       "description": "Files in the index."
     },
+    "missing": {
+      "description": "Providers the project needs and this build lacks.",
+      "items": {
+        "$ref": "#/$defs/MissingProvider"
+      },
+      "type": "array"
+    },
     "modules": {
       "description": "Modules found in build files.",
       "items": {
@@ -307,7 +373,8 @@
     "changed",
     "errors",
     "modules",
-    "build_issues"
+    "build_issues",
+    "missing"
   ],
   "title": "StatusResponse",
   "type": "object"

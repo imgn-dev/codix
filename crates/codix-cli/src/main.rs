@@ -1011,6 +1011,35 @@ mod tests {
         }
     }
 
+    #[test]
+    fn compiled_in_descriptors_agree_with_known() {
+        let same = |kind: &str, name: &str, declared: &[String], table| {
+            let mut declared: Vec<&str> = declared.iter().map(String::as_str).collect();
+            declared.sort_unstable();
+            let mut known = known::values_of(table, name);
+            known.sort_unstable();
+            assert_eq!(declared, known, "{kind} of {name}");
+        };
+        let registry = registry();
+        for d in &registry.languages {
+            same(
+                "extensions",
+                &d.name,
+                &d.detect.extensions,
+                known::EXTENSIONS,
+            );
+            same("filenames", &d.name, &d.detect.filenames, known::FILENAMES);
+            same("shebangs", &d.name, &d.detect.shebangs, known::SHEBANGS);
+            same("modelines", &d.name, &d.detect.modelines, known::MODELINES);
+        }
+        for d in &registry.builds {
+            same("markers", &d.name, &d.detect, known::BUILD_MARKERS);
+        }
+        for d in &registry.vcs {
+            same("markers", &d.name, &d.detect, known::VCS_MARKERS);
+        }
+    }
+
     #[cfg(feature = "full")]
     #[test]
     fn full_build_has_every_known_language() {

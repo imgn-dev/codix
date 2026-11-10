@@ -13,6 +13,7 @@ use crate::Error;
 use crate::config::Config;
 use crate::lock::WriteGate;
 use crate::project::{FileId, Project};
+use crate::providers::{MissingProvider, missing};
 use crate::store::{FileRow, FileStatus, FileUpdate, RefRow, Store, SymbolRow};
 use crate::vcs::Vcs;
 use crate::walk::{ContentClass, Skip, WalkedFile, classify, walk, walk_where};
@@ -94,6 +95,8 @@ pub struct ScanReport {
     pub skipped: Vec<(String, Skip)>,
     /// Files that could not be read, as (path, error).
     pub errors: Vec<(String, String)>,
+    /// Providers the project needs and this build lacks.
+    pub missing: Vec<MissingProvider>,
 }
 
 /// Scans the project and brings the index up to date, waiting for the write
@@ -192,6 +195,10 @@ pub fn scan_within(
     .collect();
     store.commit_scan(&updates, &deleted, Some(&dirs))?;
     store.replace_build(&crate::build::discover(project, config))?;
+    report.missing = missing(
+        project.root(),
+        &store.snapshot()?.search_only_by_language()?,
+    );
     report.errors.sort();
     Ok(Some(report))
 }

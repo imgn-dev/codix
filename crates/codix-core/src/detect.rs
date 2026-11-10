@@ -82,17 +82,19 @@ impl Detector {
             return found(language, Step::Override);
         }
         let text = String::from_utf8_lossy(&content[..content.len().min(64 << 10)]);
-        if let Some(language) =
-            modeline(&text).and_then(|name| self.by(name, |d| &d.detect.modelines))
-        {
+        if let Some(language) = modeline(&text).and_then(|name| {
+            self.by(name, |d| &d.detect.modelines)
+                .or_else(|| known::language_for_modeline(name))
+        }) {
             return found(language, Step::Modeline);
         }
         if let Some(language) = shebang(&text).and_then(|name| {
-            self.by(name, |d| &d.detect.shebangs).or_else(|| {
-                self.by(
-                    name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '.'),
-                    |d| &d.detect.shebangs,
-                )
+            let by_shebang = |name| {
+                self.by(name, |d| &d.detect.shebangs)
+                    .or_else(|| known::language_for_shebang(name))
+            };
+            by_shebang(name).or_else(|| {
+                by_shebang(name.trim_end_matches(|c: char| c.is_ascii_digit() || c == '.'))
             })
         }) {
             return found(language, Step::Shebang);

@@ -59,7 +59,8 @@ pub enum Error {
         /// The valid keys or values.
         hint: String,
     },
-    /// The file's provider is not compiled into this build.
+    /// The file's provider is not in this build: not compiled in, or its
+    /// plugin not installed.
     NotSupportedInBuild {
         /// Provider name, such as `kotlin`.
         provider: String,
@@ -199,7 +200,7 @@ impl Error {
             | Self::Usage { cause, .. }
             | Self::Refused { cause, .. } => cause.clone(),
             Self::NotSupportedInBuild { provider, path } => {
-                format!("{path}: {provider} is not supported in this build")
+                crate::providers::not_supported_cause(provider, path)
             }
             Self::PluginInvalid { provider, cause } => {
                 format!("the {provider} provider cannot be used: {cause}")
@@ -233,8 +234,8 @@ impl Error {
             Self::InvalidConfig { hint, .. }
             | Self::Usage { hint, .. }
             | Self::Refused { hint, .. } => hint.clone(),
-            Self::NotSupportedInBuild { .. } => {
-                "use the full codix build, which includes every provider".to_owned()
+            Self::NotSupportedInBuild { provider, .. } => {
+                crate::providers::hint(codix_provider::ProviderKind::Language, provider)
             }
             Self::Io { source, .. } if source.kind() == io::ErrorKind::NotFound => {
                 "paths are relative to the current directory or the project root; find a file with `codix find <name>`".to_owned()

@@ -13,6 +13,7 @@ use crate::daemon::DaemonStatus;
 use crate::op::{Context, Operation, Outcome};
 use crate::parse::PackIndexer;
 use crate::project::{DATA_DIR, Project};
+use crate::providers::MissingProvider;
 use crate::scan::{RACY_MTIME, ScanReport, scan};
 use crate::store::{FileStatus, Store};
 use crate::vcs::Vcs;
@@ -209,6 +210,8 @@ pub struct StatusResponse {
     pub modules: Vec<Module>,
     /// Build constructs codix could not interpret.
     pub build_issues: Vec<Unsupported>,
+    /// Providers the project needs and this build lacks.
+    pub missing: Vec<MissingProvider>,
     /// The daemon serving the project, if one runs.
     pub daemon: Option<DaemonStatus>,
 }
@@ -232,6 +235,7 @@ impl Operation for StatusOp {
         let snapshot = store.snapshot()?;
         let rows = snapshot.files()?;
         let build = snapshot.build()?;
+        let search_only = snapshot.search_only_by_language()?;
 
         let mut files = FileCounts::default();
         let mut errors = Vec::new();
@@ -283,6 +287,7 @@ impl Operation for StatusOp {
             errors,
             modules: build.modules,
             build_issues: build.unsupported,
+            missing: crate::providers::missing(project.root(), &search_only),
             daemon: crate::daemon::running(project)?.map(|record| DaemonStatus {
                 record,
                 watch: ctx.watch().map(crate::daemon::Watch::status),

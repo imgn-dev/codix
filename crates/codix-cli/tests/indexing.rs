@@ -35,10 +35,12 @@ fn golden(name: &str) -> String {
 }
 
 /// Which of the fixture files are parsed depends on the packs in this build,
-/// so the counts line is checked on its own.
+/// so the counts line and the lines of missing packs are checked on their
+/// own.
 fn without_counts(stdout: &str) -> String {
     let mut masked: Vec<&str> = stdout
         .lines()
+        .filter(|line| !is_missing(line))
         .map(|line| {
             if line.starts_with("files: ") {
                 "files: <counts>"
@@ -49,6 +51,35 @@ fn without_counts(stdout: &str) -> String {
         .collect();
     masked.push("");
     masked.join("\n")
+}
+
+fn is_missing(line: &str) -> bool {
+    line.contains(" indexed as text; ")
+}
+
+/// The fixture's languages whose pack this build lacks, one line each.
+fn expected_missing() -> Vec<String> {
+    [
+        ("markdown", cfg!(feature = "lang-markdown")),
+        ("xml", cfg!(feature = "lang-xml")),
+    ]
+    .into_iter()
+    .filter(|(_, compiled_in)| !compiled_in)
+    .map(|(language, _)| {
+        format!(
+            "{language}: 1 file indexed as text; not in this build \
+             (use the full codix build, which includes every provider)"
+        )
+    })
+    .collect()
+}
+
+fn missing_lines(stdout: &str) -> Vec<String> {
+    stdout
+        .lines()
+        .filter(|line| is_missing(line))
+        .map(str::to_owned)
+        .collect()
 }
 
 fn expected_counts() -> String {
@@ -78,7 +109,8 @@ fn init_in_a_git_repository() {
     fs::create_dir(root.join(".git")).unwrap();
     let out = codix(&root, &root, &["init"]);
     assert_eq!(out.code, Some(0), "{}", out.stderr);
-    assert_golden(golden("init-git.txt"), &out.stdout);
+    assert_eq!(missing_lines(&out.stdout), expected_missing());
+    assert_golden(golden("init-git.txt"), &without_counts(&out.stdout));
     assert_eq!(
         fs::read_to_string(root.join(".codix/.gitignore")).unwrap(),
         "*\n"
@@ -113,6 +145,7 @@ fn status_reports_files_modules_and_changes() {
     let out = codix(&root, &root, &["status"]);
     assert_eq!(out.code, Some(0), "{}", out.stderr);
     assert_eq!(out.stdout.lines().nth(1), Some(expected_counts().as_str()));
+    assert_eq!(missing_lines(&out.stdout), expected_missing());
     assert_golden(golden("status-clean.txt"), &without_counts(&out.stdout));
 
     fs::write(root.join("README.md"), "# Shop, renamed\n").unwrap();

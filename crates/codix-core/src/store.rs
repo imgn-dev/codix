@@ -827,6 +827,26 @@ impl Snapshot<'_> {
             .map_err(|e| self.err(&e))
     }
 
+    /// The number of files searched as text only, by language, sorted by
+    /// language.
+    pub fn search_only_by_language(&self) -> Result<Vec<(String, usize)>, Error> {
+        let mut stmt = self
+            .tx
+            .prepare(
+                "SELECT language, COUNT(*) FROM files WHERE status = ?1
+                 GROUP BY language ORDER BY language",
+            )
+            .map_err(|e| self.err(&e))?;
+        stmt.query_map([FileStatus::SearchOnly.as_str()], |row| {
+            Ok((
+                row.get(0)?,
+                usize::try_from(row.get::<_, i64>(1)?).unwrap_or(0),
+            ))
+        })
+        .and_then(Iterator::collect)
+        .map_err(|e| self.err(&e))
+    }
+
     /// Every directory hash, by root-relative path.
     pub fn dirs(&self) -> Result<std::collections::HashMap<String, [u8; 32]>, Error> {
         let mut stmt = self

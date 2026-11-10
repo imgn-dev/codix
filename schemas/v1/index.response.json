@@ -1,5 +1,64 @@
 {
   "$defs": {
+    "MissingProvider": {
+      "description": "A provider the project needs and this build lacks, reported once.",
+      "properties": {
+        "files": {
+          "description": "For a language, its files, indexed as text.",
+          "format": "uint",
+          "minimum": 0,
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "hint": {
+          "description": "How to get the provider.",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/ProviderKind",
+          "description": "Provider kind."
+        },
+        "marker": {
+          "description": "For a build system or version control system, the file or directory\nthat shows it is in use, such as `pom.xml`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "description": "Provider name, such as `kotlin`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name",
+        "hint"
+      ],
+      "type": "object"
+    },
+    "ProviderKind": {
+      "description": "The three kinds of provider.",
+      "oneOf": [
+        {
+          "const": "language",
+          "description": "A language pack.",
+          "type": "string"
+        },
+        {
+          "const": "build",
+          "description": "A build system.",
+          "type": "string"
+        },
+        {
+          "const": "vcs",
+          "description": "A version control system.",
+          "type": "string"
+        }
+      ]
+    },
     "Skip": {
       "description": "Why a file was left out of the walk.",
       "oneOf": [
@@ -53,6 +112,13 @@
       "minimum": 0,
       "type": "integer"
     },
+    "missing": {
+      "description": "Providers the project needs and this build lacks.",
+      "items": {
+        "$ref": "#/$defs/MissingProvider"
+      },
+      "type": "array"
+    },
     "pending": {
       "description": "Files that kept changing during the scan, left for the next one.",
       "format": "uint",
@@ -96,7 +162,8 @@
     "unchanged",
     "pending",
     "skipped",
-    "errors"
+    "errors",
+    "missing"
   ],
   "title": "ScanReport",
   "type": "object"

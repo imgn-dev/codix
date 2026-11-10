@@ -7,6 +7,11 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+# Providers come as plugins: a missing one is "not installed", with an
+# install hint, rather than "not in this build".
+plugins = []
+
 [dependencies]
 blake3.workspace = true
 codix-provider.workspace = true

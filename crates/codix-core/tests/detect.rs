@@ -89,6 +89,18 @@ fn ambiguous_extensions_use_content() {
 fn languages_left_out_of_the_build_are_still_recognized() {
     assert_eq!(detect("src/Main.kt", ""), is("kotlin", Step::Extension));
     assert_eq!(detect("Rakefile", ""), is("ruby", Step::Filename));
+    assert_eq!(
+        detect("build", "#!/usr/bin/env kotlinc -script\n"),
+        is("kotlin", Step::Shebang)
+    );
+    assert_eq!(
+        detect("tool", "#!/usr/bin/python3.12\n"),
+        is("python", Step::Shebang)
+    );
+    assert_eq!(
+        detect("x.conf", "# vim: ft=yaml\n"),
+        is("yaml", Step::Modeline)
+    );
 }
 
 #[test]

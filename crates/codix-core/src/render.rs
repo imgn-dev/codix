@@ -14,6 +14,7 @@ use crate::indexing::{InitResponse, StatusResponse};
 use crate::op::Warning;
 use crate::page::{Location, Paged};
 use crate::previews::{DiscardResponse, PreviewsResponse, State};
+use crate::providers::MissingProvider;
 use crate::query::{
     DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse, Renamed,
     ShowResponse, SymbolResult,
@@ -683,8 +684,23 @@ impl TextRender for ScanReport {
         for (path, error) in &self.errors {
             writeln!(w, "error: {path}: {error}")?;
         }
-        Ok(())
+        render_missing(w, &self.missing)
     }
+}
+
+/// One line per provider the project needs and this build lacks.
+fn render_missing(w: &mut dyn Write, missing: &[MissingProvider]) -> io::Result<()> {
+    for provider in missing {
+        writeln!(
+            w,
+            "{}: {}; {} ({})",
+            provider.name,
+            provider.effect(),
+            crate::providers::absence(),
+            provider.hint
+        )?;
+    }
+    Ok(())
 }
 
 impl TextRender for InitResponse {
@@ -798,7 +814,7 @@ impl TextRender for StatusResponse {
                 writeln!(w, "  {}:{}  {}", issue.file, issue.line, issue.construct)?;
             }
         }
-        Ok(())
+        render_missing(w, &self.missing)
     }
 }
 
