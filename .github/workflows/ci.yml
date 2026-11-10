@@ -33,6 +33,7 @@ jobs:
           tool: cargo-hack@0.6.46
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy -p codix-cli --all-targets --no-default-features --features plugins,vcs-git -- -D warnings
       - run: cargo test
       # The published presets other than the default; registry tests check
       # each one links exactly its providers.

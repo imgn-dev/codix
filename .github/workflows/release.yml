@@ -58,3 +58,49 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/codix${{ matrix.exe }}
             measurements.json
+
+  # The modular flavour: the core with git, and every other provider as a
+  # plugin, one archive each. glibc on Linux: a plugin is loaded with dlopen,
+  # which a static musl binary cannot do.
+  modular:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+          - target: aarch64-apple-darwin
+            os: macos-26
+          - target: x86_64-apple-darwin
+            os: macos-26-intel
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+            exe: .exe
+            python: python
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install
+      - run: rustup target add ${{ matrix.target }}
+      - run: cargo xtask dist dist --target ${{ matrix.target }}
+      - name: Record sizes and startup time
+        shell: bash
+        run: >
+          ${{ matrix.python || 'python3' }} .github/scripts/measure.py
+          dist/bin/codix${{ matrix.exe }}
+          ${{ matrix.target }}
+          measurements.json
+          dist/lib/codix/plugins
+          >> "$GITHUB_STEP_SUMMARY"
+      # The oldest glibc the binaries can run on is the runner's.
+      - if: contains(matrix.target, 'linux')
+        run: ldd --version | head -n 1 >> "$GITHUB_STEP_SUMMARY"
+      - run: ${{ matrix.python || 'python3' }} .github/scripts/package.py dist ${{ matrix.target }} archives
+      - uses: actions/upload-artifact@v7
+        with:
+          name: codix-modular-${{ matrix.target }}
+          path: |
+            archives/
+            measurements.json

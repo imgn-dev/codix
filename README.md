@@ -25,7 +25,46 @@ cp target/release/codix ~/.local/bin/
 
 `--features full` includes every provider. The default build has Java, Go,
 Maven, Gradle and git; `minimal` has none, for plain-text search only.
-`codix capabilities` lists what a build supports.
+`codix capabilities` lists what a build supports. The modular flavour instead
+loads providers as plugins (see Plugins).
+
+## Plugins
+
+codix comes in two flavours:
+
+- **Monolithic**: every provider compiled in (`--features full`, the default
+  build, or `minimal`), and no plugins. For static Linux binaries, CI and
+  sandboxes.
+- **Modular**: the core with git only, and every language, build system and
+  other version control system as a plugin, installed by a package manager.
+  codix never downloads anything.
+
+```
+cargo build --release -p codix-cli --no-default-features --features plugins,vcs-git
+cargo xtask dist dist/      # dist/bin/codix and every plugin in dist/lib/codix/plugins
+```
+
+The modular flavour finds plugins in, in order:
+
+1. each directory of `CODIX_PLUGIN_PATH`;
+2. `$XDG_DATA_HOME/codix/plugins` (by default `~/.local/share/codix/plugins`;
+   `%LOCALAPPDATA%\codix\plugins` on Windows);
+3. `lib/codix/plugins` beside the binary's directory, as invoked and with
+   symlinks resolved, where a package manager installs them.
+
+Never in the project: a repository cannot bring native code. The modular
+flavour needs a C library that can load plugins: on Linux, glibc, at least the
+version of the system it was built on (2.39 for the release builds, made on
+Ubuntu 24.04); static musl builds are monolithic. A plugin is a
+directory `<kind>/<name>/`; `cargo xtask plugins <out>` builds them.
+
+A file of a known language whose plugin is not installed is indexed as text,
+and `index` and `status` say which plugin to install, with the command the
+packager set at build time in `CODIX_INSTALL_HINT` (such as
+`brew install codix-{kind}-{name}`). `codix languages` lists every provider,
+where it comes from, its version, and why a plugin is not used: invalid, or
+left out because a compiled-in provider or an earlier plugin of the same name
+wins. Writing a plugin is described in [docs/plugins.md](docs/plugins.md).
 
 ## Workflow
 
@@ -231,6 +270,9 @@ apply too.
 cargo test                     # the default build
 cargo test -p codix-cli --features full
 cargo clippy --all-targets -- -D warnings
+cargo xtask plugins target/plugins --debug    # every plugin, quick to build
+CODIX_PLUGIN_PATH=$PWD/target/plugins \
+  cargo test -p codix-cli --no-default-features --features plugins,vcs-git
 cargo bench -p codix-benches   # performance targets on pinned repositories
 cargo run -p codix-eval --release  # the LLM benchmark, through Claude Code
 ```
