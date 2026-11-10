@@ -1,7 +1,7 @@
 //! A version control system installed as a plugin behaves as a compiled-in
 //! one, and a broken plugin is listed with its reason without failing other
 //! commands.
-#![cfg(all(feature = "plugins", not(feature = "vcs-hg")))]
+#![cfg(all(feature = "plugins", not(with_vcs_hg)))]
 
 use std::fs;
 use std::path::Path;

@@ -544,7 +544,6 @@ dependencies = [
 name = "codix-testkit"
 version = "0.3.0"
 dependencies = [
- "cc",
  "codix-core",
  "codix-lang-java",
  "codix-plugin",
@@ -553,6 +552,7 @@ dependencies = [
  "rusqlite",
  "serde_json",
  "tempfile",
+ "xtask",
 ]
 
 [[package]]
@@ -2146,6 +2146,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c3b93199df0ab874cdf0c6a94f0a0dc3423fe41f1cafb62b8bd7b1deb277aef"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "xtask"
+version = "0.3.0"
+dependencies = [
+ "cc",
+ "codix-plugin",
+ "codix-provider",
+ "codix-testkit",
+ "serde_json",
 ]
 
 [[package]]

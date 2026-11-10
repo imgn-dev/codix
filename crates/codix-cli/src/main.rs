@@ -977,7 +977,16 @@ mod tests {
         .filter_map(|(enabled, provider)| enabled.then_some(provider))
         .collect();
         expected.sort_unstable();
-        assert_eq!(registry().names(), expected);
+        let registry = registry();
+        let compiled_in: Vec<(ProviderKind, &str)> = registry
+            .names()
+            .into_iter()
+            .filter(|(kind, name)| {
+                registry.sources[&(*kind, (*name).to_owned())].0
+                    == codix_provider::Source::CompiledIn
+            })
+            .collect();
+        assert_eq!(compiled_in, expected);
     }
 
     #[test]

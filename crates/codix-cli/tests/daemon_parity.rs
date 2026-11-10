@@ -178,7 +178,7 @@ fn live_every_command_answers_the_same_through_a_daemon() {
     // without Java, nothing has symbols to be ambiguous about.
     let codes: std::collections::BTreeSet<i32> =
         in_process.iter().filter_map(|run| run.code).collect();
-    let expected: &[i32] = if cfg!(feature = "lang-java") {
+    let expected: &[i32] = if cfg!(with_lang_java) {
         &[0, 1, 2, 3, 5]
     } else {
         &[0, 1, 2, 5]

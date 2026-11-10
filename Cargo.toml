@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["benches", "crates/*", "eval"]
+members = ["benches", "crates/*", "eval", "xtask"]
 
 [workspace.package]
 version = "0.3.0"
@@ -84,6 +84,7 @@ tree-sitter-toml-ng = "0.7.0"
 tree-sitter-typescript = "0.23.2"
 tree-sitter-xml = "0.7.0"
 tree-sitter-yaml = "0.7.2"
+xtask = { path = "xtask" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

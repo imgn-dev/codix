@@ -1,5 +1,5 @@
 //! `previews` and `discard`: pending previews, their state and expiry.
-#![cfg(feature = "lang-java")]
+#![cfg(with_lang_java)]
 
 use std::path::Path;
 

@@ -1,0 +1,3 @@
+[alias]
+# `cargo xtask plugins <out>`: builds the plugin directories.
+xtask = "run --package xtask --"

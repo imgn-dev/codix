@@ -6,11 +6,7 @@ use codix_testkit::fixture::{codix_in, files_only};
 const CODIX: &str = env!("CARGO_BIN_EXE_codix");
 
 /// The end of a missing provider's line: why it is missing, and the hint.
-#[cfg(any(
-    not(feature = "lang-kotlin"),
-    not(feature = "build-maven"),
-    not(feature = "vcs-hg")
-))]
+#[cfg(any(not(with_lang_kotlin), not(with_build_maven), not(with_vcs_hg)))]
 fn absent(kind: &str, name: &str) -> String {
     let (why, hint) = codix_testkit::missing_provider(cfg!(feature = "plugins"), kind, name);
     format!("{why} ({hint})")
@@ -30,7 +26,7 @@ fn reports(files: &[(&str, &str)], dirs: &[&str]) -> [String; 3] {
     [out(&["init"]), out(&["index"]), out(&["status"])]
 }
 
-#[cfg(not(feature = "lang-kotlin"))]
+#[cfg(not(with_lang_kotlin))]
 #[test]
 fn a_language_without_its_pack_is_indexed_as_text_and_reported() {
     let files = [
@@ -62,7 +58,7 @@ fn a_language_without_its_pack_is_indexed_as_text_and_reported() {
     );
 }
 
-#[cfg(not(feature = "build-maven"))]
+#[cfg(not(with_build_maven))]
 #[test]
 fn a_build_system_without_its_provider_is_reported() {
     let line = format!(
@@ -74,7 +70,7 @@ fn a_build_system_without_its_provider_is_reported() {
     }
 }
 
-#[cfg(not(feature = "vcs-hg"))]
+#[cfg(not(with_vcs_hg))]
 #[test]
 fn a_version_control_system_without_its_provider_is_reported() {
     let line = format!(

@@ -157,7 +157,7 @@ fn tools_are_the_operations_and_each_takes_a_cwd() {
     }
 }
 
-#[cfg(feature = "lang-java")]
+#[cfg(with_lang_java)]
 #[test]
 fn results_carry_the_cli_text_only() {
     let (_guard, root) = indexed(CODIX, BILLING);
@@ -178,7 +178,7 @@ fn results_carry_the_cli_text_only() {
     assert!(result.get("structuredContent").is_none(), "{result}");
 }
 
-#[cfg(feature = "lang-java")]
+#[cfg(with_lang_java)]
 #[test]
 fn one_server_answers_for_several_projects() {
     let (_a_guard, a) = indexed(CODIX, &[("A.java", "class Alpha {}\n")]);

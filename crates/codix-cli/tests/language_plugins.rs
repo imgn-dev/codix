@@ -2,7 +2,7 @@
 //! does. Installing it reparses its files on the next scan, removing it
 //! returns them to text, and a plugin that cannot be used is reported with
 //! its reason while its files are indexed as text.
-#![cfg(all(feature = "plugins", not(feature = "lang-java")))]
+#![cfg(all(feature = "plugins", not(with_lang_java)))]
 
 use std::fs;
 use std::path::{Path, PathBuf};

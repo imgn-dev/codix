@@ -1,5 +1,5 @@
 //! Paths shown relative to the cwd, `--root`, `--here` and `--path`.
-#![cfg(feature = "lang-java")]
+#![cfg(with_lang_java)]
 
 use codix_testkit::Run;
 use codix_testkit::fixture::BILLING;

@@ -1,6 +1,6 @@
 //! A build system installed as a plugin gives the project its modules, and
 //! one that fails is reported with its cause while the scan goes on.
-#![cfg(all(feature = "plugins", not(feature = "build-maven")))]
+#![cfg(all(feature = "plugins", not(with_build_maven)))]
 
 use std::fs;
 use std::path::{Path, PathBuf};

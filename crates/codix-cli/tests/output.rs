@@ -1,5 +1,5 @@
 //! Text and JSON rendering, paging and exit codes, through `find`.
-#![cfg(feature = "lang-java")]
+#![cfg(with_lang_java)]
 
 use codix_testkit::assert_golden;
 use codix_testkit::fixture::methods;

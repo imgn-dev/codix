@@ -1,5 +1,5 @@
 //! `find`, `def`, `outline`, `show` and `grep`, and their freshness.
-#![cfg(feature = "lang-java")]
+#![cfg(with_lang_java)]
 
 use std::fs;
 

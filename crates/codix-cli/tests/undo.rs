@@ -1,5 +1,5 @@
 //! `undo`: previews reverting applies, newest first.
-#![cfg(feature = "lang-java")]
+#![cfg(with_lang_java)]
 
 use std::fs;
 use std::path::Path;

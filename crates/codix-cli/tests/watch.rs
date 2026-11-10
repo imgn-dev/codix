@@ -190,7 +190,7 @@ fn live_codix_watch_runs_the_daemon_in_the_foreground() {
     assert!(child.wait().expect("wait").success());
 }
 
-#[cfg(feature = "lang-java")]
+#[cfg(with_lang_java)]
 #[test]
 fn live_an_apply_through_the_daemon_leaves_its_index_current() {
     let runtime = tempfile::tempdir().expect("runtime dir");

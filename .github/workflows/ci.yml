@@ -38,7 +38,12 @@ jobs:
       # each one links exactly its providers.
       - run: cargo test -p codix-cli --no-default-features --features minimal
       - run: cargo test -p codix-cli --features full
-      # The core with git only, every other provider as a plugin.
+      # The core with git only, every other provider as a plugin: first with
+      # none installed, then with every plugin, built as they ship.
       - run: cargo test -p codix-cli --no-default-features --features plugins,vcs-git
+      - run: cargo xtask plugins target/plugins --debug
+      - run: cargo test -p codix-cli --no-default-features --features plugins,vcs-git
+        env:
+          CODIX_PLUGIN_PATH: ${{ github.workspace }}/target/plugins
       # Each feature alone, which covers the presets and every provider feature.
       - run: cargo hack --each-feature --no-dev-deps check

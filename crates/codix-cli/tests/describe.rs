@@ -4,7 +4,7 @@
 use std::fs;
 use std::path::PathBuf;
 
-#[cfg(feature = "lang-java")]
+#[cfg(with_lang_java)]
 use codix_testkit::fixture::indexed;
 use codix_testkit::fixture::{codix_in, files_only};
 use codix_testkit::{assert_golden, run};
@@ -32,7 +32,7 @@ fn the_command_docs_are_generated_from_the_descriptions() {
     assert_golden(docs, &codix_core::describe::markdown());
 }
 
-#[cfg(feature = "lang-java")]
+#[cfg(with_lang_java)]
 #[test]
 fn languages_lists_every_known_language() {
     let out = run(CODIX, &["languages"]);
@@ -50,7 +50,7 @@ fn languages_lists_every_known_language() {
     assert_eq!(java["extensions"], serde_json::json!(["java"]));
 }
 
-#[cfg(feature = "lang-java")]
+#[cfg(with_lang_java)]
 #[test]
 fn capabilities_in_a_project_describe_its_index() {
     let (_guard, root) = indexed(

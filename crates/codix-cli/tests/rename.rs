@@ -1,5 +1,5 @@
 //! `rename` within a file: previews, refusals and overrides.
-#![cfg(feature = "lang-java")]
+#![cfg(with_lang_java)]
 
 use codix_testkit::assert_golden;
 use codix_testkit::fixture::{codix_in, indexed};
@@ -159,7 +159,7 @@ fn the_same_name_or_an_invalid_one_is_refused() {
     );
 }
 
-#[cfg(feature = "lang-kotlin")]
+#[cfg(with_lang_kotlin)]
 #[test]
 fn a_definition_named_by_a_keyword_is_not_renamed() {
     let (_guard, root) = indexed(

@@ -1,6 +1,6 @@
 //! `init`, `index` and `status` from the command line. The fixtures need the
 //! Java pack, the Maven provider and git, which the minimal build leaves out.
-#![cfg(all(feature = "lang-java", feature = "build-maven", feature = "vcs-git"))]
+#![cfg(all(with_lang_java, with_build_maven, with_vcs_git))]
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -60,8 +60,8 @@ fn is_missing(line: &str) -> bool {
 /// The fixture's languages whose pack this build lacks, one line each.
 fn expected_missing() -> Vec<String> {
     [
-        ("markdown", cfg!(feature = "lang-markdown")),
-        ("xml", cfg!(feature = "lang-xml")),
+        ("markdown", cfg!(with_lang_markdown)),
+        ("xml", cfg!(with_lang_xml)),
     ]
     .into_iter()
     .filter(|(_, compiled_in)| !compiled_in)
@@ -82,8 +82,7 @@ fn missing_lines(stdout: &str) -> Vec<String> {
 }
 
 fn expected_counts() -> String {
-    let parsed =
-        1 + usize::from(cfg!(feature = "lang-xml")) + usize::from(cfg!(feature = "lang-markdown"));
+    let parsed = 1 + usize::from(cfg!(with_lang_xml)) + usize::from(cfg!(with_lang_markdown));
     format!(
         "files: {parsed} indexed, {} search only, 0 pending, 0 errors, 0 skipped",
         3 - parsed
@@ -117,7 +116,7 @@ fn init_in_a_git_repository() {
     assert!(root.join(".codix/index.db").is_file());
 }
 
-#[cfg(feature = "vcs-hg")]
+#[cfg(with_vcs_hg)]
 #[test]
 fn the_hint_is_printed_on_the_first_init_only() {
     let (_guard, root) = project(FILES);

@@ -1,6 +1,6 @@
 //! `apply`: writing previews, rebasing them, refusing stale ones, and
 //! rolling back an apply a crash interrupted.
-#![cfg(feature = "lang-java")]
+#![cfg(with_lang_java)]
 
 use std::fs;
 use std::path::Path;

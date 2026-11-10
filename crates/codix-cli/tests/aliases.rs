@@ -1,6 +1,6 @@
 //! Symbol aliases: an ID from before a rename codix applied still leads to
 //! the symbol for queries, and refuses edits.
-#![cfg(feature = "lang-java")]
+#![cfg(with_lang_java)]
 
 use std::path::Path;
 

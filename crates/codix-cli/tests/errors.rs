@@ -209,7 +209,7 @@ fn run_renamed(args: &[&str]) -> String {
     String::from_utf8(output.stderr).expect("UTF-8")
 }
 
-#[cfg(feature = "lang-java")]
+#[cfg(with_lang_java)]
 mod with_java {
     use super::{check, codix, indexed};
 
@@ -256,7 +256,7 @@ mod with_java {
     }
 }
 
-#[cfg(not(feature = "lang-kotlin"))]
+#[cfg(not(with_lang_kotlin))]
 #[test]
 fn not_supported_in_build() {
     let (_guard, root) = indexed(&[("src/Main.kt", "fun main() {}\n")]);
