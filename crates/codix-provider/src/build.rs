@@ -50,3 +50,54 @@ pub struct Unsupported {
     /// The construct, as written.
     pub construct: String,
 }
+
+/// The build plugin protocol this codix speaks.
+pub const PROTOCOL: u32 = 1;
+
+/// What a build plugin prints on stdout for
+/// `<executable> discover --protocol 1 <root>`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct Answer {
+    /// The protocol the answer follows: 1.
+    pub protocol: u32,
+    /// The build's modules.
+    pub model: BuildModel,
+}
+
+/// The `main` of a build plugin's executable: answers
+/// `discover --protocol 1 <root>` with the resolver's model as JSON on
+/// stdout. Anything else is a usage error, exit code 2.
+pub fn serve(resolver: &dyn BuildResolver) -> std::process::ExitCode {
+    use std::io::Write as _;
+
+    let args: Vec<std::ffi::OsString> = std::env::args_os().skip(1).collect();
+    let protocol = PROTOCOL.to_string();
+    let root = match args.as_slice() {
+        [command, flag, version, root]
+            if command == "discover" && flag == "--protocol" && *version == *protocol =>
+        {
+            Path::new(root)
+        }
+        _ => {
+            // Nothing to do if stderr is gone: the exit code says it.
+            let _ = writeln!(
+                std::io::stderr(),
+                "usage: discover --protocol {PROTOCOL} <root>"
+            );
+            return std::process::ExitCode::from(2);
+        }
+    };
+    let answer = Answer {
+        protocol: PROTOCOL,
+        model: resolver.discover(root),
+    };
+    let mut stdout = std::io::stdout().lock();
+    match serde_json::to_writer(&mut stdout, &answer)
+        .map_err(std::io::Error::from)
+        .and_then(|()| writeln!(stdout))
+    {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(_) => std::process::ExitCode::FAILURE,
+    }
+}

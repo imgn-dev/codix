@@ -1,6 +1,9 @@
 //! Modules and source roots from the build systems a project uses, or from
 //! `sources.roots` in `codix.toml`, which overrides them.
 
+use std::collections::BTreeMap;
+use std::sync::{Mutex, OnceLock, PoisonError};
+
 use codix_provider::{BuildModel, Module, registry};
 
 use crate::config::Config;
@@ -45,9 +48,33 @@ pub fn discover(project: &Project, config: &Config) -> BuildModel {
             .any(|marker| project.root().join(marker).is_file())
         {
             let found = resolver.discover(project.root());
-            model.modules.extend(found.modules);
-            model.unsupported.extend(found.unsupported);
+            let mut failures = failures().lock().unwrap_or_else(PoisonError::into_inner);
+            match found {
+                Ok(found) => {
+                    failures.remove(&descriptor.name);
+                    model.modules.extend(found.modules);
+                    model.unsupported.extend(found.unsupported);
+                }
+                Err(e) => {
+                    failures.insert(descriptor.name.clone(), e.to_string());
+                }
+            }
         }
     }
     model
+}
+
+/// Why the build system named `name` gave no modules at its last discovery
+/// in this process: its plugin failed or answered badly.
+pub(crate) fn failure(name: &str) -> Option<String> {
+    failures()
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .get(name)
+        .cloned()
+}
+
+fn failures() -> &'static Mutex<BTreeMap<String, String>> {
+    static FAILURES: OnceLock<Mutex<BTreeMap<String, String>>> = OnceLock::new();
+    FAILURES.get_or_init(Mutex::default)
 }

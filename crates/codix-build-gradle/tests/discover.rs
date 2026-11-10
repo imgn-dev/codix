@@ -1,7 +1,8 @@
-//! Gradle discovery on Groovy and Kotlin DSL fixtures.
+//! Gradle discovery on Groovy and Kotlin DSL fixtures, compiled in and as a
+//! plugin.
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use codix_build_gradle::Gradle;
 use codix_provider::{BuildModel, BuildResolver};
@@ -14,7 +15,15 @@ fn discover(files: &[(&str, &str)]) -> BuildModel {
         fs::create_dir_all(path.parent().expect("parent")).expect("create dirs");
         fs::write(path, content).expect("write file");
     }
-    Gradle.discover(&root)
+    let model = Gradle.discover(&root);
+    // The plugin form gives the same.
+    let plugin = Path::new(env!("CARGO_BIN_EXE_codix-build-gradle"));
+    assert_eq!(
+        codix_plugin::build::run_within(plugin, &root, codix_plugin::build::TIMEOUT),
+        Ok(model.clone()),
+        "through the plugin"
+    );
+    model
 }
 
 /// Name, root, source roots, test roots and parent of a module.

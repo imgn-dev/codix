@@ -12,10 +12,12 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use codix_provider::{
-    Descriptor, Plugin, PluginGrammar, PluginSource, ProviderKind, Rejected, Rejection, toml_error,
+    Descriptor, Plugin, PluginBuild, PluginGrammar, PluginSource, ProviderKind, Rejected,
+    Rejection, toml_error,
 };
 use serde::Deserialize;
 
+pub mod build;
 mod native;
 
 /// The manifest schema this codix reads.
@@ -57,6 +59,9 @@ struct Manifest {
     /// The function the library exports that returns the grammar, such as
     /// `tree_sitter_java`.
     symbol: Option<String>,
+    /// A build plugin's executable, relative to its directory, such as
+    /// `bin/codix-build-maven`.
+    executable: Option<String>,
 }
 
 /// The directories searched for plugins, in order: each directory of
@@ -194,9 +199,6 @@ fn check(kind: ProviderKind, name: &str, dir: &Path) -> Result<Plugin, String> {
             manifest.name
         ));
     }
-    if kind == ProviderKind::Build {
-        return Err(format!("this codix cannot load {kind} plugins yet"));
-    }
     let descriptor = Descriptor::parse(kind, &read(dir, DESCRIPTOR)?)
         .map_err(|e| format!("{DESCRIPTOR}: {e}"))?;
     if descriptor.name() != name {
@@ -214,11 +216,43 @@ fn check(kind: ProviderKind, name: &str, dir: &Path) -> Result<Plugin, String> {
         }
         _ => None,
     };
+    let build = match (kind, manifest.executable) {
+        (ProviderKind::Build, Some(executable)) => Some(build(dir, &executable)?),
+        (ProviderKind::Build, None) => {
+            return Err(format!("{MANIFEST}: a build plugin names its executable"));
+        }
+        (_, Some(_)) => {
+            return Err(format!("{MANIFEST}: executable is for build plugins"));
+        }
+        (_, None) => None,
+    };
     Ok(Plugin {
         version: manifest.version,
         dir: dir.to_path_buf(),
         descriptor,
         grammar,
+        build,
+    })
+}
+
+/// A build plugin's executable, which must be in its directory.
+fn build(dir: &Path, executable: &str) -> Result<PluginBuild, String> {
+    let relative = Path::new(executable);
+    if !relative
+        .components()
+        .all(|c| matches!(c, std::path::Component::Normal(_)))
+    {
+        return Err(format!(
+            "{MANIFEST}: executable {executable} is not a path in the plugin's directory"
+        ));
+    }
+    let executable = dir.join(relative);
+    if !executable.is_file() {
+        return Err(format!("{}: not found", executable.display()));
+    }
+    Ok(PluginBuild {
+        executable,
+        run: build::run,
     })
 }
 
@@ -394,8 +428,29 @@ mod tests {
                 "build",
                 "maven",
                 manifest("build", "maven"),
-                "",
-                "this codix cannot load build plugins yet",
+                MAVEN,
+                "plugin.toml: a build plugin names its executable",
+            ),
+            (
+                "build",
+                "maven",
+                manifest("build", "maven") + "executable = \"../codix-build-maven\"\n",
+                MAVEN,
+                "plugin.toml: executable ../codix-build-maven is not a path in the plugin's directory",
+            ),
+            (
+                "build",
+                "maven",
+                manifest("build", "maven") + "executable = \"bin/codix-build-maven\"\n",
+                MAVEN,
+                "codix-build-maven: not found",
+            ),
+            (
+                "vcs",
+                "mercurial",
+                manifest("vcs", "mercurial") + "executable = \"x\"\n",
+                HG,
+                "plugin.toml: executable is for build plugins",
             ),
         ];
         for (kind, name, manifest, descriptor, expected) in cases {
@@ -408,8 +463,33 @@ mod tests {
             let found = discover(&[root.path().to_path_buf()]);
             assert_eq!(found.len(), 1, "{expected}");
             let reason = reason(&found[0]);
-            assert!(reason.starts_with(expected), "{reason} / {expected}");
+            assert!(
+                reason.starts_with(expected) || reason.ends_with(expected),
+                "{reason} / {expected}"
+            );
         }
+    }
+
+    const MAVEN: &str = "name = \"maven\"\ndetect = [\"pom.xml\"]\n";
+
+    #[test]
+    fn a_build_plugin_is_found_with_its_executable() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let manifest = manifest("build", "maven") + "executable = \"bin/codix-build-maven\"\n";
+        let dir = plugin(
+            root.path(),
+            "build",
+            "maven",
+            &[(MANIFEST, &manifest), (DESCRIPTOR, MAVEN)],
+        );
+        fs::create_dir(dir.join("bin")).expect("bin");
+        fs::write(dir.join("bin/codix-build-maven"), "").expect("executable");
+        let found = discover(&[root.path().to_path_buf()]);
+        let [Ok(plugin)] = found.as_slice() else {
+            panic!("{found:?}");
+        };
+        let build = plugin.build.as_ref().expect("build");
+        assert_eq!(build.executable, dir.join("bin/codix-build-maven"));
     }
 
     const KOTLIN: &str = "name = \"kotlin\"\nversion = 1\nid_prefix = \"kotlin\"\n";

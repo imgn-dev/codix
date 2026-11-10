@@ -18,6 +18,7 @@ fn vcs(name: &str, dir: &str) -> Plugin {
         dir: PathBuf::from(dir),
         descriptor: Descriptor::parse(ProviderKind::Vcs, &text).expect("descriptor"),
         grammar: None,
+        build: None,
     }
 }
 

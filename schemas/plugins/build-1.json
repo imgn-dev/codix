@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Answer",
+  "description": "What a build plugin prints on stdout for\n`<executable> discover --protocol 1 <root>`.",
+  "type": "object",
+  "properties": {
+    "model": {
+      "description": "The build's modules.",
+      "$ref": "#/$defs/BuildModel"
+    },
+    "protocol": {
+      "description": "The protocol the answer follows: 1.",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "protocol",
+    "model"
+  ],
+  "$defs": {
+    "BuildModel": {
+      "description": "The modules of a build, and the constructs that could not be interpreted.",
+      "type": "object",
+      "properties": {
+        "modules": {
+          "description": "Modules, root first.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Module"
+          }
+        },
+        "unsupported": {
+          "description": "Constructs reported rather than guessed.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Unsupported"
+          }
+        }
+      },
+      "required": [
+        "modules",
+        "unsupported"
+      ]
+    },
+    "Module": {
+      "description": "One module of a build.",
+      "type": "object",
+      "properties": {
+        "build": {
+          "description": "Build system, such as `maven`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Module name, such as a Maven `artifactId` or a Gradle project path.",
+          "type": "string"
+        },
+        "notes": {
+          "description": "What could not be resolved, such as an undefined `${property}`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "parent": {
+          "description": "Name of the parent module, if any.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "root": {
+          "description": "Module directory, root-relative; `\"\"` for the root.",
+          "type": "string"
+        },
+        "source_roots": {
+          "description": "Main source directories, root-relative.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "test_roots": {
+          "description": "Test source directories, root-relative.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "build",
+        "root",
+        "source_roots",
+        "test_roots",
+        "notes"
+      ]
+    },
+    "Unsupported": {
+      "description": "A build construct codix does not interpret.",
+      "type": "object",
+      "properties": {
+        "construct": {
+          "description": "The construct, as written.",
+          "type": "string"
+        },
+        "file": {
+          "description": "Build file, root-relative.",
+          "type": "string"
+        },
+        "line": {
+          "description": "1-based line.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "file",
+        "line",
+        "construct"
+      ]
+    }
+  }
+}

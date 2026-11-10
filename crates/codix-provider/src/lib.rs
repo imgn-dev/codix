@@ -11,14 +11,15 @@ pub mod descriptor;
 pub mod known;
 mod registry;
 
-pub use build::{BuildModel, BuildResolver, Module, Unsupported};
+pub use build::{Answer, BuildModel, BuildResolver, Module, PROTOCOL, Unsupported, serve};
 pub use descriptor::{
     BuildDescriptor, Descriptor, Detect, IgnoreStrategy, LanguageDescriptor, ProviderKind, Scopes,
     VcsDescriptor, toml_error,
 };
 pub use registry::{
-    CompiledGrammar, Grammar, LoadLibrary, Plugin, PluginError, PluginGrammar, PluginSource,
-    ProviderEntry, Registry, Rejected, Rejection, Source, registry,
+    BuildLogic, CompiledGrammar, Grammar, LoadLibrary, Plugin, PluginBuild, PluginError,
+    PluginGrammar, PluginSource, ProviderEntry, Registry, Rejected, Rejection, RunBuild, Source,
+    registry,
 };
 
 #[doc(hidden)]

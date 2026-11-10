@@ -1,4 +1,4 @@
-//! Maven discovery on fixture builds.
+//! Maven discovery on fixture builds, compiled in and as a plugin.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -25,8 +25,17 @@ fn module<'a>(model: &'a BuildModel, name: &str) -> &'a Module {
         .expect("module")
 }
 
+/// The model of the build at `root`, compiled in; the plugin form must give
+/// the same.
 fn discover(root: &Path) -> BuildModel {
-    Maven.discover(root)
+    let model = Maven.discover(root);
+    let plugin = Path::new(env!("CARGO_BIN_EXE_codix-build-maven"));
+    assert_eq!(
+        codix_plugin::build::run_within(plugin, root, codix_plugin::build::TIMEOUT),
+        Ok(model.clone()),
+        "through the plugin"
+    );
+    model
 }
 
 const PARENT: &str = r"<project>

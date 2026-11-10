@@ -86,8 +86,8 @@ impl MissingProvider {
 }
 
 /// Why the provider of this kind and name, installed as a plugin, cannot be
-/// used: its plugin was rejected, or its grammar does not load. `None` when
-/// it is usable or not installed.
+/// used: its plugin was rejected, its grammar does not load, or it failed at
+/// its last build discovery. `None` when it is usable or not installed.
 fn invalid(kind: ProviderKind, name: &str) -> Option<String> {
     let registry = registry();
     if registry.contains(kind, name) {
@@ -97,7 +97,8 @@ fn invalid(kind: ProviderKind, name: &str) -> Option<String> {
                 .get(name)
                 .and_then(|g| g.language().err())
                 .map(|e| e.to_string()),
-            ProviderKind::Build | ProviderKind::Vcs => None,
+            ProviderKind::Build => crate::build::failure(name),
+            ProviderKind::Vcs => None,
         };
     }
     registry.rejected.iter().find_map(|r| match &r.rejection {
@@ -132,7 +133,10 @@ pub fn missing(root: &Path, search_only: &[(String, usize)]) -> Vec<MissingProvi
     let marked = |kind, markers: &[(&'static str, &'static str)], dirs: &[&Path]| {
         let mut found: Vec<MissingProvider> = Vec::new();
         for (marker, name) in markers {
-            if registry.contains(kind, name) || found.iter().any(|m| m.name == *name) {
+            let invalid = invalid(kind, name);
+            if (invalid.is_none() && registry.contains(kind, name))
+                || found.iter().any(|m| m.name == *name)
+            {
                 continue;
             }
             if dirs
@@ -145,7 +149,7 @@ pub fn missing(root: &Path, search_only: &[(String, usize)]) -> Vec<MissingProvi
                     files: None,
                     marker: Some((*marker).to_owned()),
                     hint: hint(kind, name),
-                    invalid: invalid(kind, name),
+                    invalid,
                 });
             }
         }

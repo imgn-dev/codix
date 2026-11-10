@@ -197,6 +197,39 @@ impl std::fmt::Debug for Grammar {
     }
 }
 
+/// A build system's logic: compiled in, or a plugin's executable.
+#[derive(Debug)]
+pub enum BuildLogic {
+    /// Compiled into this binary.
+    CompiledIn(&'static dyn crate::BuildResolver),
+    /// A build plugin.
+    Plugin(PluginBuild),
+}
+
+impl BuildLogic {
+    /// The modules of the build at `root`; an error when a plugin fails or
+    /// answers badly.
+    pub fn discover(&self, root: &Path) -> Result<crate::BuildModel, PluginError> {
+        match self {
+            Self::CompiledIn(resolver) => Ok(resolver.discover(root)),
+            Self::Plugin(plugin) => (plugin.run)(&plugin.executable, root),
+        }
+    }
+}
+
+/// Runs a build plugin's executable on a project root: `codix-plugin`'s
+/// client of the build protocol.
+pub type RunBuild = fn(&Path, &Path) -> Result<crate::BuildModel, PluginError>;
+
+/// A build plugin's executable.
+#[derive(Debug, Clone)]
+pub struct PluginBuild {
+    /// The executable.
+    pub executable: PathBuf,
+    /// How to run it.
+    pub run: RunBuild,
+}
+
 /// Why a provider cannot be used.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PluginError(String);
@@ -229,6 +262,8 @@ pub struct Plugin {
     pub descriptor: Descriptor,
     /// A language plugin's grammar.
     pub grammar: Option<PluginGrammar>,
+    /// A build plugin's executable.
+    pub build: Option<PluginBuild>,
 }
 
 /// A plugin the registry does not use, and why.
@@ -282,8 +317,8 @@ pub struct Registry {
     pub vcs: Vec<VcsDescriptor>,
     /// Grammars of language packs, by language name.
     pub grammars: BTreeMap<String, Grammar>,
-    /// Resolvers of build systems, by build system name.
-    pub resolvers: BTreeMap<String, &'static dyn crate::BuildResolver>,
+    /// Logic of build systems, by build system name.
+    pub resolvers: BTreeMap<String, BuildLogic>,
     /// Where each provider comes from, and its version.
     pub sources: BTreeMap<(ProviderKind, String), (Source, String)>,
     /// Plugins found but not used, in search order.
@@ -347,7 +382,9 @@ pub fn registry() -> &'static Registry {
                     .insert(d.name.clone(), Grammar::compiled(grammar));
             }
             if let (Descriptor::Build(d), Some(resolver)) = (&descriptor, entry.resolver) {
-                registry.resolvers.insert(d.name.clone(), resolver);
+                registry
+                    .resolvers
+                    .insert(d.name.clone(), BuildLogic::CompiledIn(resolver));
             }
             registry.add(descriptor, Source::CompiledIn, entry.version.to_owned());
         }
@@ -382,7 +419,10 @@ impl Registry {
         let name = plugin.descriptor.name().to_owned();
         let Some((used, _)) = self.sources.get(&(kind, name.clone())) else {
             if let Some(grammar) = plugin.grammar {
-                self.grammars.insert(name, Grammar::plugin(grammar));
+                self.grammars.insert(name.clone(), Grammar::plugin(grammar));
+            }
+            if let Some(build) = plugin.build {
+                self.resolvers.insert(name, BuildLogic::Plugin(build));
             }
             self.add(
                 plugin.descriptor,

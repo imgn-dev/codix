@@ -12,6 +12,7 @@ publish = false
 codix-provider.workspace = true
 libloading.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 toml.workspace = true
 tree-sitter.workspace = true
 tree-sitter-language.workspace = true
@@ -19,6 +20,7 @@ tree-sitter-language.workspace = true
 [dev-dependencies]
 codix-lang-java.workspace = true
 codix-testkit.workspace = true
+schemars.workspace = true
 tempfile.workspace = true
 
 # The workspace lints, but for `unsafe_code`: this crate holds the native

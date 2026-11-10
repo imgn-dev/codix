@@ -212,6 +212,7 @@ dependencies = [
 name = "codix-build-gradle"
 version = "0.3.0"
 dependencies = [
+ "codix-plugin",
  "codix-provider",
  "tempfile",
 ]
@@ -220,6 +221,7 @@ dependencies = [
 name = "codix-build-maven"
 version = "0.3.0"
 dependencies = [
+ "codix-plugin",
  "codix-provider",
  "roxmltree",
  "tempfile",
@@ -501,7 +503,9 @@ dependencies = [
  "codix-provider",
  "codix-testkit",
  "libloading",
+ "schemars",
  "serde",
+ "serde_json",
  "tempfile",
  "toml",
  "tree-sitter",
@@ -516,6 +520,7 @@ dependencies = [
  "regex",
  "schemars",
  "serde",
+ "serde_json",
  "toml",
  "tree-sitter",
  "tree-sitter-language",
