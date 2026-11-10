@@ -14,7 +14,8 @@ use crate::Error;
 pub(crate) const MODULAR: bool = cfg!(feature = "plugins");
 
 /// The command a packager sets to install a plugin, with `{kind}` and
-/// `{name}` placeholders, such as `brew install codix-{kind}-{name}`.
+/// `{name}` placeholders, such as `brew install codix-{kind}-{name}`;
+/// `{name}` is the package's, [`known::package`].
 const INSTALL_HINT: Option<&str> = option_env!("CODIX_INSTALL_HINT");
 
 /// Where plugins are explained when no packager set an install command.
@@ -251,6 +252,7 @@ fn hint_in(modular: bool, template: Option<&str>, kind: ProviderKind, name: &str
     if !modular {
         return "use the full codix build, which includes every provider".to_owned();
     }
+    let name = known::package(kind, name);
     let kind = match kind {
         ProviderKind::Language => "lang",
         ProviderKind::Build => "build",
@@ -322,6 +324,11 @@ mod tests {
         assert_eq!(
             hint_in(true, template, ProviderKind::Build, "maven"),
             "brew install codix-build-maven"
+        );
+        assert_eq!(
+            hint_in(true, template, ProviderKind::Language, "tsx"),
+            "brew install codix-lang-typescript",
+            "TSX ships in TypeScript's package"
         );
         assert_eq!(
             hint_in(true, None, ProviderKind::Vcs, "mercurial"),

@@ -61,7 +61,9 @@ directory `<kind>/<name>/`; `cargo xtask plugins <out>` builds them.
 A file of a known language whose plugin is not installed is indexed as text,
 and `index` and `status` say which plugin to install, with the command the
 packager set at build time in `CODIX_INSTALL_HINT` (such as
-`brew install codix-{kind}-{name}`). `codix languages` lists every provider,
+`brew install codix-{kind}-{name}`, where `{kind}` is `lang`, `build` or
+`vcs`, and `{name}` the package: TSX ships with TypeScript, as
+`codix-lang-typescript`). `codix languages` lists every provider,
 where it comes from, its version, and why a plugin is not used: invalid, or
 left out because a compiled-in provider or an earlier plugin of the same name
 wins. Writing a plugin is described in [docs/plugins.md](docs/plugins.md).

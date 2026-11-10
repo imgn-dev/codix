@@ -29,6 +29,22 @@ pub const LANGUAGES: &[&str] = &[
     "yaml",
 ];
 
+/// Languages whose plugin ships in another one's package, as TSX does in
+/// TypeScript's: (language, package).
+pub const PACKAGES: &[(&str, &str)] = &[("tsx", "typescript")];
+
+/// The name of the package that holds the plugin of this provider: its own
+/// name, but for the languages of [`PACKAGES`].
+pub fn package(kind: ProviderKind, name: &str) -> &str {
+    match kind {
+        ProviderKind::Language => PACKAGES
+            .iter()
+            .find(|(language, _)| *language == name)
+            .map_or(name, |(_, package)| package),
+        ProviderKind::Build | ProviderKind::Vcs => name,
+    }
+}
+
 /// Build system names.
 pub const BUILDS: &[&str] = &["gradle", "maven"];
 
