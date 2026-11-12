@@ -55,6 +55,9 @@ Options:
       --all
           Return every result, for scripts
 
+      --files
+          Return one row per file, with its number of results, paged by file
+
   -h, --help
           Print help (see a summary with '-h')
 

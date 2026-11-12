@@ -132,7 +132,9 @@ last line is the command for the next page, ready to copy, which starts after
 the last result shown (`--after`), so results fixed meanwhile shift nothing.
 When a first page does not hold every result, it ends with where they are,
 by directory, each with the command that keeps only that one. `--count` gives
-how many results there are and where, and `--all` every result, for scripts.
+how many results there are and where, `--files` one line per file with its
+number of results (the worklist of a refactoring, paged by file), and `--all`
+every result, for scripts.
 
 Every command takes `--json` for stable, versioned output (`schema_version`).
 Errors have a stable code, a cause and a hint:

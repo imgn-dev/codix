@@ -15,6 +15,11 @@
       "description": "Return how many results there are, not the results.",
       "type": "boolean"
     },
+    "files": {
+      "default": false,
+      "description": "Return one row per file, with its number of results, paged by file.",
+      "type": "boolean"
+    },
     "here": {
       "default": false,
       "description": "Limit results to the current directory's subtree.",

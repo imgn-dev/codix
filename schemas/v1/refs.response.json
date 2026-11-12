@@ -8,7 +8,14 @@
       "description": "One page of results and the total they were taken from.",
       "properties": {
         "breakdown": {
-          "description": "Where the results are, when a first page does not hold them all or\nthey are counted: the places below the directory they share, most\nresults first, at most 8.",
+          "description": "Where the results are, when a first page does not hold them all or\nthey are counted: the places below the directory they share, most\nresults first, at most 8; by file, counting files.",
+          "items": {
+            "$ref": "#/$defs/Place"
+          },
+          "type": "array"
+        },
+        "files": {
+          "description": "By file, this page's files with their number of results, in the\nresults' order; `items` is then empty.",
           "items": {
             "$ref": "#/$defs/Place"
           },
@@ -22,7 +29,7 @@
           "type": "array"
         },
         "total": {
-          "description": "Number of results before paging.",
+          "description": "Number of results before paging; by file, of files.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
@@ -31,7 +38,8 @@
       "required": [
         "items",
         "total",
-        "breakdown"
+        "breakdown",
+        "files"
       ],
       "type": "object"
     },

@@ -454,13 +454,22 @@ struct PageArgs {
     /// Return every result, for scripts.
     #[arg(long, conflicts_with = "limit")]
     all: bool,
+    /// Return one row per file, with its number of results, paged by file.
+    #[arg(long)]
+    files: bool,
 }
 
 impl PageArgs {
     fn page(&self) -> Result<Page, Error> {
         let limit = if self.all { usize::MAX } else { self.limit };
-        let page = Page::new(limit, self.after.clone())?;
-        Ok(if self.count { page.counted() } else { page })
+        let mut page = Page::new(limit, self.after.clone())?;
+        if self.count {
+            page = page.counted();
+        }
+        if self.files {
+            page = page.by_file();
+        }
+        Ok(page)
     }
 }
 

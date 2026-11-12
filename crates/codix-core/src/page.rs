@@ -23,6 +23,8 @@ pub struct Page {
     after: Option<String>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     count: bool,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    files: bool,
 }
 
 /// [`Page`] as requests carry it, checked on the way in.
@@ -38,6 +40,9 @@ struct PageFields {
     /// Return how many results there are, not the results.
     #[serde(default)]
     count: bool,
+    /// Return one row per file, with its number of results, paged by file.
+    #[serde(default)]
+    files: bool,
 }
 
 fn default_limit() -> usize {
@@ -48,8 +53,10 @@ impl TryFrom<PageFields> for Page {
     type Error = String;
 
     fn try_from(fields: PageFields) -> Result<Self, String> {
-        let page = Self::new(fields.limit, fields.after).map_err(|e| e.cause())?;
-        Ok(if fields.count { page.counted() } else { page })
+        let mut page = Self::new(fields.limit, fields.after).map_err(|e| e.cause())?;
+        page.count = fields.count;
+        page.files = fields.files;
+        Ok(page)
     }
 }
 
@@ -72,7 +79,17 @@ impl Page {
             limit,
             after,
             count: false,
+            files: false,
         })
+    }
+
+    /// The same page, by file rather than by result.
+    #[must_use]
+    pub fn by_file(self) -> Self {
+        Self {
+            files: true,
+            ..self
+        }
     }
 
     /// The same page, counted rather than listed.
@@ -104,13 +121,14 @@ impl Page {
     ) -> (Paged<T>, Option<String>) {
         let total = all.len();
         if self.count {
-            let breakdown = breakdown(&all);
+            let breakdown = breakdown(&places(&all));
             let items = Vec::new();
             return (
                 Paged {
                     items,
                     total,
                     breakdown,
+                    files: Vec::new(),
                 },
                 None,
             );
@@ -119,6 +137,9 @@ impl Page {
             let cursor = cursor(&all, after, anchor);
             all.partition_point(|r| key(r, anchor) <= cursor)
         });
+        if self.files {
+            return self.files_page(&all, start);
+        }
         let mut end = start.saturating_add(self.limit).min(total);
         let mut next = None;
         if end < total {
@@ -148,7 +169,7 @@ impl Page {
         }
         // Paging on, a reader has chosen to read through.
         let breakdown = if self.after.is_none() && end - start < total {
-            breakdown(&all)
+            breakdown(&places(&all))
         } else {
             Vec::new()
         };
@@ -158,10 +179,66 @@ impl Page {
                 items,
                 total,
                 breakdown,
+                files: Vec::new(),
             },
             next,
         )
     }
+
+    /// The page of the files of `all` from the result `start` on.
+    fn files_page<T: Ranked>(&self, all: &[T], start: usize) -> (Paged<T>, Option<String>) {
+        let every = files(all);
+        let first = files(&all[..start]).len();
+        let total = every.len();
+        let end = first.saturating_add(self.limit).min(total);
+        let next = (end < total).then(|| every[end - 1].root_path.clone());
+        let breakdown = if self.after.is_none() && end - first < total {
+            let each: Vec<(&str, &str)> = every
+                .iter()
+                .map(|f| (f.path.as_str(), f.root_path.as_str()))
+                .collect();
+            breakdown(&each)
+        } else {
+            Vec::new()
+        };
+        let files = every[first..end].to_vec();
+        (
+            Paged {
+                items: Vec::new(),
+                total,
+                breakdown,
+                files,
+            },
+            next,
+        )
+    }
+}
+
+/// The files of sorted `all`, in order, with their number of results.
+fn files<T: Ranked>(all: &[T]) -> Vec<Place> {
+    let mut files: Vec<Place> = Vec::new();
+    for r in all {
+        let l = r.location();
+        match files.last_mut() {
+            Some(last) if last.root_path == l.root_path.as_str() => last.count += 1,
+            _ => files.push(Place {
+                path: l.path.clone(),
+                root_path: l.root_path.as_str().to_owned(),
+                count: 1,
+            }),
+        }
+    }
+    files
+}
+
+/// Each result's path as shown from the cwd, and root-relative.
+fn places<T: Ranked>(all: &[T]) -> Vec<(&str, &str)> {
+    all.iter()
+        .map(|r| {
+            let l = r.location();
+            (l.path.as_str(), l.root_path.as_str())
+        })
+        .collect()
 }
 
 impl Default for Page {
@@ -170,6 +247,7 @@ impl Default for Page {
             limit: DEFAULT_LIMIT,
             after: None,
             count: false,
+            files: false,
         }
     }
 }
@@ -179,12 +257,15 @@ impl Default for Page {
 pub struct Paged<T> {
     /// The results in this page.
     pub items: Vec<T>,
-    /// Number of results before paging.
+    /// Number of results before paging; by file, of files.
     pub total: usize,
     /// Where the results are, when a first page does not hold them all or
     /// they are counted: the places below the directory they share, most
-    /// results first, at most 8.
+    /// results first, at most 8; by file, counting files.
     pub breakdown: Vec<Place>,
+    /// By file, this page's files with their number of results, in the
+    /// results' order; `items` is then empty.
+    pub files: Vec<Place>,
 }
 
 /// A directory or a file holding some of the results.
@@ -201,23 +282,24 @@ pub struct Place {
 /// The places a breakdown shows.
 const PLACES: usize = 8;
 
-/// The directories a result is in, outermost first.
-fn directory<T: Ranked>(r: &T) -> Vec<&str> {
-    let mut parts: Vec<&str> = r.location().root_path.as_str().split('/').collect();
+/// The directories of a root-relative path, outermost first.
+fn directory(root: &str) -> Vec<&str> {
+    let mut parts: Vec<&str> = root.split('/').collect();
     parts.pop();
     parts
 }
 
-/// Where `all` are: grouped by the first path component below the deepest
+/// Where `entries` are, each a path as shown from the cwd and its
+/// root-relative one: grouped by the first path component below the deepest
 /// directory they all share, a directory or a file directly in it. Nothing
 /// when they are all in one file.
-fn breakdown<T: Ranked>(all: &[T]) -> Vec<Place> {
-    let Some(first) = all.first() else {
+fn breakdown(entries: &[(&str, &str)]) -> Vec<Place> {
+    let Some((_, first)) = entries.first() else {
         return Vec::new();
     };
     let mut shared = directory(first);
-    for r in &all[1..] {
-        let parts = directory(r);
+    for (_, root) in &entries[1..] {
+        let parts = directory(root);
         let same = shared
             .iter()
             .zip(&parts)
@@ -226,9 +308,7 @@ fn breakdown<T: Ranked>(all: &[T]) -> Vec<Place> {
         shared.truncate(same);
     }
     let mut places: Vec<Place> = Vec::new();
-    for r in all {
-        let l = r.location();
-        let root = l.root_path.as_str();
+    for (shown, root) in entries {
         let parts: Vec<&str> = root.split('/').collect();
         let key = parts[..=shared.len()].join("/");
         if let Some(place) = places.iter_mut().find(|p| p.root_path == key) {
@@ -237,7 +317,7 @@ fn breakdown<T: Ranked>(all: &[T]) -> Vec<Place> {
         }
         // The path as shown from the cwd ends as the root-relative one does.
         let tail = &root[key.len()..];
-        let path = l.path.strip_suffix(tail).unwrap_or(&key).to_owned();
+        let path = shown.strip_suffix(tail).unwrap_or(&key).to_owned();
         places.push(Place {
             path,
             root_path: key,
@@ -525,8 +605,8 @@ mod tests {
         assert_eq!(next, None);
     }
 
-    fn places(all: &[R]) -> Vec<(String, String, usize)> {
-        breakdown(all)
+    fn grouped(all: &[R]) -> Vec<(String, String, usize)> {
+        breakdown(&places(all))
             .into_iter()
             .map(|p| (p.path, p.root_path, p.count))
             .collect()
@@ -537,7 +617,7 @@ mod tests {
         let mut all = mentions(&["src/a/x.rs", "src/a/y.rs", "src/b/z.rs", "src/top.rs"], 1);
         all.push(r(false, "src/a/deep/w.rs", 1, 1));
         assert_eq!(
-            places(&all),
+            grouped(&all),
             [
                 ("src/a".to_owned(), "src/a".to_owned(), 3),
                 ("src/b".to_owned(), "src/b".to_owned(), 1),
@@ -552,15 +632,15 @@ mod tests {
         for r in &mut all {
             r.1.path = format!("../{}", r.1.root_path.as_str());
         }
-        assert_eq!(places(&all)[0].0, "../src/a");
+        assert_eq!(grouped(&all)[0].0, "../src/a");
     }
 
     #[test]
     fn a_breakdown_needs_two_places_and_keeps_eight() {
-        assert_eq!(places(&mentions(&["src/a/x.rs"], 3)), []);
+        assert_eq!(grouped(&mentions(&["src/a/x.rs"], 3)), []);
         let files: Vec<String> = (0..10).map(|i| format!("d{i}/f.rs")).collect();
         let files: Vec<&str> = files.iter().map(String::as_str).collect();
-        assert_eq!(places(&mentions(&files, 1)).len(), PLACES);
+        assert_eq!(grouped(&mentions(&files, 1)).len(), PLACES);
     }
 
     #[test]
@@ -585,6 +665,34 @@ mod tests {
                 .len(),
             2
         );
+    }
+
+    #[test]
+    fn by_file_a_page_holds_files_and_continues_after_the_last() {
+        let all = || mentions(&["a/x.rs", "a/y.rs", "b/z.rs"], 2);
+        let (paged, next) = page(2, None).by_file().apply(all(), None);
+        let rows: Vec<(&str, usize)> = paged
+            .files
+            .iter()
+            .map(|f| (f.root_path.as_str(), f.count))
+            .collect();
+        assert_eq!(rows, [("a/x.rs", 2), ("a/y.rs", 2)]);
+        assert_eq!(paged.total, 3);
+        assert_eq!(paged.items, Vec::<R>::new());
+        assert_eq!(next.as_deref(), Some("a/y.rs"));
+        assert_eq!(grouped_counts(&paged.breakdown), [("a", 2), ("b", 1)]);
+
+        let (paged, next) = page(2, next.as_deref()).by_file().apply(all(), None);
+        assert_eq!(paged.files.len(), 1);
+        assert_eq!(paged.files[0].root_path, "b/z.rs");
+        assert_eq!(next, None);
+    }
+
+    fn grouped_counts(places: &[Place]) -> Vec<(&str, usize)> {
+        places
+            .iter()
+            .map(|p| (p.root_path.as_str(), p.count))
+            .collect()
     }
 
     #[test]

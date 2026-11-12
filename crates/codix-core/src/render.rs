@@ -557,16 +557,22 @@ impl TextRender for GrepResponse {
 
 impl<T: Row> TextRender for Paged<T> {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
-        let rows: Vec<Vec<String>> = self
-            .items
-            .iter()
-            .map(|item| {
-                let l = item.location();
-                let mut row = vec![format!("{}:{}:{}", l.path, l.line, l.column)];
-                row.extend(item.columns());
-                row
-            })
-            .collect();
+        let rows: Vec<Vec<String>> = if self.files.is_empty() {
+            self.items
+                .iter()
+                .map(|item| {
+                    let l = item.location();
+                    let mut row = vec![format!("{}:{}:{}", l.path, l.line, l.column)];
+                    row.extend(item.columns());
+                    row
+                })
+                .collect()
+        } else {
+            self.files
+                .iter()
+                .map(|f| vec![f.path.clone(), f.count.to_string()])
+                .collect()
+        };
         let widths = column_widths(&rows);
         for row in &rows {
             let mut line = String::new();
@@ -606,8 +612,12 @@ fn column_widths(rows: &[Vec<String>]) -> Vec<usize> {
 }
 
 fn footer<T>(page: &Paged<T>) -> String {
-    let shown = page.items.len();
-    let noun = if page.total == 1 { "result" } else { "results" };
+    let (shown, noun) = match (page.files.len(), page.total) {
+        (0, 1) => (page.items.len(), "result"),
+        (0, _) => (page.items.len(), "results"),
+        (files, 1) => (files, "file"),
+        (files, _) => (files, "files"),
+    };
     if page.total == 0 {
         return "no results".to_owned();
     }
@@ -1144,6 +1154,7 @@ mod tests {
                 .collect(),
             total: n as usize,
             breakdown: Vec::new(),
+            files: Vec::new(),
         }
     }
 

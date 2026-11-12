@@ -261,3 +261,48 @@ fn results_that_do_not_fit_say_where_they_are() {
         serde_json::json!([])
     );
 }
+
+#[test]
+fn by_file_is_a_worklist_paged_by_file() {
+    let files: Vec<(String, String)> = ["A", "B", "C"]
+        .iter()
+        .map(|c| (format!("{c}.java"), two_calls(c, "legacy")))
+        .collect();
+    let files: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(p, c)| (p.as_str(), c.as_str()))
+        .collect();
+    let (_guard, root) = indexed(CODIX, &files);
+
+    let text = codix(&root, &["grep", "legacy\\(", "--files", "--limit", "2"]);
+    assert_eq!(text.code, Some(0), "{}", text.stderr);
+    assert!(
+        text.stdout
+            .starts_with("A.java  2\nB.java  2\n2 of 3 files\n"),
+        "{}",
+        text.stdout
+    );
+    let last = text.stdout.lines().last().expect("a next page");
+    assert!(
+        last.ends_with(" --files --limit 2 --after B.java"),
+        "{last}"
+    );
+
+    let second = json(
+        &root,
+        &[
+            "grep",
+            "legacy\\(",
+            "--files",
+            "--limit",
+            "2",
+            "--after",
+            "B.java",
+        ],
+    );
+    let matches = &second["result"]["matches"];
+    assert_eq!(matches["files"][0]["path"], "C.java");
+    assert_eq!(matches["files"][0]["count"], 2);
+    assert_eq!(matches["total"], 3);
+    assert!(second["result"]["next"].is_null());
+}
