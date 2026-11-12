@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use crate::Error;
 use crate::config::Config;
 use crate::detect::Detector;
-use crate::edit::{EditSet, PlannedFile, apply, hash, regions};
+use crate::edit::{EditSet, ExcludedSite, Exclusion, PlannedFile, apply, hash, regions};
 use crate::error::Site;
 use crate::op::{Context, Operation, Outcome};
 use crate::parse::PackIndexer;
@@ -60,6 +60,13 @@ pub struct ApplyResponse {
     /// Whether files had changed since planning, outside the edited
     /// regions, so the plan was made again on them.
     pub rebased: bool,
+    /// Whether it was an undo: `undo` then goes on to the apply before.
+    #[serde(default)]
+    pub undo: bool,
+    /// The references that may mean the renamed symbol and were left
+    /// unchanged, as the preview listed them: the code may no longer build.
+    #[serde(default)]
+    pub left: Vec<ExcludedSite>,
 }
 
 impl Outcome for ApplyResponse {
@@ -126,6 +133,14 @@ impl Operation for ApplyOp {
                 .collect(),
             sites: current.edits.sites(),
             rebased: current.rebased,
+            undo: row.operation == crate::undo::UndoOp::NAME,
+            left: row
+                .response
+                .excluded
+                .iter()
+                .filter(|e| e.reason == Exclusion::Unresolved)
+                .cloned()
+                .collect(),
         })
     }
 }

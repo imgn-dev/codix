@@ -1,4 +1,80 @@
 {
+  "$defs": {
+    "ExcludedSite": {
+      "description": "A site the plan leaves unchanged.",
+      "properties": {
+        "location": {
+          "$ref": "#/$defs/Location",
+          "description": "Where."
+        },
+        "reason": {
+          "$ref": "#/$defs/Exclusion",
+          "description": "Why."
+        },
+        "text": {
+          "description": "The line, trimmed.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "location",
+        "reason",
+        "text"
+      ],
+      "type": "object"
+    },
+    "Exclusion": {
+      "description": "Why a site is not edited.",
+      "oneOf": [
+        {
+          "const": "unresolved",
+          "description": "A reference codix cannot bind, left unchanged under\n`--exclude-unresolved`.",
+          "type": "string"
+        },
+        {
+          "const": "mention",
+          "description": "The name in a comment, a string or a macro body.",
+          "type": "string"
+        }
+      ]
+    },
+    "FileId": {
+      "description": "A file or directory identity: its root-relative path with `/` separators,\nthe case found on disk, and symlinks resolved. The root itself is `\"\"`.",
+      "type": "string"
+    },
+    "Location": {
+      "description": "A position in a file: its path as shown from the cwd, its root-relative\nidentity, and a 1-based line and column.",
+      "properties": {
+        "column": {
+          "description": "1-based column, in Unicode scalar values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "line": {
+          "description": "1-based line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Path relative to the cwd, with `/` separators.",
+          "type": "string"
+        },
+        "root_path": {
+          "$ref": "#/$defs/FileId",
+          "description": "Root-relative path."
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "line",
+        "column"
+      ],
+      "type": "object"
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "What [`ApplyOp`] answers.",
   "properties": {
@@ -17,6 +93,14 @@
       "description": "The preview applied.",
       "type": "string"
     },
+    "left": {
+      "default": [],
+      "description": "The references that may mean the renamed symbol and were left\nunchanged, as the preview listed them: the code may no longer build.",
+      "items": {
+        "$ref": "#/$defs/ExcludedSite"
+      },
+      "type": "array"
+    },
     "rebased": {
       "description": "Whether files had changed since planning, outside the edited\nregions, so the plan was made again on them.",
       "type": "boolean"
@@ -26,6 +110,11 @@
       "format": "uint",
       "minimum": 0,
       "type": "integer"
+    },
+    "undo": {
+      "default": false,
+      "description": "Whether it was an undo: `undo` then goes on to the apply before.",
+      "type": "boolean"
     }
   },
   "required": [

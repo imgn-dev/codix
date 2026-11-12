@@ -51,6 +51,31 @@ fn minimal_edit(current: &str, original: &str) -> Edit {
     }
 }
 
+/// The edits turning `current` back into `original`, one per changed line
+/// when the apply kept the line count, as a rename does, so the preview
+/// shows each site; otherwise a single edit around every change.
+fn edits_back(current: &str, original: &str) -> Vec<Edit> {
+    let now: Vec<&str> = current.split_inclusive('\n').collect();
+    let before: Vec<&str> = original.split_inclusive('\n').collect();
+    if now.len() != before.len() {
+        return vec![minimal_edit(current, original)];
+    }
+    let mut edits = Vec::new();
+    let mut offset = 0;
+    for (line, was) in now.iter().zip(&before) {
+        if line != was {
+            let edit = minimal_edit(line, was);
+            edits.push(Edit {
+                start: offset + edit.start,
+                end: offset + edit.end,
+                replacement: edit.replacement,
+            });
+        }
+        offset += line.len();
+    }
+    edits
+}
+
 impl Operation for UndoOp {
     const NAME: &'static str = "undo";
     type Request = UndoRequest;
@@ -68,6 +93,7 @@ impl Operation for UndoOp {
         let mut files = Vec::new();
         let mut text = String::new();
         let mut changed = Vec::new();
+        let mut sites = 0;
         for file in &entry.files {
             let id = FileId::from_canonical(file.path.as_str());
             let current = fs::read(project.path_of(&id)).unwrap_or_default();
@@ -86,10 +112,11 @@ impl Operation for UndoOp {
                     message: format!("{} is not UTF-8", file.path),
                 });
             };
-            let edit = minimal_edit(&current, original);
-            text.push_str(&diff(&file.path, &current, std::slice::from_ref(&edit)));
-            files.push(plan_file(&file.path, &current, std::slice::from_ref(&edit)));
-            edits.push((file.path.clone(), edit));
+            let back = edits_back(&current, original);
+            text.push_str(&diff(&file.path, &current, &back));
+            files.push(plan_file(&file.path, &current, &back));
+            sites += back.len();
+            edits.extend(back.into_iter().map(|edit| (file.path.clone(), edit)));
         }
         if !changed.is_empty() {
             return Err(Error::Refused {
@@ -113,7 +140,7 @@ impl Operation for UndoOp {
                 id: String::new(),
                 description: format!("undo {}", entry.description),
                 files: entry.files.len(),
-                sites: entry.files.len(),
+                sites,
                 overrides: Vec::new(),
                 excluded: Vec::new(),
                 ambiguous: Vec::new(),
@@ -129,6 +156,20 @@ impl Operation for UndoOp {
 mod tests {
     use super::*;
     use crate::edit::apply;
+
+    #[test]
+    fn a_rename_is_undone_site_by_site() {
+        let original = "let total = 1;\nprint(x);\nreturn total;\n";
+        let current = "let sum = 1;\nprint(x);\nreturn sum;\n";
+        let back = edits_back(current, original);
+        assert_eq!(back.len(), 2);
+        assert_eq!(apply(current, &back), original);
+        // Lines added or removed: one edit around the change.
+        let grown = "let sum = 1;\nnew();\nprint(x);\nreturn sum;\n";
+        let back = edits_back(grown, original);
+        assert_eq!(back.len(), 1);
+        assert_eq!(apply(grown, &back), original);
+    }
 
     #[test]
     fn the_minimal_edit_turns_one_text_into_the_other() {

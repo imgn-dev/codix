@@ -63,10 +63,55 @@ fn unresolved_references_refuse_unless_excluded() {
         ],
     );
     assert_eq!(out.code, Some(0), "{}", out.stderr);
+    // The site left is listed once, with its line.
     assert!(
-        out.stdout.contains("  override --exclude-unresolved: references codix cannot bind, left unchanged\n    src/Report.java:5:24\n"),
+        out.stdout.contains("  override --exclude-unresolved: references codix cannot bind, left unchanged\n  not changed, 1 unresolved site:\n    src/Report.java:5:24  return invoice.withTax(1);\n"),
         "{}",
         out.stdout
+    );
+    let preview = out
+        .stdout
+        .split_whitespace()
+        .nth(1)
+        .expect("a preview ID")
+        .trim_end_matches(':');
+
+    // Applying it says what it left, which may no longer build.
+    let applied = codix(&root, &["apply", preview]);
+    assert_eq!(applied.code, Some(0), "{}", applied.stderr);
+    assert!(
+        applied.stdout.contains("warning: left unchanged, 1 reference that may mean it; the code may no longer build:\n    src/Report.java:5:24  return invoice.withTax(1);\n"),
+        "{}",
+        applied.stdout
+    );
+    assert!(
+        applied.stdout.ends_with("undo with: codix undo\n"),
+        "{}",
+        applied.stdout
+    );
+
+    // The undo shows each site, and applying it says what `undo` does next.
+    let undo = codix(&root, &["undo"]);
+    assert_eq!(undo.code, Some(0), "{}", undo.stderr);
+    assert!(
+        undo.stdout.contains("  1 file, 1 site\n"),
+        "{}",
+        undo.stdout
+    );
+    let undo_id = undo
+        .stdout
+        .split_whitespace()
+        .nth(1)
+        .expect("a preview ID")
+        .trim_end_matches(':');
+    let undone = codix(&root, &["apply", undo_id]);
+    assert_eq!(undone.code, Some(0), "{}", undone.stderr);
+    assert!(
+        undone
+            .stdout
+            .ends_with("codix undo now reverts the apply before the one undone\n"),
+        "{}",
+        undone.stdout
     );
 }
 

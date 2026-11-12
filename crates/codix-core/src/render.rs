@@ -11,7 +11,7 @@ use crate::capabilities::{
     Capabilities, LanguagesResponse, ProviderInfo, ProviderSource, ProviderStatus, Tier,
 };
 use crate::config::{ConfigResponse, Setting};
-use crate::edit::{Exclusion, PreviewResponse};
+use crate::edit::{ExcludedSite, Exclusion, PreviewResponse};
 use crate::error::Candidate;
 use crate::indexing::{InitResponse, StatusResponse};
 use crate::op::Warning;
@@ -249,12 +249,47 @@ impl TextRender for ApplyResponse {
         for file in &self.files {
             writeln!(w, "    {}", style.paint("36", file))?;
         }
-        if style.tools {
-            writeln!(w, "undo with: the undo tool")
+        if !self.left.is_empty() {
+            writeln!(
+                w,
+                "{}: left unchanged, {} that may mean it; the code may no longer build:",
+                style.paint("1;33", "warning"),
+                plural(self.left.len(), "reference", "references")
+            )?;
+            excluded_sites(w, style, &self.left)?;
+        }
+        let undo = if style.tools {
+            "the undo tool"
         } else {
-            writeln!(w, "undo with: codix undo")
+            "codix undo"
+        };
+        if self.undo {
+            // An undo is not undone: the next one goes further back.
+            writeln!(w, "{undo} now reverts the apply before the one undone")
+        } else {
+            writeln!(w, "undo with: {undo}")
         }
     }
+}
+
+/// Sites an edit left unchanged, with their line.
+fn excluded_sites(w: &mut dyn Write, style: Style, sites: &[ExcludedSite]) -> io::Result<()> {
+    let width = sites
+        .iter()
+        .map(|e| location(&e.location).len())
+        .max()
+        .unwrap_or(0);
+    for e in sites {
+        let at = location(&e.location);
+        writeln!(
+            w,
+            "    {}{}{COLUMN_GAP}{}",
+            style.paint("36", &at),
+            " ".repeat(width - at.len()),
+            e.text
+        )?;
+    }
+    Ok(())
 }
 
 impl TextRender for DiscardResponse {
@@ -465,6 +500,10 @@ impl TextRender for PreviewResponse {
         )?;
         for o in &self.overrides {
             writeln!(w, "  override {}: {}", o.flag, o.condition)?;
+            // Sites left unchanged are listed with their line below.
+            if o.flag == "--exclude-unresolved" {
+                continue;
+            }
             for site in &o.sites {
                 writeln!(w, "    {}", style.paint("36", &location(site)))?;
             }
@@ -482,21 +521,8 @@ impl TextRender for PreviewResponse {
                 continue;
             }
             writeln!(w, "  not changed, {}:", plural(sites.len(), one, many))?;
-            let width = sites
-                .iter()
-                .map(|e| location(&e.location).len())
-                .max()
-                .unwrap_or(0);
-            for e in sites {
-                let at = location(&e.location);
-                writeln!(
-                    w,
-                    "    {}{}{COLUMN_GAP}{}",
-                    style.paint("36", &at),
-                    " ".repeat(width - at.len()),
-                    e.text
-                )?;
-            }
+            let sites: Vec<ExcludedSite> = sites.into_iter().cloned().collect();
+            excluded_sites(w, style, &sites)?;
         }
         if !self.ambiguous.is_empty() {
             writeln!(
@@ -1280,7 +1306,6 @@ mod tests {
             "preview 3f9a2c41: rename method Invoice.total to sum
   1 file, 2 sites
   override --exclude-unresolved: references codix cannot bind, left unchanged
-    Report.java:5:9
   not changed, 1 unresolved site:
     Report.java:5:9  return invoice.total();
   not changed, 1 mention:
