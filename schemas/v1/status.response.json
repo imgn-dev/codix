@@ -114,7 +114,7 @@
           "type": "integer"
         },
         "skipped": {
-          "description": "Binary, kept out of search.",
+          "description": "Binary: kept track of, never read.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
@@ -334,6 +334,13 @@
       },
       "type": "array"
     },
+    "build_systems": {
+      "description": "The build systems declaring them.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
     "changed": {
       "$ref": "#/$defs/Changes",
       "description": "Changes since the last scan."
@@ -367,8 +374,14 @@
       },
       "type": "array"
     },
+    "module_count": {
+      "description": "How many modules the build files declare.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
     "modules": {
-      "description": "Modules found in build files.",
+      "description": "The modules, when asked for.",
       "items": {
         "$ref": "#/$defs/Module"
       },
@@ -384,6 +397,8 @@
     "files",
     "changed",
     "errors",
+    "module_count",
+    "build_systems",
     "modules",
     "build_issues",
     "missing"

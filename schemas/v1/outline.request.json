@@ -2,6 +2,24 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Request for [`OutlineOp`].",
   "properties": {
+    "depth": {
+      "default": null,
+      "description": "Levels of symbols shown, 1 for the top level only.",
+      "format": "uint",
+      "minimum": 1,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "kind": {
+      "default": [],
+      "description": "Keep symbols of this kind, and what contains them; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
     "path": {
       "description": "File or directory.",
       "type": "string"

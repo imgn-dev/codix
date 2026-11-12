@@ -24,8 +24,13 @@ impl Invocation {
         let mut valued = HashSet::new();
         collect_valued(command, &mut valued);
         let mut argv = argv.iter().map(|a| a.to_string_lossy().into_owned());
+        let program = argv.next().unwrap_or_else(|| "codix".to_owned());
         Self {
-            program: argv.next().unwrap_or_else(|| "codix".to_owned()),
+            program: if found_on_path(&program) {
+                "codix".to_owned()
+            } else {
+                program
+            },
             args: argv.collect(),
             valued,
         }
@@ -123,6 +128,25 @@ impl Invocation {
             }
         }
     }
+}
+
+/// Whether `codix` on `PATH` is `program`, the binary running: then
+/// `codix` names it, shorter than the path it was run by.
+fn found_on_path(program: &str) -> bool {
+    let Ok(running) = std::env::current_exe().and_then(std::fs::canonicalize) else {
+        return false;
+    };
+    let name = format!("codix{}", std::env::consts::EXE_SUFFIX);
+    if program == name || program == "codix" {
+        return true;
+    }
+    std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path)
+            .map(|dir| dir.join(&name))
+            .find(|candidate| candidate.is_file())
+            .and_then(|candidate| std::fs::canonicalize(candidate).ok())
+            .is_some_and(|found| found == running)
+    })
 }
 
 fn collect_valued(command: &Command, valued: &mut HashSet<String>) {

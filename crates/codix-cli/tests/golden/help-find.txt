@@ -27,7 +27,7 @@ Options:
           The name is within a few edits of the query, ignoring case
 
       --glob
-          The qualified name matches a glob, such as `Invoice.*`
+          The qualified name matches a glob, such as 'Invoice.*', quoted for the shell
 
       --kind <KIND>
           Keep symbols of this kind, such as method; repeatable

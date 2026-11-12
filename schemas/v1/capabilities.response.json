@@ -73,6 +73,49 @@
       ],
       "type": "object"
     },
+    "FileCounts": {
+      "description": "Files by how the index holds them.",
+      "properties": {
+        "errors": {
+          "description": "Could not be read or parsed.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "indexed": {
+          "description": "Parsed for symbols.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "pending": {
+          "description": "Waiting to be reparsed.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "skipped": {
+          "description": "Binary: kept track of, never read.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "text": {
+          "description": "Kept as text, without symbols.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "indexed",
+        "text",
+        "pending",
+        "errors",
+        "skipped"
+      ],
+      "type": "object"
+    },
     "LanguageSupport": {
       "description": "One language's support.",
       "properties": {
@@ -131,10 +174,8 @@
           "description": "The daemon serving it, if one runs."
         },
         "files": {
-          "description": "Files in the index.",
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
+          "$ref": "#/$defs/FileCounts",
+          "description": "Files in the index, by how it holds them, as `status` counts them."
         },
         "languages": {
           "description": "The languages of its files, most files first.",
@@ -142,12 +183,6 @@
             "$ref": "#/$defs/ProjectLanguage"
           },
           "type": "array"
-        },
-        "pending": {
-          "description": "Files waiting to be reparsed.",
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
         },
         "root": {
           "description": "The project root.",
@@ -157,7 +192,6 @@
       "required": [
         "root",
         "files",
-        "pending",
         "languages"
       ],
       "type": "object"

@@ -84,3 +84,22 @@ fn piped_output_has_no_color() {
         assert!(!out.stderr.contains('\x1b'), "{}", out.stderr);
     }
 }
+
+/// Run by its path while `codix` on `PATH` is the same binary, a next page's
+/// command says `codix`.
+#[cfg(unix)]
+#[test]
+fn a_command_names_codix_when_path_finds_this_binary() {
+    let (_guard, root) = indexed(&[("Box.java", &methods(60))]);
+    let bin = tempfile::tempdir().expect("a directory for PATH");
+    std::os::unix::fs::symlink(CODIX, bin.path().join("codix")).expect("link codix");
+    let out = std::process::Command::new(CODIX)
+        .args(["find", "m", "--prefix"])
+        .current_dir(&root)
+        .env("PATH", bin.path())
+        .output()
+        .expect("run codix");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let last = stdout.lines().last().expect("a next page");
+    assert_eq!(last, "codix find m --prefix --after Box.java:51:10");
+}

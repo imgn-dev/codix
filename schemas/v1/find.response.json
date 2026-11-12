@@ -236,6 +236,10 @@
       "$ref": "#/$defs/MatchMode",
       "description": "The mode that matched, or the last one tried."
     },
+    "narrowed": {
+      "description": "Whether `--kind`, `--lang` or a scope narrowed the lookup.",
+      "type": "boolean"
+    },
     "next": {
       "anyOf": [
         {
@@ -251,12 +255,18 @@
       "description": "Whether another process held the write lock, so changed files could\nnot be reindexed first.",
       "type": "boolean"
     },
+    "query": {
+      "description": "The name looked for.",
+      "type": "string"
+    },
     "results": {
       "$ref": "#/$defs/Paged",
       "description": "Matching symbols: for a fuzzy match, the symbols of the closest name."
     }
   },
   "required": [
+    "query",
+    "narrowed",
     "mode",
     "results",
     "alternatives",

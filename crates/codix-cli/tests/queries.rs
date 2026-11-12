@@ -287,6 +287,54 @@ fn show_with_context() {
 }
 
 #[test]
+fn outline_keeps_a_depth_or_kinds() {
+    let (_guard, root) = indexed(BILLING);
+    let top = codix(&root, &root, &["outline", "src/billing", "--depth", "1"]);
+    assert_eq!(top.code, Some(0), "{}", top.stderr);
+    assert!(!top.stdout.contains("method"), "{}", top.stdout);
+    assert!(
+        top.stdout.contains("class  public class Invoice"),
+        "{}",
+        top.stdout
+    );
+    let fields = codix(&root, &root, &["outline", "src/billing", "--kind", "field"]);
+    // A field, and the class holding it; no method, and no Cart without one.
+    assert!(
+        fields.stdout.contains("field  private long total"),
+        "{}",
+        fields.stdout
+    );
+    assert!(
+        fields.stdout.contains("class  public class Invoice"),
+        "{}",
+        fields.stdout
+    );
+    assert!(!fields.stdout.contains("method"), "{}", fields.stdout);
+    assert!(!fields.stdout.contains("Cart"), "{}", fields.stdout);
+}
+
+#[test]
+fn nothing_found_says_what_to_try() {
+    let (_guard, root) = indexed(BILLING);
+    let none = codix(&root, &root, &["find", "Zebra"]);
+    assert_eq!(none.code, Some(1));
+    assert!(
+        none.stdout
+            .ends_with("no symbol named \"Zebra\", even a few edits away\n"),
+        "{}",
+        none.stdout
+    );
+    let narrowed = codix(&root, &root, &["find", "Invoice", "--kind", "method"]);
+    assert!(
+        narrowed
+            .stdout
+            .contains("without them, find looks everywhere"),
+        "{}",
+        narrowed.stdout
+    );
+}
+
+#[test]
 fn at_names_the_enclosing_symbol() {
     check(
         "",

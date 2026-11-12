@@ -10,8 +10,9 @@ use serde::{Deserialize, Serialize};
 use crate::Error;
 use crate::daemon::DaemonRecord;
 use crate::detect::AMBIGUOUS;
+use crate::indexing::FileCounts;
 use crate::op::{Context, Operation, Outcome};
-use crate::store::{FileStatus, Store};
+use crate::store::Store;
 
 /// How deep support for a language goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -77,10 +78,8 @@ pub struct ProjectLanguage {
 pub struct ProjectSupport {
     /// The project root.
     pub root: PathBuf,
-    /// Files in the index.
-    pub files: usize,
-    /// Files waiting to be reparsed.
-    pub pending: usize,
+    /// Files in the index, by how it holds them, as `status` counts them.
+    pub files: FileCounts,
     /// The languages of its files, most files first.
     pub languages: Vec<ProjectLanguage>,
     /// The daemon serving it, if one runs.
@@ -138,11 +137,7 @@ impl Operation for CapabilitiesOp {
             languages.sort_by(|a, b| b.files.cmp(&a.files).then_with(|| a.name.cmp(&b.name)));
             capabilities.project = Some(ProjectSupport {
                 root: project.root().to_path_buf(),
-                files: rows.len(),
-                pending: rows
-                    .iter()
-                    .filter(|r| r.status == FileStatus::Pending)
-                    .count(),
+                files: FileCounts::of(rows.iter().map(|r| &r.status)),
                 languages,
                 daemon: crate::daemon::running(project)?,
             });

@@ -176,6 +176,10 @@ pub struct FindRequest {
 /// What [`FindOp`] answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct FindResponse {
+    /// The name looked for.
+    pub query: String,
+    /// Whether `--kind`, `--lang` or a scope narrowed the lookup.
+    pub narrowed: bool,
     /// The mode that matched, or the last one tried.
     pub mode: MatchMode,
     /// Matching symbols: for a fuzzy match, the symbols of the closest name.
@@ -341,6 +345,10 @@ impl Operation for FindOp {
             })?;
         let (corrected, alternatives) = correction.unzip();
         Ok(FindResponse {
+            query: request.query.clone(),
+            narrowed: !request.kinds.is_empty()
+                || !request.languages.is_empty()
+                || !request.scope.is_empty(),
             mode,
             results,
             corrected,
@@ -439,6 +447,13 @@ pub struct OutlineOp;
 pub struct OutlineRequest {
     /// File or directory.
     pub path: String,
+    /// Levels of symbols shown, 1 for the top level only.
+    #[serde(default)]
+    #[schemars(range(min = 1))]
+    pub depth: Option<usize>,
+    /// Keep symbols of this kind, and what contains them; repeatable.
+    #[serde(default, rename = "kind")]
+    pub kinds: Vec<String>,
 }
 
 /// One symbol in an outline, with the symbols it contains.
@@ -477,6 +492,28 @@ impl Outcome for OutlineResponse {
     fn has_results(&self) -> bool {
         !self.files.is_empty()
     }
+}
+
+/// The nodes of the kinds wanted, with what contains them, down to `depth`
+/// levels.
+fn prune(nodes: Vec<OutlineNode>, kinds: &[String], depth: Option<usize>) -> Vec<OutlineNode> {
+    if depth == Some(0) {
+        return Vec::new();
+    }
+    nodes
+        .into_iter()
+        .filter_map(|mut node| {
+            let children = prune(
+                std::mem::take(&mut node.children),
+                kinds,
+                depth.map(|d| d - 1),
+            );
+            let wanted = kinds.is_empty() || kinds.contains(&node.symbol.kind);
+            // A container stays for the wanted symbols it holds.
+            let holds = !children.is_empty() && !kinds.is_empty();
+            (wanted || holds).then_some(OutlineNode { children, ..node })
+        })
+        .collect()
 }
 
 impl Operation for OutlineOp {
@@ -527,9 +564,10 @@ impl Operation for OutlineOp {
                     path: ctx.location(&id, 1, 1).path,
                     root_path: id,
                     language,
-                    symbols: tree(ctx, hits),
+                    symbols: prune(tree(ctx, hits), &request.kinds, request.depth),
                 }
             })
+            .filter(|file: &OutlineFile| !file.symbols.is_empty())
             .collect();
         Ok(OutlineResponse {
             files,

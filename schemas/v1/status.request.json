@@ -1,6 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Request for [`StatusOp`]: nothing to choose.",
+  "properties": {
+    "modules": {
+      "default": false,
+      "description": "List every build module, with its source and test directories.",
+      "type": "boolean"
+    }
+  },
   "title": "StatusRequest",
   "type": "object"
 }

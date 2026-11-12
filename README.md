@@ -127,9 +127,11 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   them: `rg -n 'mutex_lock\(' fs/ext4 | codix at -` annotates each match with
   the function holding it. codix does not search text; your own grep does it
   better.
-- `index` brings the index up to date; `status` shows what changed since, the
-  build modules found in Maven and Gradle files, and anything codix could not
-  read in them.
+- `index` brings the index up to date; `status` shows what changed since, how
+  many build modules Maven and Gradle files declare (`--modules` lists them),
+  and anything codix could not read in them.
+- `outline` shows a file's or directory's symbols; `--depth 1` keeps the top
+  level, `--kind` the kinds asked for and what holds them.
 
 Queries keep the index fresh themselves: lookups recheck the files they
 return, and `refs` scans for changes first. Results are capped at 50 (`--limit`); the

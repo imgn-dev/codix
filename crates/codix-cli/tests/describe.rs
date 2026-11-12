@@ -76,7 +76,9 @@ fn capabilities_in_a_project_describe_its_index() {
     let out = codix_in(CODIX, &root, &root, &["capabilities", "--json"]);
     let json: serde_json::Value = serde_json::from_str(&out.stdout).expect("JSON");
     let project = &json["result"]["project"];
-    assert_eq!(project["files"], 3, "{project}");
+    // Counted as `status` counts them: the README has no symbols but parses.
+    assert_eq!(project["files"]["indexed"], 3, "{project}");
+    assert_eq!(project["files"]["text"], 0, "{project}");
     assert_eq!(project["languages"][0]["name"], "java", "{project}");
     assert_eq!(project["languages"][0]["files"], 2, "{project}");
     let find = json["result"]["commands"]

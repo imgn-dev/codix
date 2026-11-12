@@ -167,7 +167,11 @@ pub struct StatusOp;
 
 /// Request for [`StatusOp`]: nothing to choose.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct StatusRequest {}
+pub struct StatusRequest {
+    /// List every build module, with its source and test directories.
+    #[serde(default)]
+    pub modules: bool,
+}
 
 /// Files by how the index holds them.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -180,8 +184,25 @@ pub struct FileCounts {
     pub pending: usize,
     /// Could not be read or parsed.
     pub errors: usize,
-    /// Binary, kept out of search.
+    /// Binary: kept track of, never read.
     pub skipped: usize,
+}
+
+impl FileCounts {
+    /// Counts `statuses`.
+    pub fn of<'a>(statuses: impl Iterator<Item = &'a FileStatus>) -> Self {
+        let mut counts = Self::default();
+        for status in statuses {
+            match status {
+                FileStatus::Indexed => counts.indexed += 1,
+                FileStatus::SearchOnly => counts.text += 1,
+                FileStatus::Pending => counts.pending += 1,
+                FileStatus::Skipped => counts.skipped += 1,
+                FileStatus::Error => counts.errors += 1,
+            }
+        }
+        counts
+    }
 }
 
 /// Files whose stat differs from the index, found without reading them.
@@ -206,7 +227,11 @@ pub struct StatusResponse {
     pub changed: Changes,
     /// Files whose last scan failed, with the reason.
     pub errors: Vec<String>,
-    /// Modules found in build files.
+    /// How many modules the build files declare.
+    pub module_count: usize,
+    /// The build systems declaring them.
+    pub build_systems: Vec<String>,
+    /// The modules, when asked for.
     pub modules: Vec<Module>,
     /// Build constructs codix could not interpret.
     pub build_issues: Vec<Unsupported>,
@@ -227,7 +252,7 @@ impl Operation for StatusOp {
     type Request = StatusRequest;
     type Response = StatusResponse;
 
-    fn run(&self, ctx: &Context, _: StatusRequest) -> Result<StatusResponse, Error> {
+    fn run(&self, ctx: &Context, request: StatusRequest) -> Result<StatusResponse, Error> {
         let project = ctx.project()?;
         project.require_indexed()?;
         let config = Config::load(project)?;
@@ -285,7 +310,19 @@ impl Operation for StatusOp {
             files,
             changed,
             errors,
-            modules: build.modules,
+            module_count: build.modules.len(),
+            build_systems: {
+                let mut systems: Vec<String> =
+                    build.modules.iter().map(|m| m.build.clone()).collect();
+                systems.sort();
+                systems.dedup();
+                systems
+            },
+            modules: if request.modules {
+                build.modules
+            } else {
+                Vec::new()
+            },
             build_issues: build.unsupported,
             missing: crate::providers::missing(project.root(), &search_only),
             daemon: crate::daemon::running(project)?.map(|record| DaemonStatus {

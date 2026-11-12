@@ -158,7 +158,23 @@ fn status_reports_files_modules_and_changes() {
         json["result"]["changed"]["new"],
         serde_json::json!(["NOTES"])
     );
-    assert_eq!(json["result"]["modules"][0]["name"], "shop");
+    // Modules are counted; listed when asked for.
+    assert_eq!(json["result"]["module_count"], 1);
+    assert_eq!(
+        json["result"]["build_systems"],
+        serde_json::json!(["maven"])
+    );
+    assert_eq!(json["result"]["modules"], serde_json::json!([]));
+    let listed: Value =
+        serde_json::from_str(&codix(&root, &root, &["status", "--modules", "--json"]).stdout)
+            .unwrap();
+    assert_eq!(listed["result"]["modules"][0]["name"], "shop");
+    let text = codix(&root, &root, &["status", "--modules"]);
+    assert!(
+        text.stdout.contains("modules:\n  maven  shop  .\n"),
+        "{}",
+        text.stdout
+    );
 }
 
 #[test]

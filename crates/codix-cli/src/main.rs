@@ -139,7 +139,11 @@ enum Command {
         #[arg(long)]
         full: bool,
     },
-    Status,
+    Status {
+        /// List every build module, with its source and test directories.
+        #[arg(long)]
+        modules: bool,
+    },
     Capabilities,
     Languages,
     Config(ConfigArgs),
@@ -154,6 +158,12 @@ enum Command {
     Outline {
         /// File or directory.
         path: String,
+        /// Levels of symbols shown, 1 for the top level only.
+        #[arg(long, value_name = "N", value_parser = clap::value_parser!(u64).range(1..))]
+        depth: Option<u64>,
+        /// Keep symbols of this kind, and what contains them; repeatable.
+        #[arg(long = "kind", value_name = "KIND")]
+        kinds: Vec<String>,
     },
     Show {
         /// Symbol ID, its path part, `file:line:col`, or a name.
@@ -286,7 +296,7 @@ struct ModeArgs {
     /// The name is within a few edits of the query, ignoring case.
     #[arg(long, num_args = 0, default_missing_value = "fuzzy")]
     fuzzy: Option<ModeArg>,
-    /// The qualified name matches a glob, such as `Invoice.*`.
+    /// The qualified name matches a glob, such as 'Invoice.*', quoted for the shell.
     #[arg(long, num_args = 0, default_missing_value = "glob")]
     glob: Option<ModeArg>,
 }
@@ -854,7 +864,7 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
             output.progress("indexing");
             run(output, &IndexOp, ctx, Ok(IndexRequest { full }))
         }
-        Command::Status => run(output, &StatusOp, ctx, Ok(StatusRequest {})),
+        Command::Status { modules } => run(output, &StatusOp, ctx, Ok(StatusRequest { modules })),
         Command::Capabilities => run(output, &CapabilitiesOp, ctx, Ok(CapabilitiesRequest {})),
         Command::Languages => run(output, &LanguagesOp, ctx, Ok(LanguagesRequest {})),
         Command::Config(args) => {
@@ -885,7 +895,14 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
             run(output, &DefOp, ctx, Ok(request))
         }
         Command::Refs(args) => run(output, &RefsOp, ctx, args.request()),
-        Command::Outline { path } => run(output, &OutlineOp, ctx, Ok(OutlineRequest { path })),
+        Command::Outline { path, depth, kinds } => {
+            let request = OutlineRequest {
+                path,
+                depth: depth.and_then(|d| usize::try_from(d).ok()),
+                kinds,
+            };
+            run(output, &OutlineOp, ctx, Ok(request))
+        }
         Command::Rename(args) => run(output, &RenameOp, ctx, Ok(args.request())),
         Command::Apply { id } => run(output, &ApplyOp, ctx, Ok(ApplyRequest { id })),
         Command::Undo => run(output, &UndoOp, ctx, Ok(UndoRequest {})),

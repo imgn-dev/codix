@@ -14,7 +14,7 @@ use crate::capabilities::{
 use crate::config::{ConfigResponse, Setting};
 use crate::edit::{ExcludedSite, Exclusion, PreviewResponse};
 use crate::error::Candidate;
-use crate::indexing::{InitResponse, StatusResponse};
+use crate::indexing::{FileCounts, InitResponse, StatusResponse};
 use crate::op::Warning;
 use crate::page::{Location, Paged};
 use crate::previews::{DiscardResponse, PreviewsResponse, State};
@@ -180,6 +180,12 @@ impl TextRender for RefsResponse {
                 self.definitions, self.scoped, self.textual
             )?;
         }
+        if self.references.total == 0 {
+            writeln!(
+                w,
+                "the scope, --confidence or --context left nothing; without them, refs lists every use"
+            )?;
+        }
         breakdown(w, style, &self.references)?;
         renamed(w, self.renamed.as_ref())?;
         stale(w, self.possibly_stale)?;
@@ -310,6 +316,21 @@ impl TextRender for FindResponse {
             writeln!(w, "closest name: {name}")?;
         }
         self.results.render_text(w, style)?;
+        if self.results.total == 0 {
+            if self.narrowed {
+                writeln!(
+                    w,
+                    "no symbol named \"{}\" where --kind, --lang or the scope allow; without them, find looks everywhere",
+                    self.query
+                )?;
+            } else {
+                writeln!(
+                    w,
+                    "no symbol named \"{}\", even a few edits away",
+                    self.query
+                )?;
+            }
+        }
         if self.results.total > 0 && self.mode != MatchMode::Exact && self.corrected.is_none() {
             writeln!(w, "matched by {}", mode_name(self.mode))?;
         }
@@ -843,12 +864,7 @@ impl TextRender for Capabilities {
         }
         if let Some(project) = &self.project {
             writeln!(w, "project: {}", project.root.display())?;
-            writeln!(
-                w,
-                "  {} indexed, {} pending",
-                files(project.files),
-                project.pending
-            )?;
+            writeln!(w, "  {}", file_counts(&project.files))?;
             for language in &project.languages {
                 writeln!(
                     w,
@@ -865,6 +881,14 @@ impl TextRender for Capabilities {
         }
         Ok(())
     }
+}
+
+/// Files by how the index holds them, as `status` and `capabilities` say.
+fn file_counts(f: &FileCounts) -> String {
+    format!(
+        "files: {} indexed, {} text, {} pending, {} errors, {} skipped",
+        f.indexed, f.text, f.pending, f.errors, f.skipped
+    )
 }
 
 fn files(count: usize) -> String {
@@ -1017,14 +1041,10 @@ impl TextRender for InitResponse {
 }
 
 impl TextRender for StatusResponse {
-    fn render_text(&self, w: &mut dyn Write, _: Style) -> io::Result<()> {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
         let f = &self.files;
         writeln!(w, "project: {}", self.root.display())?;
-        writeln!(
-            w,
-            "files: {} indexed, {} text, {} pending, {} errors, {} skipped",
-            f.indexed, f.text, f.pending, f.errors, f.skipped
-        )?;
+        writeln!(w, "{}", file_counts(f))?;
         match &self.daemon {
             Some(status) => {
                 let d = &status.record;
@@ -1076,6 +1096,19 @@ impl TextRender for StatusResponse {
         }
         for path in &self.errors {
             writeln!(w, "error: {path}")?;
+        }
+        if self.modules.is_empty() && self.module_count > 0 {
+            let list = if style.tools {
+                "modules: true lists them"
+            } else {
+                "--modules lists them"
+            };
+            writeln!(
+                w,
+                "modules: {} ({}); {list}",
+                self.module_count,
+                self.build_systems.join(", ")
+            )?;
         }
         if !self.modules.is_empty() {
             writeln!(w, "modules:")?;
