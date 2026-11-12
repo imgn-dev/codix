@@ -6,14 +6,14 @@
 //! Run with `cargo bench -p codix-benches --bench equivalence` from a
 //! terminal. Indexes each repository from scratch with both flavours, so the
 //! linux checkout takes several minutes, and writes
-//! `benches/results/<version>-equivalence.json`.
+//! `benches/results/<date>-equivalence.json`, the date in UTC.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::io::Write as _;
 use std::path::Path;
 
-use codix_benches::{Pinned, SPRING, build_codix, build_modular, checkout, time, workspace};
+use codix_benches::{Pinned, SPRING, build_codix, build_modular, checkout, time, today, workspace};
 use rusqlite::{Connection, OpenFlags};
 use serde::Serialize;
 
@@ -223,10 +223,7 @@ fn main() {
         }
     )
     .expect("write");
-    let path = workspace().join(format!(
-        "benches/results/{}-equivalence.json",
-        env!("CARGO_PKG_VERSION")
-    ));
+    let path = workspace().join(format!("benches/results/{}-equivalence.json", today()));
     let json = serde_json::to_string_pretty(&results).expect("serialize results");
     std::fs::write(&path, format!("{json}\n")).expect("write results");
 }

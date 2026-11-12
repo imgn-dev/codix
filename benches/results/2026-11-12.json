@@ -1,0 +1,142 @@
+{
+  "version": "0.4.0",
+  "cpus": 10,
+  "os": "macos",
+  "cold_index": {
+    "repository": "spring-framework v6.2.0",
+    "files": 10860,
+    "lines": 1600036,
+    "seconds": 19.095
+  },
+  "no_change_scan": {
+    "repository": "linux v6.12",
+    "files": 86605,
+    "lines": 39626044,
+    "seconds": 0.876
+  },
+  "lookup_p95_ms": 55.5,
+  "daemon": {
+    "cli_p95_ms": 20.6,
+    "mcp_p95_ms": 8.6,
+    "memory_mb": 30,
+    "reindex_ms": 64
+  },
+  "index_mb": 255,
+  "edits": {
+    "refs_p95_ms": 85.4,
+    "rename_p95_ms": 217.4,
+    "apply_p95_ms": 146.0,
+    "round_trips": {
+      "repository": "spring-framework .",
+      "attempted": 1000,
+      "restored": 881,
+      "refused": {
+        "invalid_name": 2,
+        "renames_file": 38,
+        "shadowing": 1,
+        "tier_too_low": 78
+      },
+      "failed": []
+    }
+  },
+  "linux_round_trips": {
+    "repository": "linux kernel, mm, lib",
+    "attempted": 1000,
+    "restored": 774,
+    "refused": {
+      "invalid_name": 1,
+      "parse_error_region": 223,
+      "usage": 2
+    },
+    "failed": []
+  },
+  "plugins": {
+    "cold_full_seconds": 18.337,
+    "cold_modular_seconds": 18.403,
+    "lookup_p95_ms": 62.0,
+    "first_command_after_install_ms": 70.7,
+    "installed": "kotlin, 447 files",
+    "core_bytes": 8761984,
+    "plugins_bytes": {
+      "build/gradle": 336238,
+      "build/maven": 419174,
+      "language/c": 668800,
+      "language/cpp": 3500584,
+      "language/csharp": 5410270,
+      "language/go": 255718,
+      "language/java": 455350,
+      "language/javascript": 455502,
+      "language/json": 34490,
+      "language/kotlin": 3510217,
+      "language/markdown": 419048,
+      "language/php": 1116091,
+      "language/python": 487581,
+      "language/ruby": 2155934,
+      "language/rust": 1151532,
+      "language/sql": 2464727,
+      "language/toml": 51848,
+      "language/tsx": 1514412,
+      "language/typescript": 1464568,
+      "language/xml": 69000,
+      "language/yaml": 217713,
+      "vcs/mercurial": 256,
+      "vcs/subversion": 216
+    }
+  },
+  "targets": [
+    {
+      "name": "cold index",
+      "goal": "1M lines across 10k files in under 30 s",
+      "measured": "1600036 lines across 10860 files in 19.09 s",
+      "met": true
+    },
+    {
+      "name": "no-change scan",
+      "goal": "100k files in under 1 s",
+      "measured": "86605 files in 0.876 s",
+      "met": true
+    },
+    {
+      "name": "CLI lookup p95",
+      "goal": "under 150 ms",
+      "measured": "55.5 ms",
+      "met": true
+    },
+    {
+      "name": "query via daemon p95",
+      "goal": "under 10 ms, through the CLI",
+      "measured": "20.6 ms through the CLI, 8.6 ms through MCP",
+      "met": false
+    },
+    {
+      "name": "daemon memory",
+      "goal": "under 500 MB on a 1M-line project",
+      "measured": "30 MB on 1600036 lines, after 1,000 queries",
+      "met": true
+    },
+    {
+      "name": "reindex after one save",
+      "goal": "under 50 ms, from the end of the debounce",
+      "measured": "64 ms",
+      "met": false
+    },
+    {
+      "name": "rename round trips",
+      "goal": "renamed and back, every file as it was",
+      "measured": "spring-framework .: 881 of 1000 restored, 119 refused, 0 failed; linux kernel, mm, lib: 774 of 1000 restored, 226 refused, 0 failed",
+      "met": true
+    },
+    {
+      "name": "modular cold index",
+      "goal": "within 5 % of the monolithic build",
+      "measured": "18.40 s modular, 18.34 s monolithic (medians of 3)",
+      "met": true
+    },
+    {
+      "name": "modular CLI lookup p95",
+      "goal": "under 150 ms",
+      "measured": "62.0 ms",
+      "met": true
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+{
+  "version": "0.4.0",
+  "repositories": [
+    {
+      "repository": "spring-framework v6.2.0",
+      "full_seconds": 18.946,
+      "modular_seconds": 19.144,
+      "tables": {
+        "files": {
+          "full_rows": 10816,
+          "modular_rows": 10816,
+          "differing_rows": 0,
+          "first_differences": []
+        },
+        "modules": {
+          "full_rows": 29,
+          "modular_rows": 29,
+          "differing_rows": 0,
+          "first_differences": []
+        },
+        "refs": {
+          "full_rows": 1498575,
+          "modular_rows": 1498575,
+          "differing_rows": 0,
+          "first_differences": []
+        },
+        "symbols": {
+          "full_rows": 143418,
+          "modular_rows": 143418,
+          "differing_rows": 0,
+          "first_differences": []
+        }
+      },
+      "equivalent": true
+    },
+    {
+      "repository": "linux v6.12",
+      "full_seconds": 991.261,
+      "modular_seconds": 991.496,
+      "tables": {
+        "files": {
+          "full_rows": 86425,
+          "modular_rows": 86425,
+          "differing_rows": 0,
+          "first_differences": []
+        },
+        "modules": {
+          "full_rows": 0,
+          "modular_rows": 0,
+          "differing_rows": 0,
+          "first_differences": []
+        },
+        "refs": {
+          "full_rows": 19283441,
+          "modular_rows": 19283441,
+          "differing_rows": 0,
+          "first_differences": []
+        },
+        "symbols": {
+          "full_rows": 5309054,
+          "modular_rows": 5309054,
+          "differing_rows": 0,
+          "first_differences": []
+        }
+      },
+      "equivalent": true
+    }
+  ],
+  "equivalent": true
+}

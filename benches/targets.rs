@@ -10,7 +10,8 @@
 //! Code session, whose sandbox lets no daemon bind its socket. Builds the
 //! release binary with every provider and the modular flavour with every
 //! plugin (`cargo xtask dist`), downloads the repositories into
-//! `target/bench-repos` once, and writes `benches/results/<version>.json`.
+//! `target/bench-repos` once, and writes `benches/results/<date>.json`, the
+//! date in UTC.
 
 use std::io::Write as _;
 use std::path::Path;
@@ -21,7 +22,7 @@ mod edits;
 mod plugins;
 
 use codix_benches::{
-    Pinned, SPRING, build_codix, build_modular, checkout, files_and_lines, percentile, time,
+    Pinned, SPRING, build_codix, build_modular, checkout, files_and_lines, percentile, time, today,
     workspace,
 };
 use serde::Serialize;
@@ -367,10 +368,7 @@ fn main() {
         linux_round_trips: measured.linux_trips,
         plugins: measured.modular,
     };
-    let path = workspace().join(format!(
-        "benches/results/{}.json",
-        env!("CARGO_PKG_VERSION")
-    ));
+    let path = workspace().join(format!("benches/results/{}.json", today()));
     let json = serde_json::to_string_pretty(&results).expect("serialize results");
     std::fs::write(&path, format!("{json}\n")).expect("write results");
     for target in &results.targets {

@@ -205,3 +205,48 @@ pub fn build_modular() -> PathBuf {
     dist.join("bin")
         .join(format!("codix{}", std::env::consts::EXE_SUFFIX))
 }
+
+/// Today's date in UTC, as `YYYY-MM-DD`: the name of the results files.
+///
+/// # Panics
+///
+/// When the clock is set before 1970.
+pub fn today() -> String {
+    let seconds = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("a clock after 1970")
+        .as_secs();
+    let (year, month, day) = civil(seconds / 86_400);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+/// The proleptic Gregorian date `days` days after 1970-01-01, after Howard
+/// Hinnant's `civil_from_days`.
+fn civil(days: u64) -> (u64, u64, u64) {
+    let z = days + 719_468;
+    let era = z / 146_097;
+    let doe = z % 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + u64::from(month <= 2);
+    (year, month, day)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::civil;
+
+    #[test]
+    fn days_since_the_epoch_are_dates() {
+        assert_eq!(civil(0), (1970, 1, 1));
+        assert_eq!(civil(59), (1970, 3, 1));
+        assert_eq!(civil(11_016), (2000, 2, 29));
+        assert_eq!(civil(11_017), (2000, 3, 1));
+        assert_eq!(civil(20_769), (2026, 11, 12));
+        assert_eq!(civil(20_818), (2026, 12, 31));
+        assert_eq!(civil(20_819), (2027, 1, 1));
+    }
+}
