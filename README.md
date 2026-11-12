@@ -136,8 +136,11 @@ the last result shown (`--after`), so results fixed meanwhile shift nothing.
 When a first page does not hold every result, it ends with where they are,
 by directory, each with the command that keeps only that one. `--count` gives
 how many results there are and where, `--files` one line per file with its
-number of results (the worklist of a refactoring, paged by file), and `--all`
-every result, for scripts.
+number of results (the worklist of a refactoring, paged by file; `--sort
+count` for the files with the most first), and `--all` every result, for
+scripts. Every lookup narrows with `--path`, `--here`, `--exclude-path` and
+`--sources main|test` (from the build systems' source roots); `refs` also with
+`--context call|type|import|read|write`.
 
 Every command takes `--json` for stable, versioned output (`schema_version`).
 Errors have a stable code, a cause and a hint:

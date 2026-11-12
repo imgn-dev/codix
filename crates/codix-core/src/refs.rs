@@ -283,12 +283,43 @@ pub struct RefsRequest {
     /// Keep the references of this certainty only; the definitions stay.
     #[serde(default)]
     pub confidence: Option<Confidence>,
+    /// Keep the references in this context only; repeatable; the definitions stay.
+    #[serde(default, rename = "context")]
+    pub contexts: Vec<RefContext>,
     /// Directories to keep.
     #[serde(flatten)]
     pub scope: ScopeRequest,
     /// Page to return.
     #[serde(flatten)]
     pub page: Page,
+}
+
+/// How a reference uses the symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RefContext {
+    /// A call.
+    Call,
+    /// A type, as in a declaration or a cast.
+    Type,
+    /// An import.
+    Import,
+    /// A read.
+    Read,
+    /// A write.
+    Write,
+}
+
+impl RefContext {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Call => "call",
+            Self::Type => "type",
+            Self::Import => "import",
+            Self::Read => "read",
+            Self::Write => "write",
+        }
+    }
 }
 
 /// How sure codix is that a reference is to the symbol.
@@ -414,7 +445,13 @@ impl Operation for RefsOp {
                 ))
         });
         results.dedup_by(|a, b| a.location == b.location);
-        results.retain(|r| scope.contains(&r.location.root_path) && kept(request.confidence, r));
+        results.retain(|r| {
+            scope.contains(&r.location.root_path)
+                && kept(request.confidence, r)
+                && (r.is_definition()
+                    || request.contexts.is_empty()
+                    || request.contexts.iter().any(|c| c.as_str() == r.context))
+        });
         let Target::Definitions { file: anchor, .. } = &targets[0];
         let anchor = anchor.id.as_str().to_owned();
         sort_results(&mut results, Some(&anchor));

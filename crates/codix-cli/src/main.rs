@@ -72,15 +72,15 @@ use codix_core::describe::describe;
 use codix_core::error::exit;
 use codix_core::indexing::{IndexOp, IndexRequest, InitOp, InitRequest, StatusOp, StatusRequest};
 use codix_core::op::{Context, Operation, Outcome, Warning};
-use codix_core::page::{DEFAULT_LIMIT, Page};
+use codix_core::page::{DEFAULT_LIMIT, Page, Sort};
 use codix_core::preflight::{Allow, Overrides};
 use codix_core::previews::{DiscardOp, DiscardRequest, PreviewsOp, PreviewsRequest};
-use codix_core::project::ScopeRequest;
+use codix_core::project::{ScopeRequest, Sources};
 use codix_core::query::{
     DEFAULT_SOURCES, DefOp, DefRequest, FindOp, FindRequest, GrepOp, GrepRequest, OutlineOp,
     OutlineRequest, ShowOp, ShowRequest,
 };
-use codix_core::refs::{Confidence, RefsOp, RefsRequest};
+use codix_core::refs::{Confidence, RefContext, RefsOp, RefsRequest};
 use codix_core::rename::{RenameOp, RenameRequest};
 use codix_core::render::{self, Style, TextRender};
 use codix_core::store::MatchMode;
@@ -324,6 +324,9 @@ struct RefsArgs {
     /// Keep the references of this certainty only; the definitions stay.
     #[arg(long, value_enum, value_name = "CONFIDENCE")]
     confidence: Option<ConfidenceArg>,
+    /// Keep the references in this context only; repeatable; the definitions stay.
+    #[arg(long = "context", value_enum, value_name = "CONTEXT")]
+    contexts: Vec<ContextArg>,
     #[command(flatten)]
     scope: ScopeArgs,
     #[command(flatten)]
@@ -376,10 +379,31 @@ impl RefsArgs {
             symbol: self.symbol,
             kinds: self.kinds,
             confidence: self.confidence.map(Confidence::from),
+            contexts: self
+                .contexts
+                .into_iter()
+                .map(|c| match c {
+                    ContextArg::Call => RefContext::Call,
+                    ContextArg::Type => RefContext::Type,
+                    ContextArg::Import => RefContext::Import,
+                    ContextArg::Read => RefContext::Read,
+                    ContextArg::Write => RefContext::Write,
+                })
+                .collect(),
             scope: self.scope.request(),
             page,
         })
     }
+}
+
+/// The contexts `refs --context` takes.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum ContextArg {
+    Call,
+    Type,
+    Import,
+    Read,
+    Write,
 }
 
 /// The certainties `--confidence` takes.
@@ -452,6 +476,12 @@ struct ScopeArgs {
     /// Limit results to this subtree; repeatable.
     #[arg(long, value_name = "DIR")]
     path: Vec<String>,
+    /// Leave out this subtree; repeatable.
+    #[arg(long, value_name = "DIR")]
+    exclude_path: Vec<String>,
+    /// Keep main or test sources only, as the build systems declare them.
+    #[arg(long, value_enum, value_name = "SOURCES")]
+    sources: Option<SourcesArg>,
 }
 
 impl ScopeArgs {
@@ -459,8 +489,20 @@ impl ScopeArgs {
         ScopeRequest {
             here: self.here,
             paths: self.path,
+            excluded: self.exclude_path,
+            sources: self.sources.map(|s| match s {
+                SourcesArg::Main => Sources::Main,
+                SourcesArg::Test => Sources::Test,
+            }),
         }
     }
+}
+
+/// The sources `--sources` takes.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum SourcesArg {
+    Main,
+    Test,
 }
 
 #[derive(Args)]
@@ -480,6 +522,15 @@ struct PageArgs {
     /// Return one row per file, with its number of results, paged by file.
     #[arg(long)]
     files: bool,
+    /// With files, `count` puts the files with the most results first, on one page.
+    #[arg(long, value_enum, value_name = "ORDER")]
+    sort: Option<SortArg>,
+}
+
+/// The orders `--sort` takes.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum SortArg {
+    Count,
 }
 
 impl PageArgs {
@@ -491,6 +542,9 @@ impl PageArgs {
         }
         if self.files {
             page = page.by_file();
+        }
+        if let Some(SortArg::Count) = self.sort {
+            page = page.sorted(Sort::Count)?;
         }
         Ok(page)
     }

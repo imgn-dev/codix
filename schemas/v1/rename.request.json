@@ -24,6 +24,21 @@
           "type": "string"
         }
       ]
+    },
+    "Sources": {
+      "description": "Which sources a build system declares.",
+      "oneOf": [
+        {
+          "const": "main",
+          "description": "The main sources.",
+          "type": "string"
+        },
+        {
+          "const": "test",
+          "description": "The test sources.",
+          "type": "string"
+        }
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -39,6 +54,14 @@
       "description": "Allow a condition the checks refuse; repeatable.",
       "items": {
         "$ref": "#/$defs/Allow"
+      },
+      "type": "array"
+    },
+    "exclude_path": {
+      "default": [],
+      "description": "Leave out this subtree; repeatable.",
+      "items": {
+        "type": "string"
       },
       "type": "array"
     },
@@ -71,6 +94,18 @@
         "type": "string"
       },
       "type": "array"
+    },
+    "sources": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sources"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Keep main or test sources only, as the build systems declare them."
     },
     "symbol": {
       "description": "Symbol ID, its path part, `file:line:col`, or a name; a local by `file:line:col` only.",

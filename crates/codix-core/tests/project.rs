@@ -221,6 +221,7 @@ fn here_and_path_scopes() {
         &ScopeRequest {
             here: true,
             paths: vec![],
+            ..ScopeRequest::default()
         },
     )
     .unwrap();
@@ -233,11 +234,24 @@ fn here_and_path_scopes() {
         &ScopeRequest {
             here: false,
             paths: vec!["billing".to_owned(), "tests".to_owned()],
+            ..ScopeRequest::default()
         },
     )
     .unwrap();
     assert!(both.contains(&in_src));
     assert!(both.contains(&in_tests));
+
+    let but_tests = Scope::resolve(
+        &p,
+        &root,
+        &ScopeRequest {
+            excluded: vec!["tests".to_owned()],
+            ..ScopeRequest::default()
+        },
+    )
+    .unwrap();
+    assert!(but_tests.contains(&in_src));
+    assert!(!but_tests.contains(&in_tests));
     assert!(!both.contains(&FileId::from_canonical("src/other.rs")));
 }
 

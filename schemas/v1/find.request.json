@@ -24,6 +24,31 @@
           "type": "string"
         }
       ]
+    },
+    "Sort": {
+      "description": "Another order than the results' own.",
+      "oneOf": [
+        {
+          "const": "count",
+          "description": "With `files`, the files with the most results first.",
+          "type": "string"
+        }
+      ]
+    },
+    "Sources": {
+      "description": "Which sources a build system declares.",
+      "oneOf": [
+        {
+          "const": "main",
+          "description": "The main sources.",
+          "type": "string"
+        },
+        {
+          "const": "test",
+          "description": "The test sources.",
+          "type": "string"
+        }
+      ]
     }
   },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -41,6 +66,14 @@
       "default": false,
       "description": "Return how many results there are, not the results.",
       "type": "boolean"
+    },
+    "exclude_path": {
+      "default": [],
+      "description": "Leave out this subtree; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     },
     "files": {
       "default": false,
@@ -98,6 +131,30 @@
     "query": {
       "description": "Name to look for.",
       "type": "string"
+    },
+    "sort": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sort"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "With files, `count` puts the files with the most results first, on one page."
+    },
+    "sources": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sources"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Keep main or test sources only, as the build systems declare them."
     }
   },
   "required": [

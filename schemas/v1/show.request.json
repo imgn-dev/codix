@@ -1,4 +1,21 @@
 {
+  "$defs": {
+    "Sources": {
+      "description": "Which sources a build system declares.",
+      "oneOf": [
+        {
+          "const": "main",
+          "description": "The main sources.",
+          "type": "string"
+        },
+        {
+          "const": "test",
+          "description": "The test sources.",
+          "type": "string"
+        }
+      ]
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Request for [`ShowOp`].",
   "properties": {
@@ -8,6 +25,14 @@
       "format": "uint",
       "minimum": 0,
       "type": "integer"
+    },
+    "exclude_path": {
+      "default": [],
+      "description": "Leave out this subtree; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     },
     "here": {
       "default": false,
@@ -36,6 +61,18 @@
         "type": "string"
       },
       "type": "array"
+    },
+    "sources": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sources"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Keep main or test sources only, as the build systems declare them."
     },
     "symbol": {
       "description": "Symbol ID, its path part, `file:line:col`, or a name.",

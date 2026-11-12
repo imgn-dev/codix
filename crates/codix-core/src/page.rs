@@ -25,6 +25,16 @@ pub struct Page {
     count: bool,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     files: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    sort: Option<Sort>,
+}
+
+/// Another order than the results' own.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Sort {
+    /// With `files`, the files with the most results first.
+    Count,
 }
 
 /// [`Page`] as requests carry it, checked on the way in.
@@ -43,6 +53,9 @@ struct PageFields {
     /// Return one row per file, with its number of results, paged by file.
     #[serde(default)]
     files: bool,
+    /// With files, `count` puts the files with the most results first, on one page.
+    #[serde(default)]
+    sort: Option<Sort>,
 }
 
 fn default_limit() -> usize {
@@ -56,6 +69,9 @@ impl TryFrom<PageFields> for Page {
         let mut page = Self::new(fields.limit, fields.after).map_err(|e| e.cause())?;
         page.count = fields.count;
         page.files = fields.files;
+        if let Some(sort) = fields.sort {
+            page = page.sorted(sort).map_err(|e| e.cause())?;
+        }
         Ok(page)
     }
 }
@@ -80,6 +96,28 @@ impl Page {
             after,
             count: false,
             files: false,
+            sort: None,
+        })
+    }
+
+    /// The same page, in another order: one page, with no next one, since
+    /// the order changes as results do.
+    pub fn sorted(self, sort: Sort) -> Result<Self, Error> {
+        if !self.files {
+            return Err(Error::Usage {
+                cause: "--sort count orders files: it needs --files".to_owned(),
+                hint: "add --files".to_owned(),
+            });
+        }
+        if self.after.is_some() {
+            return Err(Error::Usage {
+                cause: "a sorted page has no next page to start after".to_owned(),
+                hint: "drop --after, or --sort for pages in path order".to_owned(),
+            });
+        }
+        Ok(Self {
+            sort: Some(sort),
+            ..self
         })
     }
 
@@ -187,7 +225,34 @@ impl Page {
 
     /// The page of the files of `all` from the result `start` on.
     fn files_page<T: Ranked>(&self, all: &[T], start: usize) -> (Paged<T>, Option<String>) {
-        let every = files(all);
+        let mut every = files(all);
+        if self.sort == Some(Sort::Count) {
+            every.sort_by(|a, b| {
+                b.count
+                    .cmp(&a.count)
+                    .then_with(|| a.root_path.cmp(&b.root_path))
+            });
+            let total = every.len();
+            let breakdown = if self.limit < total {
+                let each: Vec<(&str, &str)> = every
+                    .iter()
+                    .map(|f| (f.path.as_str(), f.root_path.as_str()))
+                    .collect();
+                breakdown(&each)
+            } else {
+                Vec::new()
+            };
+            every.truncate(self.limit);
+            return (
+                Paged {
+                    items: Vec::new(),
+                    total,
+                    breakdown,
+                    files: every,
+                },
+                None,
+            );
+        }
         let first = files(&all[..start]).len();
         let total = every.len();
         let end = first.saturating_add(self.limit).min(total);
@@ -248,6 +313,7 @@ impl Default for Page {
             after: None,
             count: false,
             files: false,
+            sort: None,
         }
     }
 }
@@ -686,6 +752,35 @@ mod tests {
         assert_eq!(paged.files.len(), 1);
         assert_eq!(paged.files[0].root_path, "b/z.rs");
         assert_eq!(next, None);
+    }
+
+    #[test]
+    fn files_sorted_by_count_are_one_page_most_first() {
+        let mut all = mentions(&["a.rs", "c.rs"], 1);
+        all.extend(mentions(&["b.rs"], 3));
+        sort_results(&mut all, None);
+        let page = Page::new(2, None)
+            .unwrap()
+            .by_file()
+            .sorted(Sort::Count)
+            .unwrap();
+        let (paged, next) = page.apply(all, None);
+        let rows: Vec<(&str, usize)> = paged
+            .files
+            .iter()
+            .map(|f| (f.root_path.as_str(), f.count))
+            .collect();
+        assert_eq!(rows, [("b.rs", 3), ("a.rs", 1)]);
+        assert_eq!(paged.total, 3);
+        assert_eq!(next, None);
+        assert_eq!(
+            Page::new(2, None)
+                .unwrap()
+                .sorted(Sort::Count)
+                .unwrap_err()
+                .code(),
+            "usage"
+        );
     }
 
     fn grouped_counts(places: &[Place]) -> Vec<(&str, usize)> {

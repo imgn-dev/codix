@@ -328,7 +328,8 @@ fn relative(from: &Path, to: &Path) -> String {
     }
 }
 
-/// Directories results are limited to: `--here` and `--path`, as given.
+/// Where results may be: `--here`, `--path`, `--exclude-path` and
+/// `--sources`, as given.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct ScopeRequest {
     /// Limit results to the current directory's subtree.
@@ -337,13 +338,39 @@ pub struct ScopeRequest {
     /// Limit results to this subtree; repeatable.
     #[serde(default, rename = "path")]
     pub paths: Vec<String>,
+    /// Leave out this subtree; repeatable.
+    #[serde(default, rename = "exclude_path")]
+    pub excluded: Vec<String>,
+    /// Keep main or test sources only, as the build systems declare them.
+    #[serde(default)]
+    pub sources: Option<Sources>,
 }
 
-/// Resolved scope: results must lie within one of `dirs`, or anywhere when
-/// `dirs` is empty.
+impl ScopeRequest {
+    /// Whether the request limits results at all.
+    pub fn is_empty(&self) -> bool {
+        !self.here && self.paths.is_empty() && self.excluded.is_empty() && self.sources.is_none()
+    }
+}
+
+/// Which sources a build system declares.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Sources {
+    /// The main sources.
+    Main,
+    /// The test sources.
+    Test,
+}
+
+/// Resolved scope: results must lie within one of `dirs` (anywhere when
+/// there are none), outside every one of `excluded`, and within one of
+/// `roots` when the sources are chosen.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Scope {
     dirs: Vec<FileId>,
+    excluded: Vec<FileId>,
+    roots: Option<Vec<FileId>>,
 }
 
 impl Scope {
@@ -364,12 +391,35 @@ impl Scope {
         for path in &request.paths {
             dirs.push(project.file_id(cwd, path)?);
         }
-        Ok(Self { dirs })
+        let excluded = request
+            .excluded
+            .iter()
+            .map(|path| project.file_id(cwd, path))
+            .collect::<Result<_, _>>()?;
+        Ok(Self {
+            dirs,
+            excluded,
+            roots: None,
+        })
+    }
+
+    /// The same scope, within `roots` only.
+    #[must_use]
+    pub fn within(self, roots: Vec<FileId>) -> Self {
+        Self {
+            roots: Some(roots),
+            ..self
+        }
     }
 
     /// Whether `id` is in scope.
     pub fn contains(&self, id: &FileId) -> bool {
-        self.dirs.is_empty() || self.dirs.iter().any(|dir| id.is_within(dir))
+        (self.dirs.is_empty() || self.dirs.iter().any(|dir| id.is_within(dir)))
+            && !self.excluded.iter().any(|dir| id.is_within(dir))
+            && self
+                .roots
+                .as_ref()
+                .is_none_or(|roots| roots.iter().any(|root| id.is_within(root)))
     }
 }
 

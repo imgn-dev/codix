@@ -41,6 +41,14 @@ Options:
       --path <DIR>
           Limit results to this subtree; repeatable
 
+      --exclude-path <DIR>
+          Leave out this subtree; repeatable
+
+      --sources <SOURCES>
+          Keep main or test sources only, as the build systems declare them
+          
+          [possible values: main, test]
+
       --limit <LIMIT>
           Maximum number of results
           
@@ -57,6 +65,11 @@ Options:
 
       --files
           Return one row per file, with its number of results, paged by file
+
+      --sort <ORDER>
+          With files, `count` puts the files with the most results first, on one page
+          
+          [possible values: count]
 
   -h, --help
           Print help (see a summary with '-h')

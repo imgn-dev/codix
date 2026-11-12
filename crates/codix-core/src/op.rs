@@ -11,7 +11,8 @@ use crate::Error;
 use crate::daemon::Watch;
 use crate::lock::{FileGate, WriteGate, network_filesystem_warning};
 use crate::page::Location;
-use crate::project::{FileId, Project, Scope, ScopeRequest};
+use crate::project::{FileId, Project, Scope, ScopeRequest, Sources};
+use crate::store::Store;
 
 /// A command of the operation layer.
 pub trait Operation {
@@ -203,13 +204,35 @@ impl Context {
         }
     }
 
-    /// Resolves `--here` and `--path`; without a project, only an empty request
-    /// is valid.
+    /// Resolves `--here`, `--path`, `--exclude-path` and `--sources`; without
+    /// a project, only an empty request is valid.
     pub fn scope(&self, request: &ScopeRequest) -> Result<Scope, Error> {
-        if !request.here && request.paths.is_empty() {
+        if request.is_empty() {
             return Ok(Scope::default());
         }
-        Scope::resolve(self.project()?, &self.cwd, request)
+        let project = self.project()?;
+        let scope = Scope::resolve(project, &self.cwd, request)?;
+        let Some(sources) = request.sources else {
+            return Ok(scope);
+        };
+        let mut store = Store::open(&project.index_path())?;
+        let build = store.snapshot()?.build()?;
+        let roots: Vec<FileId> = build
+            .modules
+            .iter()
+            .flat_map(|m| match sources {
+                Sources::Main => &m.source_roots,
+                Sources::Test => &m.test_roots,
+            })
+            .map(FileId::from_canonical)
+            .collect();
+        if roots.is_empty() {
+            return Err(Error::Usage {
+                cause: "--sources: no build system here declares main and test sources".to_owned(),
+                hint: "narrow with --path or --exclude-path instead".to_owned(),
+            });
+        }
+        Ok(scope.within(roots))
     }
 }
 
