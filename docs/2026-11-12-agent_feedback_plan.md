@@ -68,18 +68,14 @@ On 2026-11-12:
   command, `codix at`, which also annotates another tool's results. Text-only
   files lose their only use: they stay in the index and `status`, as known
   files without symbols.
-
-## Decisions to take
-
-- **(a) `def` with several matches lists them all** (exit 0), definitions
-  with a body first, instead of failing. A lookup has no reason to refuse:
-  the agent wanted the list anyway. `show` and `refs` still need one symbol
-  and keep the error, with the richer candidates. Alternative: keep the error
-  everywhere.
-- **(b) Declarations step aside.** When a name matches C or C++ definitions
-  with a body and declarations without one, the declarations are dropped
-  from resolution. `--kind declaration` still finds them. Alternative: rank
-  them last but keep them in the ambiguity.
+- **(a) Every command treats an ambiguous name the same way.** The commands
+  that read (`def`, `show`, `refs`) list the matches first, then answer for
+  all of them, instead of failing. `rename`, which changes code, still
+  refuses, with the same list.
+- **(b) A C or C++ function's declarations belong to it.** A prototype in a
+  header is part of the function's interface: `def` and `show` list it with
+  the definition, `refs` counts its place, and `rename` edits it with the
+  definition.
 
 ## Design
 
@@ -92,11 +88,24 @@ On 2026-11-12:
             java:…::DefaultListableBeanFactory.getBean#7197
   ```
   JSON: `candidates: [{symbol_id, kind, path, line, column, signature}]`.
-- `show` takes the overloads of a name in one file, as `def` does, and prints
-  each.
+- An ambiguous name in `def`, `show` or `refs` (a): the matches first, as the
+  candidates above, then the answer for all of them: every definition for
+  `def`, every source for `show` (capped by `--limit`), the references of
+  every match for `refs`, each result naming the match it belongs to. The
+  exit code is 0. `rename` still fails with `ambiguous_symbol`, its hint
+  naming `--kind`, `--path` and the IDs.
 - C and C++ declarations without a body are indexed as such: the parse marks
-  them, and a symbol gets `declaration: true`; `find` and `outline` show the
-  kind as `declaration`. Then (a) and (b).
+  them, and a symbol gets `declaration: true`; `find` and `outline` show them
+  as `declaration`.
+- **A function and its declarations are one target (b).** A declaration
+  joins the definitions of the same name, in C or C++, outside any type, with
+  as many parameters, and both visible across files (a `static` one only
+  within its own file). `def` and `show` list the definitions first and then
+  the declarations; `refs` and `rename` take them all, so renaming
+  `kmem_cache_alloc_noprof` edits `mm/slub.c` and `include/linux/slab.h`
+  together. Without build information, codix cannot tell two programs apart:
+  `tools/perf`'s own `mutex_lock` joins the kernel's, and the rename preview
+  shows it, for the reader to narrow with `--exclude-path`.
 - **The lost `#else` definition:** find whether the parse or the store drops
   the second symbol of an identical ID, keep both, and give the second an
   occurrence suffix (`…#14e7~2`). `def file:line:col` resolves the place, not
@@ -193,10 +202,11 @@ schema changes too: indexes are rebuilt.
 
 One branch, one commit each, the full local suite after each:
 
-1. **Ambiguity**: richer candidates; `show` takes overloads; `def` lists every
-   match (a).
-2. **Declarations and duplicate definitions**: `declaration` in the index,
-   declarations step aside (b); the `#else` definition kept with its own ID;
+1. **Ambiguity**: richer candidates; `def`, `show` and `refs` answer for
+   every match, the matches first (a).
+2. **Declarations and duplicate definitions**: `declaration` in the index; a
+   function and its declarations as one target for every command, rename
+   included (b); the `#else` definition kept with its own ID;
    `def file:line:col` resolves the place.
 3. **Languages**: the `*.h` heuristic; `languages` shows rules and
    search-only languages.
