@@ -2,4 +2,4 @@ src/Invoice.java:6:17   def   -                scoped
 src/Invoice.java:11:21  call  Invoice.withTax  scoped
 src/Report.java:5:24    call  Report.render    textual
 3 results
-2 scoped, 1 textual
+1 definition, 1 scoped, 1 textual

@@ -126,10 +126,20 @@ impl TextRender for RefsResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
         self.references.render_text(w, style)?;
         if self.references.total > 0 {
-            writeln!(w, "{} scoped, {} textual", self.scoped, self.textual)?;
+            let definitions = if self.definitions == 1 {
+                "definition"
+            } else {
+                "definitions"
+            };
+            writeln!(
+                w,
+                "{} {definitions}, {} scoped, {} textual",
+                self.definitions, self.scoped, self.textual
+            )?;
         }
         renamed(w, self.renamed.as_ref())?;
-        stale(w, self.possibly_stale)
+        stale(w, self.possibly_stale)?;
+        next(w, self.next.as_ref())
     }
 }
 
@@ -236,7 +246,17 @@ impl TextRender for FindResponse {
             };
             writeln!(w, "matched by {mode}")?;
         }
-        stale(w, self.possibly_stale)
+        stale(w, self.possibly_stale)?;
+        next(w, self.next.as_ref())
+    }
+}
+
+/// The next page, last so it is easy to take: the request fields to change.
+fn next<N: Serialize>(w: &mut dyn Write, next: Option<&N>) -> io::Result<()> {
+    match next.map(serde_json::to_string) {
+        Some(Ok(fields)) => writeln!(w, "next: {fields}"),
+        Some(Err(e)) => Err(io::Error::other(e)),
+        None => Ok(()),
     }
 }
 
@@ -407,7 +427,8 @@ impl TextRender for ShowResponse {
 impl TextRender for GrepResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
         self.matches.render_text(w, style)?;
-        stale(w, self.possibly_stale)
+        stale(w, self.possibly_stale)?;
+        next(w, self.next.as_ref())
     }
 }
 
@@ -467,13 +488,10 @@ fn footer<T>(page: &Paged<T>) -> String {
     if page.total == 0 {
         return "no results".to_owned();
     }
-    if page.offset == 0 && shown == page.total {
+    if shown == page.total {
         return format!("{} {noun}", page.total);
     }
-    match page.next_offset() {
-        Some(next) => format!("{shown} of {} {noun}; next: --offset {next}", page.total),
-        None => format!("{shown} of {} {noun}", page.total),
-    }
+    format!("{shown} of {} {noun}", page.total)
 }
 
 impl TextRender for ConfigResponse {
@@ -1001,7 +1019,6 @@ mod tests {
                 })
                 .collect(),
             total: n as usize,
-            offset: 0,
         }
     }
 

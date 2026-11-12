@@ -46,10 +46,8 @@ Options:
           
           [default: 50]
 
-      --offset <OFFSET>
-          Number of results to skip
-          
-          [default: 0]
+      --after <PLACE>
+          Return the results after this place, as a page's `next` gives it
 
   -h, --help
           Print help (see a summary with '-h')

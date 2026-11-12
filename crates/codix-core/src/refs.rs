@@ -254,19 +254,34 @@ impl Ranked for RefResult {
 /// What [`RefsOp`] answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RefsResponse {
-    /// The symbol's ID, or a local's `file:line:col`.
-    pub target: String,
-    /// The definition first, then references in its file, then by path.
+    /// The symbol's ID, and its overloads' after it; or a local's
+    /// `file:line:col`.
+    pub targets: Vec<String>,
+    /// The definitions first, then references in their file, then by path.
     pub references: Paged<RefResult>,
+    /// Definitions among the results, before paging.
+    pub definitions: usize,
     /// References bound by scope, before paging.
     pub scoped: usize,
     /// References matched by name only, before paging.
     pub textual: usize,
+    /// The next page, when results remain: the request with these fields
+    /// changed.
+    pub next: Option<RefsNext>,
     /// See [`crate::query::FindResponse::possibly_stale`].
     pub possibly_stale: bool,
     /// When the ID given was the symbol's before codix renamed it.
     #[serde(default)]
     pub renamed: Option<Renamed>,
+}
+
+/// What changes in a [`RefsRequest`] for its next page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct RefsNext {
+    /// Where the next page starts.
+    pub after: String,
+    /// The symbol's ID, so the next page keeps it through a rename.
+    pub symbol: String,
 }
 
 impl Outcome for RefsResponse {
@@ -297,7 +312,10 @@ impl Operation for RefsOp {
             })?;
         let model = &file.model;
         let first = &model.definitions[definitions[0]];
-        let target = symbol_result(ctx, &file, definitions[0], SCOPED).symbol_id;
+        let targets: Vec<String> = definitions
+            .iter()
+            .map(|&d| symbol_result(ctx, &file, d, SCOPED).symbol_id)
+            .collect();
         let enclosing = |byte: usize| {
             model
                 .enclosing_symbol(byte)
@@ -362,17 +380,36 @@ impl Operation for RefsOp {
         }
         results.retain(|r| scope.contains(&r.location.root_path));
         sort_results(&mut results, Some(file.id.as_str()));
-        let scoped = results.iter().filter(|r| r.confidence == SCOPED).count();
-        let textual = results.len() - scoped;
+        let (definitions, scoped, textual) = counts(&results);
+        // A symbol is pinned by its ID, which follows renames; a local has
+        // only its place.
+        let symbol = match first.defines {
+            Defines::Symbol(_) => targets[0].clone(),
+            Defines::Local { .. } => request.symbol.clone(),
+        };
+        let (references, after) = request.page.apply(results, Some(file.id.as_str()));
         Ok(RefsResponse {
-            target,
-            references: request.page.apply(results),
+            targets,
+            references,
+            definitions,
             scoped,
             textual,
+            next: after.map(|after| RefsNext { after, symbol }),
             possibly_stale,
             renamed,
         })
     }
+}
+
+/// The definitions, the references bound by scope, and those matched by name
+/// among `results`.
+fn counts(results: &[RefResult]) -> (usize, usize, usize) {
+    let definitions = results.iter().filter(|r| r.is_definition()).count();
+    let scoped = results
+        .iter()
+        .filter(|r| !r.is_definition() && r.confidence == SCOPED)
+        .count();
+    (definitions, scoped, results.len() - definitions - scoped)
 }
 
 /// The qualified name in a symbol ID, `prefix:path::Qualified.name#hash`.

@@ -14,12 +14,6 @@
           },
           "type": "array"
         },
-        "offset": {
-          "description": "Number of results skipped.",
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
         "total": {
           "description": "Number of results before paging.",
           "format": "uint",
@@ -29,8 +23,7 @@
       },
       "required": [
         "items",
-        "total",
-        "offset"
+        "total"
       ],
       "type": "object"
     },
@@ -83,6 +76,24 @@
       ],
       "type": "object"
     },
+    "RefsNext": {
+      "description": "What changes in a [`RefsRequest`] for its next page.",
+      "properties": {
+        "after": {
+          "description": "Where the next page starts.",
+          "type": "string"
+        },
+        "symbol": {
+          "description": "The symbol's ID, so the next page keeps it through a rename.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "after",
+        "symbol"
+      ],
+      "type": "object"
+    },
     "Renamed": {
       "description": "A symbol ID that codix renamed, followed to the symbol's ID now.",
       "properties": {
@@ -105,13 +116,30 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "What [`RefsOp`] answers.",
   "properties": {
+    "definitions": {
+      "description": "Definitions among the results, before paging.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "next": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RefsNext"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The next page, when results remain: the request with these fields\nchanged."
+    },
     "possibly_stale": {
       "description": "See [`crate::query::FindResponse::possibly_stale`].",
       "type": "boolean"
     },
     "references": {
       "$ref": "#/$defs/Paged",
-      "description": "The definition first, then references in its file, then by path."
+      "description": "The definitions first, then references in their file, then by path."
     },
     "renamed": {
       "anyOf": [
@@ -131,9 +159,12 @@
       "minimum": 0,
       "type": "integer"
     },
-    "target": {
-      "description": "The symbol's ID, or a local's `file:line:col`.",
-      "type": "string"
+    "targets": {
+      "description": "The symbol's ID, and its overloads' after it; or a local's\n`file:line:col`.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     },
     "textual": {
       "description": "References matched by name only, before paging.",
@@ -143,8 +174,9 @@
     }
   },
   "required": [
-    "target",
+    "targets",
     "references",
+    "definitions",
     "scoped",
     "textual",
     "possibly_stale"

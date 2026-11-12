@@ -48,9 +48,16 @@ fn sixty_results_are_capped_at_the_default_limit() {
 }
 
 #[test]
-fn offset_returns_the_next_page() {
+fn after_returns_the_next_page() {
     let (_guard, root) = indexed(&[("Box.java", &methods(60))]);
-    let out = codix(&root, &root, &["find", "m", "--prefix", "--offset", "50"]);
+    let first = codix(&root, &root, &["find", "m", "--prefix"]);
+    let next = first.stdout.lines().last().expect("a next page");
+    assert_eq!(next, r#"next: {"after":"Box.java:51:10","mode":"prefix"}"#);
+    let out = codix(
+        &root,
+        &root,
+        &["find", "m", "--prefix", "--after", "Box.java:51:10"],
+    );
     assert_eq!(out.code, Some(0));
     assert!(
         out.stdout

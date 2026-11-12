@@ -3,7 +3,7 @@
 //!
 //! An additive change is blessed with `CODIX_BLESS=1`. A breaking one needs
 //! `SCHEMA_VERSION` incremented first, which blesses into a new directory;
-//! blessing it in place fails.
+//! blessing it in place fails, once codix is released.
 
 use std::collections::BTreeSet;
 use std::fs;
@@ -14,6 +14,11 @@ use codix_core::render::{SCHEMA_VERSION, envelope_schema, error_schema};
 use codix_testkit::BLESS_VAR;
 use codix_testkit::schema::{Side, breaking_changes};
 use serde_json::Value;
+
+/// Whether a release has published the contract. Until then, nobody depends
+/// on it: `CODIX_BLESS=1` blesses breaking changes in place too, and without
+/// it they are still listed.
+const RELEASED: bool = false;
 
 fn generated() -> Vec<(String, Value, Side)> {
     let mut all = Vec::new();
@@ -62,8 +67,15 @@ fn json_schemas_match_their_snapshots() {
             Ok(snapshot) => {
                 let old: Value = serde_json::from_str(&snapshot).expect("snapshot JSON");
                 let breaking = breaking_changes(&old, schema, *side);
-                if !breaking.is_empty() {
-                    problems.push(format!("{file}: {bump}:\n  {}", breaking.join("\n  ")));
+                if !breaking.is_empty() && (RELEASED || !bless) {
+                    let fix = if RELEASED {
+                        bump.clone()
+                    } else {
+                        format!(
+                            "a breaking change, before a release: run with {BLESS_VAR}=1 to update the snapshot"
+                        )
+                    };
+                    problems.push(format!("{file}: {fix}:\n  {}", breaking.join("\n  ")));
                 } else if bless {
                     fs::write(&path, text).expect("write snapshot");
                 } else {

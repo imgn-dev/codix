@@ -48,5 +48,6 @@ Box.java:48:10  method  Box.m46  void m46()
 Box.java:49:10  method  Box.m47  void m47()
 Box.java:50:10  method  Box.m48  void m48()
 Box.java:51:10  method  Box.m49  void m49()
-50 of 60 results; next: --offset 50
+50 of 60 results
 matched by prefix
+next: {"after":"Box.java:51:10","mode":"prefix"}

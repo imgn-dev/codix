@@ -185,9 +185,21 @@ pub struct FindResponse {
     pub mode: MatchMode,
     /// Matching symbols.
     pub results: Paged<SymbolResult>,
+    /// The next page, when results remain: the request with these fields
+    /// changed. Fuzzy matches have none.
+    pub next: Option<FindNext>,
     /// Whether another process held the write lock, so changed files could
     /// not be reindexed first.
     pub possibly_stale: bool,
+}
+
+/// What changes in a [`FindRequest`] for its next page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct FindNext {
+    /// Where the next page starts.
+    pub after: String,
+    /// The mode that matched, so the next page keeps it.
+    pub mode: MatchMode,
 }
 
 impl Outcome for FindResponse {
@@ -213,7 +225,7 @@ impl Operation for FindOp {
                 && (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
                 && (request.languages.is_empty() || request.languages.contains(&hit.language))
         };
-        let ((mode, results), possibly_stale) = lookup(ctx, project, &config, |snapshot| {
+        let ((mode, results, next), possibly_stale) = lookup(ctx, project, &config, |snapshot| {
             let mut last = (modes[modes.len() - 1], Vec::new());
             for &mode in &modes {
                 let hits: Vec<SymbolHit> = snapshot
@@ -234,21 +246,32 @@ impl Operation for FindOp {
                 .into_iter()
                 .map(|hit| SymbolResult::new(ctx, hit))
                 .collect();
-            if mode != MatchMode::Fuzzy {
+            let (page, next) = if mode == MatchMode::Fuzzy {
+                if request.page.after().is_some() {
+                    return Err(Error::Usage {
+                        cause: "fuzzy matches are ranked, not paged".to_owned(),
+                        hint: "raise --limit, or look the name up with --exact or --prefix"
+                            .to_owned(),
+                    });
+                }
+                (request.page.first(results), None)
+            } else {
                 sort_results(&mut results, None);
-            }
+                let (page, after) = request.page.apply(results, None);
+                (page, after.map(|after| FindNext { after, mode }))
+            };
             // Only the page is returned, so only its files need to be current.
-            let page = request.page.apply(results);
             let paths = distinct(
                 page.items
                     .iter()
                     .map(|r| r.location.root_path.as_str().to_owned()),
             );
-            Ok(((mode, page), paths))
+            Ok(((mode, page, next), paths))
         })?;
         Ok(FindResponse {
             mode,
             results,
+            next,
             possibly_stale,
         })
     }
@@ -620,9 +643,19 @@ impl Ranked for GrepMatch {
 pub struct GrepResponse {
     /// Matches, by path and position.
     pub matches: Paged<GrepMatch>,
+    /// The next page, when matches remain: the request with these fields
+    /// changed.
+    pub next: Option<GrepNext>,
     /// Whether another process held the write lock, so the scan before the
     /// search could not run.
     pub possibly_stale: bool,
+}
+
+/// What changes in a [`GrepRequest`] for its next page.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct GrepNext {
+    /// Where the next page starts.
+    pub after: String,
 }
 
 impl Outcome for GrepResponse {
@@ -682,8 +715,10 @@ impl Operation for GrepOp {
             }
         }
         sort_results(&mut matches, None);
+        let (matches, after) = request.page.apply(matches, None);
         Ok(GrepResponse {
-            matches: request.page.apply(matches),
+            matches,
+            next: after.map(|after| GrepNext { after }),
             possibly_stale,
         })
     }

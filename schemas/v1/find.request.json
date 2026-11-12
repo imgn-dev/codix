@@ -29,6 +29,14 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Request for [`FindOp`].",
   "properties": {
+    "after": {
+      "default": null,
+      "description": "Return the results after this place, as a page's `next` gives it.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "here": {
       "default": false,
       "description": "Limit results to the current directory's subtree.",
@@ -68,13 +76,6 @@
       ],
       "default": null,
       "description": "How to match: `exact`, `prefix` and `fuzzy` ignore case, `glob` matches\nthe qualified name; by default exact, then prefix, then fuzzy."
-    },
-    "offset": {
-      "default": 0,
-      "description": "Number of results to skip.",
-      "format": "uint",
-      "minimum": 0,
-      "type": "integer"
     },
     "path": {
       "default": [],

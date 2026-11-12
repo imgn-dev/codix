@@ -437,14 +437,14 @@ struct PageArgs {
     /// Maximum number of results.
     #[arg(long, default_value_t = DEFAULT_LIMIT)]
     limit: usize,
-    /// Number of results to skip.
-    #[arg(long, default_value_t = 0)]
-    offset: usize,
+    /// Return the results after this place, as a page's `next` gives it.
+    #[arg(long, value_name = "PLACE")]
+    after: Option<String>,
 }
 
 impl PageArgs {
     fn page(&self) -> Result<Page, Error> {
-        Page::new(self.limit, self.offset)
+        Page::new(self.limit, self.after.clone())
     }
 }
 

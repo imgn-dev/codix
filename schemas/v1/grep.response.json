@@ -55,6 +55,19 @@
       ],
       "type": "object"
     },
+    "GrepNext": {
+      "description": "What changes in a [`GrepRequest`] for its next page.",
+      "properties": {
+        "after": {
+          "description": "Where the next page starts.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "after"
+      ],
+      "type": "object"
+    },
     "Paged": {
       "description": "One page of results and the total they were taken from.",
       "properties": {
@@ -65,12 +78,6 @@
           },
           "type": "array"
         },
-        "offset": {
-          "description": "Number of results skipped.",
-          "format": "uint",
-          "minimum": 0,
-          "type": "integer"
-        },
         "total": {
           "description": "Number of results before paging.",
           "format": "uint",
@@ -80,8 +87,7 @@
       },
       "required": [
         "items",
-        "total",
-        "offset"
+        "total"
       ],
       "type": "object"
     }
@@ -92,6 +98,17 @@
     "matches": {
       "$ref": "#/$defs/Paged",
       "description": "Matches, by path and position."
+    },
+    "next": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GrepNext"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The next page, when matches remain: the request with these fields\nchanged."
     },
     "possibly_stale": {
       "description": "Whether another process held the write lock, so the scan before the\nsearch could not run.",

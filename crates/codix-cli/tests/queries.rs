@@ -273,14 +273,14 @@ fn refs_of_a_private_field_or_a_local_stay_in_their_file() {
         field.stdout,
         "src/Invoice.java:4:18  def   -              scoped\n\
          src/Invoice.java:7:16  read  Invoice.total  scoped\n\
-         2 results\n2 scoped, 0 textual\n"
+         2 results\n1 definition, 1 scoped, 0 textual\n"
     );
     let local = codix(&root, &root.join("src"), &["refs", "Invoice.java:11:14"]);
     assert_eq!(
         local.stdout,
         "Invoice.java:11:14  def   -                scoped\n\
          Invoice.java:12:16  read  Invoice.withTax  scoped\n\
-         2 results\n2 scoped, 0 textual\n"
+         2 results\n1 definition, 1 scoped, 0 textual\n"
     );
 }
 

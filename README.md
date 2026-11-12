@@ -126,8 +126,9 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   read in them.
 
 Queries keep the index fresh themselves: lookups recheck the files they return,
-and `grep` scans for changes first. Results are capped at 50; `--limit` and
-`--offset` page through the rest.
+and `grep` scans for changes first. Results are capped at 50 (`--limit`); the
+last line names the next page, which starts after the last result shown
+(`--after`), so results fixed meanwhile shift nothing.
 
 Every command takes `--json` for stable, versioned output (`schema_version`).
 Errors have a stable code, a cause and a hint:
