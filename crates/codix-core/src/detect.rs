@@ -189,34 +189,119 @@ fn shebang(text: &str) -> Option<&str> {
         .map(|w| w.rsplit('/').next().unwrap_or(w))
 }
 
-/// The heuristic for an ambiguous extension, if it is one.
-fn heuristic(extension: &str) -> Option<fn(&str) -> &'static str> {
-    match extension {
-        "h" => Some(c_or_cpp),
-        "m" => Some(objective_c_or_matlab),
-        "pl" => Some(perl_or_prolog),
-        _ => None,
-    }
+/// An extension several languages use, and how codix chooses.
+#[derive(Debug, Clone, Copy)]
+pub struct Ambiguous {
+    /// The extension, without the dot.
+    pub extension: &'static str,
+    /// The languages it may be, the default first.
+    pub languages: &'static [&'static str],
+    /// How the file's content decides.
+    pub rule: &'static str,
+    heuristic: fn(&str) -> &'static str,
 }
 
+/// Every ambiguous extension.
+pub const AMBIGUOUS: &[Ambiguous] = &[
+    Ambiguous {
+        extension: "h",
+        languages: &["c", "cpp"],
+        rule: "C, or C++ when its code has a class, namespace, template, access specifier, std::, nullptr or constexpr",
+        heuristic: c_or_cpp,
+    },
+    Ambiguous {
+        extension: "m",
+        languages: &["objective-c", "matlab"],
+        rule: "Objective-C, or MATLAB when it has functions or % comments and no @interface",
+        heuristic: objective_c_or_matlab,
+    },
+    Ambiguous {
+        extension: "pl",
+        languages: &["perl", "prolog"],
+        rule: "Perl, or Prolog when it has :- and no Perl statement",
+        heuristic: perl_or_prolog,
+    },
+];
+
+/// The heuristic for an ambiguous extension, if it is one.
+fn heuristic(extension: &str) -> Option<fn(&str) -> &'static str> {
+    AMBIGUOUS
+        .iter()
+        .find(|a| a.extension == extension)
+        .map(|a| a.heuristic)
+}
+
+/// C++ only on C++ code: a declaration only C++ has at the start of a line,
+/// or a C++ token, outside comments and strings. A word in a comment, such
+/// as "size class", does not count.
 fn c_or_cpp(text: &str) -> &'static str {
-    const CPP: &[&str] = &[
+    const LINE_STARTS: &[&str] = &[
         "class ",
         "namespace ",
         "template<",
         "template <",
-        "std::",
         "public:",
         "private:",
-        "#include <iostream>",
-        "nullptr",
-        "constexpr",
+        "protected:",
+        "using namespace ",
     ];
-    if CPP.iter().any(|marker| text.contains(marker)) {
-        "cpp"
-    } else {
-        "c"
+    const TOKENS: &[&str] = &["std::", "nullptr", "constexpr", "#include <iostream>"];
+    let code = without_comments_and_strings(text);
+    let cpp = code.lines().any(|line| {
+        let line = line.trim_start();
+        LINE_STARTS.iter().any(|start| line.starts_with(start))
+    }) || TOKENS.iter().any(|token| code.contains(token));
+    if cpp { "cpp" } else { "c" }
+}
+
+/// `text` with its C comments and string and character literals blanked out,
+/// line breaks kept.
+fn without_comments_and_strings(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '/' if chars.peek() == Some(&'/') => {
+                for c in chars.by_ref() {
+                    if c == '\n' {
+                        out.push('\n');
+                        break;
+                    }
+                }
+            }
+            '/' if chars.peek() == Some(&'*') => {
+                chars.next();
+                let mut star = false;
+                for c in chars.by_ref() {
+                    if c == '\n' {
+                        out.push('\n');
+                    }
+                    if star && c == '/' {
+                        break;
+                    }
+                    star = c == '*';
+                }
+                out.push(' ');
+            }
+            '"' | '\'' => {
+                let quote = c;
+                let mut escaped = false;
+                for c in chars.by_ref() {
+                    if c == '\n' {
+                        out.push('\n');
+                        break;
+                    }
+                    if !escaped && c == quote {
+                        break;
+                    }
+                    escaped = !escaped && c == '\\';
+                }
+                out.push(' ');
+            }
+            c => out.push(c),
+        }
     }
+    out
 }
 
 fn objective_c_or_matlab(text: &str) -> &'static str {
@@ -253,6 +338,15 @@ fn perl_or_prolog(text: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_c_header_is_cpp_only_on_cpp_code() {
+        let c = "/* Each size class has its own cache. */\nstruct page; // the class of pages\nconst char *s = \"namespace \";\n";
+        assert_eq!(c_or_cpp(c), "c");
+        assert_eq!(c_or_cpp("int f(void);\n  class Widget {\n};\n"), "cpp");
+        assert_eq!(c_or_cpp("void f(int *p = nullptr);\n"), "cpp");
+        assert_eq!(c_or_cpp("struct s {\nprivate:\n  int x;\n};\n"), "cpp");
+    }
 
     #[test]
     fn modelines() {

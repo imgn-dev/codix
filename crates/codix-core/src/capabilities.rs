@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::daemon::DaemonRecord;
+use crate::detect::AMBIGUOUS;
 use crate::op::{Context, Operation, Outcome};
 use crate::store::{FileStatus, Store};
 
@@ -220,9 +221,22 @@ pub struct LanguageInfo {
 pub struct LanguagesResponse {
     /// Every known language, sorted by name.
     pub languages: Vec<LanguageInfo>,
+    /// The extensions several languages use, and how codix chooses.
+    pub ambiguous: Vec<AmbiguousExtension>,
     /// Every provider known, available or found as a plugin, sorted by kind
     /// and name; one name may be listed more than once, used or not.
     pub providers: Vec<ProviderInfo>,
+}
+
+/// An extension several languages use.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct AmbiguousExtension {
+    /// The extension, without the dot.
+    pub extension: String,
+    /// The languages it may be, the default first.
+    pub languages: Vec<String>,
+    /// How the file's content decides.
+    pub rule: String,
 }
 
 /// One provider: where it comes from and whether it is used.
@@ -354,7 +368,14 @@ impl Operation for LanguagesOp {
     type Response = LanguagesResponse;
 
     fn run(&self, _: &Context, _: LanguagesRequest) -> Result<LanguagesResponse, Error> {
-        let languages = capabilities()
+        let ambiguous_of = |name: &str| -> Vec<String> {
+            AMBIGUOUS
+                .iter()
+                .filter(|a| a.languages.contains(&name))
+                .map(|a| a.extension.to_owned())
+                .collect()
+        };
+        let mut languages: Vec<LanguageInfo> = capabilities()
             .languages
             .into_iter()
             .map(|support| {
@@ -365,16 +386,39 @@ impl Operation for LanguagesOp {
                         .map(|(key, _)| (*key).to_owned())
                         .collect()
                 };
+                let mut extensions = of(known::EXTENSIONS);
+                extensions.extend(ambiguous_of(&support.name));
                 LanguageInfo {
-                    extensions: of(known::EXTENSIONS),
+                    extensions,
                     filenames: of(known::FILENAMES),
                     name: support.name,
                     tier: support.tier,
                 }
             })
             .collect();
+        // Languages an ambiguous extension can be, which no provider parses:
+        // their files are text.
+        for name in AMBIGUOUS.iter().flat_map(|a| a.languages.iter()) {
+            if !languages.iter().any(|l| l.name == *name) {
+                languages.push(LanguageInfo {
+                    name: (*name).to_owned(),
+                    tier: Tier::Search,
+                    extensions: ambiguous_of(name),
+                    filenames: Vec::new(),
+                });
+            }
+        }
+        languages.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(LanguagesResponse {
             languages,
+            ambiguous: AMBIGUOUS
+                .iter()
+                .map(|a| AmbiguousExtension {
+                    extension: a.extension.to_owned(),
+                    languages: a.languages.iter().map(|l| (*l).to_owned()).collect(),
+                    rule: a.rule.to_owned(),
+                })
+                .collect(),
             providers: providers(),
         })
     }

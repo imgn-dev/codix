@@ -1,5 +1,31 @@
 {
   "$defs": {
+    "AmbiguousExtension": {
+      "description": "An extension several languages use.",
+      "properties": {
+        "extension": {
+          "description": "The extension, without the dot.",
+          "type": "string"
+        },
+        "languages": {
+          "description": "The languages it may be, the default first.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "rule": {
+          "description": "How the file's content decides.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "extension",
+        "languages",
+        "rule"
+      ],
+      "type": "object"
+    },
     "LanguageInfo": {
       "description": "One language and the files it covers.",
       "properties": {
@@ -184,6 +210,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "What `languages` lists.",
   "properties": {
+    "ambiguous": {
+      "description": "The extensions several languages use, and how codix chooses.",
+      "items": {
+        "$ref": "#/$defs/AmbiguousExtension"
+      },
+      "type": "array"
+    },
     "languages": {
       "description": "Every known language, sorted by name.",
       "items": {
@@ -201,6 +234,7 @@
   },
   "required": [
     "languages",
+    "ambiguous",
     "providers"
   ],
   "title": "LanguagesResponse",

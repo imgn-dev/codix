@@ -41,7 +41,19 @@ fn languages_lists_every_known_language() {
     let json: serde_json::Value =
         serde_json::from_str(&run(CODIX, &["languages", "--json"]).stdout).expect("JSON");
     let languages = json["result"]["languages"].as_array().expect("languages");
-    assert_eq!(languages.len(), codix_provider::known::LANGUAGES.len());
+    // Every known language, and those an ambiguous extension may be, which
+    // no provider parses.
+    let names: Vec<&str> = languages
+        .iter()
+        .filter_map(|l| l["name"].as_str())
+        .collect();
+    for known in codix_provider::known::LANGUAGES {
+        assert!(names.contains(known), "{known}");
+    }
+    for recognized in ["matlab", "objective-c", "perl", "prolog"] {
+        assert!(names.contains(&recognized), "{recognized}");
+    }
+    assert_eq!(json["result"]["ambiguous"][0]["extension"], "h");
     let java = languages
         .iter()
         .find(|l| l["name"] == "java")

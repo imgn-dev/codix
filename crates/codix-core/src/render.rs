@@ -863,6 +863,11 @@ impl TextRender for LanguagesResponse {
                 )?;
             }
         }
+        writeln!(w, "ambiguous extensions:")?;
+        for a in &self.ambiguous {
+            let extension = format!("*.{}", a.extension);
+            writeln!(w, "  {extension:5}{COLUMN_GAP}{}", a.rule)?;
+        }
         render_providers(w, &self.providers)
     }
 }
