@@ -58,6 +58,7 @@ use std::ffi::OsString;
 use std::io::{self, IsTerminal, Write};
 use std::path::PathBuf;
 use std::process::ExitCode;
+use std::sync::OnceLock;
 
 use clap::error::ErrorKind;
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
@@ -86,6 +87,13 @@ use codix_core::store::MatchMode;
 use codix_core::undo::{UndoOp, UndoRequest};
 use codix_daemon::client::{self, Route};
 use codix_daemon::{control, server};
+
+use crate::invocation::Invocation;
+
+mod invocation;
+
+/// The command line, for the next page's command.
+static INVOCATION: OnceLock<Invocation> = OnceLock::new();
 
 /// Headless code index for LLM agents.
 #[derive(Parser)]
@@ -470,11 +478,13 @@ impl Output {
                 color: color_allowed && io::stdout().is_terminal(),
                 show_origin: false,
                 tools: false,
+                command: Some(command_line),
             },
             stderr: Style {
                 color: color_allowed && io::stderr().is_terminal(),
                 show_origin: false,
                 tools: false,
+                command: Some(command_line),
             },
             warnings: Vec::new(),
         }
@@ -542,6 +552,13 @@ fn finish(written: io::Result<()>, code: u8) -> u8 {
         Err(e) if e.kind() != io::ErrorKind::BrokenPipe => exit::INTERNAL,
         _ => code,
     }
+}
+
+/// This command line with the request `fields` changed.
+fn command_line(fields: &[(&'static str, String)]) -> String {
+    INVOCATION
+        .get()
+        .map_or_else(String::new, |invocation| invocation.next(fields))
 }
 
 /// Runs an operation through the project's daemon when one runs, otherwise
@@ -673,7 +690,9 @@ fn usage_error(error: &clap::Error) -> Error {
 /// prints them, and other failures are rendered as `usage` errors.
 fn parse() -> Result<Cli, ExitCode> {
     let args: Vec<OsString> = env::args_os().collect();
-    described(Cli::command())
+    let command = described(Cli::command());
+    INVOCATION.get_or_init(|| Invocation::new(&args, &command));
+    command
         .try_get_matches_from(&args)
         .and_then(|matches| Cli::from_arg_matches(&matches))
         .map_err(|e| {

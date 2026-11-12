@@ -39,6 +39,28 @@ pub struct Style {
     pub show_origin: bool,
     /// Whether next steps name MCP tools rather than CLI commands.
     pub tools: bool,
+    /// The CLI's command line for its request with these fields changed;
+    /// without one, a changed request is shown as JSON arguments.
+    pub command: Option<CommandLine>,
+}
+
+/// Request fields to change, in order.
+pub type Fields = Vec<(&'static str, String)>;
+
+/// A command line for a request with some [`Fields`] changed.
+pub type CommandLine = fn(&[(&'static str, String)]) -> String;
+
+/// A request with `fields` changed: a command to copy, or the arguments to
+/// change.
+fn request(style: Style, fields: &[(&'static str, String)]) -> String {
+    if let Some(command) = style.command {
+        return command(fields);
+    }
+    let arguments: serde_json::Map<String, serde_json::Value> = fields
+        .iter()
+        .map(|(field, value)| ((*field).to_owned(), value.clone().into()))
+        .collect();
+    serde_json::Value::Object(arguments).to_string()
 }
 
 impl Style {
@@ -139,7 +161,11 @@ impl TextRender for RefsResponse {
         }
         renamed(w, self.renamed.as_ref())?;
         stale(w, self.possibly_stale)?;
-        next(w, self.next.as_ref())
+        let fields = self
+            .next
+            .as_ref()
+            .map(|n| vec![("symbol", n.symbol.clone()), ("after", n.after.clone())]);
+        next(w, style, fields)
     }
 }
 
@@ -238,24 +264,36 @@ impl TextRender for FindResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
         self.results.render_text(w, style)?;
         if self.results.total > 0 && self.mode != MatchMode::Exact {
-            let mode = match self.mode {
-                MatchMode::Exact => "exact",
-                MatchMode::Prefix => "prefix",
-                MatchMode::Fuzzy => "fuzzy",
-                MatchMode::Glob => "glob",
-            };
-            writeln!(w, "matched by {mode}")?;
+            writeln!(w, "matched by {}", mode_name(self.mode))?;
         }
         stale(w, self.possibly_stale)?;
-        next(w, self.next.as_ref())
+        let fields = self.next.as_ref().map(|n| {
+            vec![
+                ("mode", mode_name(n.mode).to_owned()),
+                ("after", n.after.clone()),
+            ]
+        });
+        next(w, style, fields)
     }
 }
 
-/// The next page, last so it is easy to take: the request fields to change.
-fn next<N: Serialize>(w: &mut dyn Write, next: Option<&N>) -> io::Result<()> {
-    match next.map(serde_json::to_string) {
-        Some(Ok(fields)) => writeln!(w, "next: {fields}"),
-        Some(Err(e)) => Err(io::Error::other(e)),
+fn mode_name(mode: MatchMode) -> &'static str {
+    match mode {
+        MatchMode::Exact => "exact",
+        MatchMode::Prefix => "prefix",
+        MatchMode::Fuzzy => "fuzzy",
+        MatchMode::Glob => "glob",
+    }
+}
+
+/// The next page, last so it is easy to take: alone on its line for the CLI,
+/// as arguments for tools.
+fn next(w: &mut dyn Write, style: Style, fields: Option<Fields>) -> io::Result<()> {
+    match fields {
+        Some(fields) if style.command.is_some() => {
+            writeln!(w, "next page:\n{}", request(style, &fields))
+        }
+        Some(fields) => writeln!(w, "next: {}", request(style, &fields)),
         None => Ok(()),
     }
 }
@@ -428,7 +466,8 @@ impl TextRender for GrepResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
         self.matches.render_text(w, style)?;
         stale(w, self.possibly_stale)?;
-        next(w, self.next.as_ref())
+        let fields = self.next.as_ref().map(|n| vec![("after", n.after.clone())]);
+        next(w, style, fields)
     }
 }
 
@@ -1030,6 +1069,7 @@ mod tests {
                 color,
                 show_origin: false,
                 tools: false,
+                command: None,
             },
         )
         .unwrap();
@@ -1081,6 +1121,7 @@ mod tests {
                         color: false,
                         show_origin: false,
                         tools,
+                        command: None,
                     },
                 )
                 .unwrap();
@@ -1139,6 +1180,7 @@ apply with: codix apply 3f9a2c41
                 color: false,
                 show_origin: false,
                 tools: false,
+                command: None,
             },
         )
         .unwrap();
@@ -1166,6 +1208,7 @@ apply with: codix apply 3f9a2c41
                 color: true,
                 show_origin: false,
                 tools: false,
+                command: None,
             },
         )
         .unwrap();

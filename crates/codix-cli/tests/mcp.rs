@@ -180,6 +180,23 @@ fn results_carry_the_cli_text_only() {
 
 #[cfg(with_lang_java)]
 #[test]
+fn a_next_page_is_the_arguments_to_change() {
+    let (_guard, root) = indexed(CODIX, BILLING);
+    let mut client = Client::start(&root);
+    let first = client.call(2, "find", &json!({ "query": "total", "limit": 1 }));
+    let next = r#"next: {"after":"src/Cart.java","mode":"exact"}"#;
+    assert_eq!(text(&first).lines().last(), Some(next), "{first}");
+    let second = client.call(
+        3,
+        "find",
+        &json!({ "query": "total", "limit": 1, "after": "src/Cart.java", "mode": "exact" }),
+    );
+    assert!(text(&second).starts_with("src/Invoice.java:2:"), "{second}");
+    assert!(!text(&second).contains("next"), "{second}");
+}
+
+#[cfg(with_lang_java)]
+#[test]
 fn one_server_answers_for_several_projects() {
     let (_a_guard, a) = indexed(CODIX, &[("A.java", "class Alpha {}\n")]);
     let (_b_guard, b) = indexed(CODIX, &[("B.java", "class Beta {}\n")]);

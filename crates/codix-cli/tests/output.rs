@@ -23,7 +23,11 @@ fn check(args: &[&str], name: &str, expected_code: i32) {
     let text = codix(&root, &root, args);
     assert_eq!(text.code, Some(expected_code), "{}", text.stderr);
     assert_eq!(text.stderr, "");
-    assert_golden(golden(&format!("{name}.txt")), &text.stdout);
+    // The next page's command starts with the program as invoked.
+    assert_golden(
+        golden(&format!("{name}.txt")),
+        &text.stdout.replace(CODIX, "codix"),
+    );
 
     let mut json_args = args.to_vec();
     json_args.push("--json");
@@ -52,7 +56,10 @@ fn after_returns_the_next_page() {
     let (_guard, root) = indexed(&[("Box.java", &methods(60))]);
     let first = codix(&root, &root, &["find", "m", "--prefix"]);
     let next = first.stdout.lines().last().expect("a next page");
-    assert_eq!(next, r#"next: {"after":"Box.java:51:10","mode":"prefix"}"#);
+    assert_eq!(
+        next,
+        format!("{CODIX} find m --prefix --after Box.java:51:10")
+    );
     let out = codix(
         &root,
         &root,

@@ -273,6 +273,7 @@ where
         color: false,
         show_origin: false,
         tools: true,
+        command: None,
     };
     if let Err(e) = response.render_text(&mut rendered, style) {
         return failure(

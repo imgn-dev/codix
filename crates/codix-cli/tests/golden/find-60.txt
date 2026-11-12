@@ -50,4 +50,5 @@ Box.java:50:10  method  Box.m48  void m48()
 Box.java:51:10  method  Box.m49  void m49()
 50 of 60 results
 matched by prefix
-next: {"after":"Box.java:51:10","mode":"prefix"}
+next page:
+codix find m --prefix --after Box.java:51:10
