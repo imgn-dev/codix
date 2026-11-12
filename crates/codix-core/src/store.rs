@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 pub use journal::{EntryState, JournalEntry, JournalFile};
 pub use previews::PreviewRow;
 pub use resolutions::Resolution;
+pub(crate) use search::edit_distance;
 pub use search::{MatchMode, NameQuery};
 
 use crate::Error;

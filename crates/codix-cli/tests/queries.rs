@@ -48,10 +48,11 @@ fn find_falls_back_to_fuzzy() {
     let (_guard, root) = indexed(BILLING);
     let out = codix(&root, &root, &["find", "Invioce"]);
     assert!(
-        out.stdout.ends_with("1 result\nmatched by fuzzy\n"),
+        out.stdout.starts_with("closest name: Invoice\n"),
         "{}",
         out.stdout
     );
+    assert!(out.stdout.ends_with("1 result\n"), "{}", out.stdout);
 }
 
 #[test]

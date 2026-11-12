@@ -183,10 +183,14 @@ pub struct FindRequest {
 pub struct FindResponse {
     /// The mode that matched, or the last one tried.
     pub mode: MatchMode,
-    /// Matching symbols.
+    /// Matching symbols: for a fuzzy match, the symbols of the closest name.
     pub results: Paged<SymbolResult>,
+    /// The closest name, taken as the one meant, when matched by fuzzy.
+    pub corrected: Option<String>,
+    /// The other close names, closest first, when matched by fuzzy.
+    pub alternatives: Vec<Alternative>,
     /// The next page, when results remain: the request with these fields
-    /// changed. Fuzzy matches have none.
+    /// changed.
     pub next: Option<FindNext>,
     /// Whether another process held the write lock, so changed files could
     /// not be reindexed first.
@@ -198,8 +202,71 @@ pub struct FindResponse {
 pub struct FindNext {
     /// Where the next page starts.
     pub after: String,
-    /// The mode that matched, so the next page keeps it.
+    /// The mode that matched, so the next page keeps it; `exact` after a fuzzy
+    /// match.
     pub mode: MatchMode,
+    /// The corrected name, after a fuzzy match.
+    pub query: Option<String>,
+}
+
+/// A close name a fuzzy match did not take.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Alternative {
+    /// The name.
+    pub name: String,
+    /// Edits from the query to it, ignoring case.
+    pub distance: usize,
+    /// Its symbols, as `find <name> --exact` gives them.
+    pub symbols: usize,
+}
+
+/// The close names an alternative list shows.
+const ALTERNATIVES: usize = 8;
+
+/// Takes the closest of the names fuzzy `hits` hold as the one meant: its
+/// symbols, as an exact lookup gives them, and the other names, closest first.
+fn correct(
+    snapshot: &Snapshot<'_>,
+    query: &str,
+    hits: &[SymbolHit],
+    keep: &dyn Fn(&SymbolHit) -> bool,
+) -> Result<(String, Vec<SymbolHit>, Vec<Alternative>), Error> {
+    // Hits come closest first; exact lookups ignore case, so do names here.
+    let mut names: Vec<&str> = Vec::new();
+    for hit in hits {
+        let name = hit.symbol.name.as_str();
+        if !names
+            .iter()
+            .any(|n| n.to_lowercase() == name.to_lowercase())
+        {
+            names.push(name);
+        }
+    }
+    let exact = |name: &str| -> Result<Vec<SymbolHit>, Error> {
+        Ok(snapshot
+            .find(&NameQuery {
+                text: name.to_owned(),
+                mode: MatchMode::Exact,
+            })?
+            .into_iter()
+            .filter(|hit| keep(hit))
+            .collect())
+    };
+    let lower: Vec<char> = query.to_lowercase().chars().collect();
+    let mut alternatives = Vec::new();
+    for name in names.iter().skip(1).take(ALTERNATIVES) {
+        alternatives.push(Alternative {
+            name: (*name).to_owned(),
+            distance: distance(&lower, name),
+            symbols: exact(name)?.len(),
+        });
+    }
+    Ok((names[0].to_owned(), exact(names[0])?, alternatives))
+}
+
+fn distance(query: &[char], name: &str) -> usize {
+    let name: Vec<char> = name.to_lowercase().chars().collect();
+    crate::store::edit_distance(query, &name)
 }
 
 impl Outcome for FindResponse {
@@ -225,52 +292,64 @@ impl Operation for FindOp {
                 && (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
                 && (request.languages.is_empty() || request.languages.contains(&hit.language))
         };
-        let ((mode, results, next), possibly_stale) = lookup(ctx, project, &config, |snapshot| {
-            let mut last = (modes[modes.len() - 1], Vec::new());
-            for &mode in &modes {
-                let hits: Vec<SymbolHit> = snapshot
-                    .find(&NameQuery {
-                        text: request.query.clone(),
-                        mode,
-                    })?
+        let ((mode, results, next, correction), possibly_stale) =
+            lookup(ctx, project, &config, |snapshot| {
+                let mut last = (modes[modes.len() - 1], Vec::new());
+                for &mode in &modes {
+                    let hits: Vec<SymbolHit> = snapshot
+                        .find(&NameQuery {
+                            text: request.query.clone(),
+                            mode,
+                        })?
+                        .into_iter()
+                        .filter(|hit| keep(hit))
+                        .collect();
+                    if !hits.is_empty() {
+                        last = (mode, hits);
+                        break;
+                    }
+                }
+                let (mode, mut hits) = last;
+                let mut correction = None;
+                if mode == MatchMode::Fuzzy && !hits.is_empty() {
+                    let (name, exact, alternatives) =
+                        correct(snapshot, &request.query, &hits, &keep)?;
+                    hits = exact;
+                    correction = Some((name, alternatives));
+                }
+                let mut results: Vec<SymbolResult> = hits
                     .into_iter()
-                    .filter(|hit| keep(hit))
+                    .map(|hit| SymbolResult::new(ctx, hit))
                     .collect();
-                if !hits.is_empty() {
-                    last = (mode, hits);
-                    break;
-                }
-            }
-            let (mode, hits) = last;
-            let mut results: Vec<SymbolResult> = hits
-                .into_iter()
-                .map(|hit| SymbolResult::new(ctx, hit))
-                .collect();
-            let (page, next) = if mode == MatchMode::Fuzzy {
-                if request.page.after().is_some() {
-                    return Err(Error::Usage {
-                        cause: "fuzzy matches are ranked, not paged".to_owned(),
-                        hint: "raise --limit, or look the name up with --exact or --prefix"
-                            .to_owned(),
-                    });
-                }
-                (request.page.first(results), None)
-            } else {
                 sort_results(&mut results, None);
                 let (page, after) = request.page.apply(results, None);
-                (page, after.map(|after| FindNext { after, mode }))
-            };
-            // Only the page is returned, so only its files need to be current.
-            let paths = distinct(
-                page.items
-                    .iter()
-                    .map(|r| r.location.root_path.as_str().to_owned()),
-            );
-            Ok(((mode, page, next), paths))
-        })?;
+                let next = after.map(|after| match &correction {
+                    // Next pages look the corrected name up.
+                    Some((name, _)) => FindNext {
+                        after,
+                        mode: MatchMode::Exact,
+                        query: Some(name.clone()),
+                    },
+                    None => FindNext {
+                        after,
+                        mode,
+                        query: None,
+                    },
+                });
+                // Only the page is returned, so only its files need to be current.
+                let paths = distinct(
+                    page.items
+                        .iter()
+                        .map(|r| r.location.root_path.as_str().to_owned()),
+                );
+                Ok(((mode, page, next, correction), paths))
+            })?;
+        let (corrected, alternatives) = correction.unzip();
         Ok(FindResponse {
             mode,
             results,
+            corrected,
+            alternatives: alternatives.unwrap_or_default(),
             next,
             possibly_stale,
         })

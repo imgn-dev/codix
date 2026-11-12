@@ -165,7 +165,7 @@ pub const COMMANDS: &[Description] = &[
         name: "find",
         summary: "Find symbols by name: exact match, then prefix, then fuzzy.",
         when: "Instead of grep to locate a class, function or method: it matches names, not text, and returns IDs the other commands accept.",
-        returns: "Matching symbols with kind, location and ID, best match first.",
+        returns: "Matching symbols with kind, location and ID; for a misspelled name, the symbols of the closest name and the other close names.",
         tier: Some(Tier::Symbols),
         example: "codix find Invoice --kind class",
     },

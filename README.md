@@ -108,8 +108,9 @@ src/billing/Invoice.java:6:17  method  Invoice.total
 ```
 
 - `find` matches exactly, then by prefix, then fuzzily, and says which matched;
-  `--exact`, `--prefix`, `--fuzzy` and `--glob` (on qualified names, such as
-  `'Invoice.*'`) choose one. `--kind`, `--lang`, `--path` and `--here` narrow.
+  a misspelled name gives the symbols of the closest name, and the other close
+  names with the command for each. `--exact`, `--prefix`, `--fuzzy` and
+  `--glob` (on qualified names, such as `'Invoice.*'`) choose one. `--kind`, `--lang`, `--path` and `--here` narrow.
 - `def` gives the definition, or every overload of a name in one file;
   `--kind` and `--path` narrow an ambiguous name.
   Results carry symbol IDs, such as

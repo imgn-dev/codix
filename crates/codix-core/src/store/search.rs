@@ -120,7 +120,7 @@ fn fuzzy(
         let score = *seen.entry(name).or_insert_with_key(|name| {
             let lower = name.to_lowercase();
             let chars: Vec<char> = lower.chars().collect();
-            let distance = levenshtein(&query, &chars);
+            let distance = edit_distance(&query, &chars);
             let shared = trigrams
                 .iter()
                 .filter(|t| lower.contains(t.as_str()))
@@ -174,16 +174,24 @@ fn trigrams(chars: &[char]) -> Vec<String> {
     all
 }
 
-/// Edit distance between two strings of Unicode scalar values.
-fn levenshtein(a: &[char], b: &[char]) -> usize {
+/// Edit distance between two strings of Unicode scalar values, counting the
+/// swap of two adjacent characters, the most common typo, as one edit
+/// (optimal string alignment).
+pub(crate) fn edit_distance(a: &[char], b: &[char]) -> usize {
+    let mut before: Vec<usize> = vec![0; b.len() + 1];
     let mut previous: Vec<usize> = (0..=b.len()).collect();
     let mut current = vec![0; b.len() + 1];
     for (i, ca) in a.iter().enumerate() {
         current[0] = i + 1;
         for (j, cb) in b.iter().enumerate() {
             let substitution = previous[j] + usize::from(ca != cb);
-            current[j + 1] = substitution.min(previous[j + 1] + 1).min(current[j] + 1);
+            let mut best = substitution.min(previous[j + 1] + 1).min(current[j] + 1);
+            if i > 0 && j > 0 && *ca == b[j - 1] && a[i - 1] == *cb {
+                best = best.min(before[j - 1] + 1);
+            }
+            current[j + 1] = best;
         }
+        std::mem::swap(&mut before, &mut previous);
         std::mem::swap(&mut previous, &mut current);
     }
     previous[b.len()]
@@ -194,16 +202,19 @@ mod tests {
     use super::*;
 
     fn distance(a: &str, b: &str) -> usize {
-        levenshtein(
+        edit_distance(
             &a.chars().collect::<Vec<_>>(),
             &b.chars().collect::<Vec<_>>(),
         )
     }
 
     #[test]
-    fn edit_distance() {
+    fn edit_distances_count_a_swap_as_one() {
         assert_eq!(distance("invoice", "invoice"), 0);
-        assert_eq!(distance("invioce", "invoice"), 2);
+        assert_eq!(distance("invioce", "invoice"), 1);
+        assert_eq!(distance("getbaen", "getbean"), 1);
+        assert_eq!(distance("getbaen", "getbar"), 2);
+        assert_eq!(distance("ab", "ba"), 1);
         assert_eq!(distance("total", "totals"), 1);
         assert_eq!(distance("", "abc"), 3);
         assert_eq!(distance("café", "cafe"), 1);

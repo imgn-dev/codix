@@ -118,14 +118,6 @@ impl Page {
         let items = all.into_iter().skip(start).take(end - start).collect();
         (Paged { items, total }, next)
     }
-
-    /// Keeps the first results of `all`, which are ranked rather than sorted by
-    /// place, so cannot be paged further.
-    pub fn first<T>(&self, all: Vec<T>) -> Paged<T> {
-        let total = all.len();
-        let items = all.into_iter().take(self.limit).collect();
-        Paged { items, total }
-    }
 }
 
 impl Default for Page {
@@ -395,13 +387,6 @@ mod tests {
         assert_eq!(place("src/a.rs"), ("src/a.rs", None));
         assert_eq!(place("odd:name.rs"), ("odd:name.rs", None));
         assert_eq!(place("odd:1:x"), ("odd:1:x", None));
-    }
-
-    #[test]
-    fn first_keeps_ranked_results_without_a_next_page() {
-        let paged = page(2, None).first(vec![3, 1, 2]);
-        assert_eq!(paged.items, [3, 1]);
-        assert_eq!(paged.total, 3);
     }
 
     #[test]

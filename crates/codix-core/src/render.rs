@@ -18,8 +18,8 @@ use crate::page::{Location, Paged};
 use crate::previews::{DiscardResponse, PreviewsResponse, State};
 use crate::providers::MissingProvider;
 use crate::query::{
-    DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse, Renamed,
-    ShowResponse, SymbolResult,
+    Alternative, DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse,
+    Renamed, ShowResponse, SymbolResult,
 };
 use crate::refs::{RefResult, RefsResponse};
 use crate::scan::ScanReport;
@@ -262,19 +262,57 @@ const STALE: &str = "note: another codix process holds the write lock; results m
 
 impl TextRender for FindResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        if let Some(name) = &self.corrected {
+            writeln!(w, "closest name: {name}")?;
+        }
         self.results.render_text(w, style)?;
-        if self.results.total > 0 && self.mode != MatchMode::Exact {
+        if self.results.total > 0 && self.mode != MatchMode::Exact && self.corrected.is_none() {
             writeln!(w, "matched by {}", mode_name(self.mode))?;
         }
+        alternatives(w, style, &self.alternatives)?;
         stale(w, self.possibly_stale)?;
         let fields = self.next.as_ref().map(|n| {
-            vec![
-                ("mode", mode_name(n.mode).to_owned()),
-                ("after", n.after.clone()),
-            ]
+            let mut fields: Fields = n.query.iter().map(|q| ("query", q.clone())).collect();
+            fields.push(("mode", mode_name(n.mode).to_owned()));
+            fields.push(("after", n.after.clone()));
+            fields
         });
         next(w, style, fields)
     }
+}
+
+/// The close names a fuzzy match did not take, each with its request.
+fn alternatives(w: &mut dyn Write, style: Style, alternatives: &[Alternative]) -> io::Result<()> {
+    if alternatives.is_empty() {
+        return Ok(());
+    }
+    writeln!(w, "other names:")?;
+    let rows: Vec<Vec<String>> = alternatives
+        .iter()
+        .map(|a| {
+            let edits = if a.distance == 1 { "edit" } else { "edits" };
+            let symbols = if a.symbols == 1 { "symbol" } else { "symbols" };
+            let fields = [("query", a.name.clone()), ("mode", "exact".to_owned())];
+            vec![
+                a.name.clone(),
+                format!("{} {edits}, {} {symbols}", a.distance, a.symbols),
+                request(style, &fields),
+            ]
+        })
+        .collect();
+    let widths = column_widths(&rows);
+    for row in rows {
+        writeln!(
+            w,
+            "  {:name$}{COLUMN_GAP}{:about$}{COLUMN_GAP}{}",
+            row[0],
+            row[1],
+            row[2],
+            name = widths[0],
+            about = widths[1]
+        )?;
+    }
+    Ok(())
 }
 
 fn mode_name(mode: MatchMode) -> &'static str {

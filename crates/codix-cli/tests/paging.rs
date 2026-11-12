@@ -119,12 +119,58 @@ fn the_next_page_of_refs_keeps_its_symbol_through_a_rename() {
 }
 
 #[test]
-fn fuzzy_matches_are_one_page() {
-    let (_guard, root) = indexed(CODIX, &[("A.java", "class A { void total() {} }\n")]);
-    let found = json(&root, &["find", "totl"]);
-    assert_eq!(found["result"]["mode"], "fuzzy");
-    assert!(found["result"]["next"].is_null());
-    let paged = codix(&root, &["find", "totl", "--fuzzy", "--after", "A.java"]);
-    assert_eq!(paged.code, Some(2), "{}", paged.stderr);
-    assert!(paged.stderr.starts_with("error[usage]"), "{}", paged.stderr);
+fn a_fuzzy_find_shows_the_closest_name_and_offers_the_others() {
+    let class = "class A {\n    void total() {}\n    void totals() {}\n    void totaly() {}\n}\n";
+    let other = "class B {\n    void total() {}\n}\n";
+    let (_guard, root) = indexed(CODIX, &[("A.java", class), ("B.java", other)]);
+
+    let found = json(&root, &["find", "totalx", "--limit", "1"]);
+    let result = &found["result"];
+    assert_eq!(result["mode"], "fuzzy");
+    // All three names are one edit away: the first by name is taken.
+    assert_eq!(result["corrected"], "total");
+    assert_eq!(places(&result["results"]["items"]), ["A.java:2"]);
+    assert_eq!(result["results"]["total"], 2);
+    let names: Vec<(&str, u64, u64)> = result["alternatives"]
+        .as_array()
+        .expect("alternatives")
+        .iter()
+        .map(|a| {
+            (
+                a["name"].as_str().expect("a name"),
+                a["distance"].as_u64().expect("a distance"),
+                a["symbols"].as_u64().expect("a count"),
+            )
+        })
+        .collect();
+    assert_eq!(names, [("totals", 1, 1), ("totaly", 1, 1)]);
+    let next = &result["next"];
+    assert_eq!(next["query"], "total");
+    assert_eq!(next["mode"], "exact");
+    assert_eq!(next["after"], "A.java");
+
+    let text = codix(&root, &["find", "totalx", "--limit", "1"]);
+    assert!(
+        text.stdout.starts_with("closest name: total\n"),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        text.stdout
+            .contains("other names:\n  totals  1 edit, 1 symbol  "),
+        "{}",
+        text.stdout
+    );
+    let last = text.stdout.lines().last().expect("a next page");
+    assert!(
+        last.ends_with(" find total --limit 1 --exact --after A.java"),
+        "{last}"
+    );
+    let second = json(
+        &root,
+        &[
+            "find", "total", "--limit", "1", "--exact", "--after", "A.java",
+        ],
+    );
+    assert_eq!(places(&second["result"]["results"]["items"]), ["B.java:2"]);
 }

@@ -1,5 +1,32 @@
 {
   "$defs": {
+    "Alternative": {
+      "description": "A close name a fuzzy match did not take.",
+      "properties": {
+        "distance": {
+          "description": "Edits from the query to it, ignoring case.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "The name.",
+          "type": "string"
+        },
+        "symbols": {
+          "description": "Its symbols, as `find <name> --exact` gives them.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "distance",
+        "symbols"
+      ],
+      "type": "object"
+    },
     "FileId": {
       "description": "A file or directory identity: its root-relative path with `/` separators,\nthe case found on disk, and symlinks resolved. The root itself is `\"\"`.",
       "type": "string"
@@ -13,7 +40,14 @@
         },
         "mode": {
           "$ref": "#/$defs/MatchMode",
-          "description": "The mode that matched, so the next page keeps it."
+          "description": "The mode that matched, so the next page keeps it; `exact` after a fuzzy\nmatch."
+        },
+        "query": {
+          "description": "The corrected name, after a fuzzy match.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -143,6 +177,20 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "What [`FindOp`] answers.",
   "properties": {
+    "alternatives": {
+      "description": "The other close names, closest first, when matched by fuzzy.",
+      "items": {
+        "$ref": "#/$defs/Alternative"
+      },
+      "type": "array"
+    },
+    "corrected": {
+      "description": "The closest name, taken as the one meant, when matched by fuzzy.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "mode": {
       "$ref": "#/$defs/MatchMode",
       "description": "The mode that matched, or the last one tried."
@@ -156,7 +204,7 @@
           "type": "null"
         }
       ],
-      "description": "The next page, when results remain: the request with these fields\nchanged. Fuzzy matches have none."
+      "description": "The next page, when results remain: the request with these fields\nchanged."
     },
     "possibly_stale": {
       "description": "Whether another process held the write lock, so changed files could\nnot be reindexed first.",
@@ -164,12 +212,13 @@
     },
     "results": {
       "$ref": "#/$defs/Paged",
-      "description": "Matching symbols."
+      "description": "Matching symbols: for a fuzzy match, the symbols of the closest name."
     }
   },
   "required": [
     "mode",
     "results",
+    "alternatives",
     "possibly_stale"
   ],
   "title": "FindResponse",

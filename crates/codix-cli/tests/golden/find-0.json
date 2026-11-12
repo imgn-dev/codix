@@ -1,1 +1,1 @@
-{"schema_version":1,"command":"find","result":{"mode":"fuzzy","results":{"items":[],"total":0},"next":null,"possibly_stale":false},"warnings":[]}
+{"schema_version":1,"command":"find","result":{"mode":"fuzzy","results":{"items":[],"total":0},"corrected":null,"alternatives":[],"next":null,"possibly_stale":false},"warnings":[]}
