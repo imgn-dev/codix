@@ -1,0 +1,8 @@
+# CI's test runs (`cargo nextest run --profile ci`).
+[profile.ci]
+# Every failure, not only the first.
+fail-fast = false
+# A test still running after two minutes is reported, and stopped after six:
+# a hang fails with the test's name instead of holding the job until its
+# timeout.
+slow-timeout = { period = "120s", terminate-after = 3 }
