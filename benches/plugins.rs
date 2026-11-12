@@ -105,12 +105,18 @@ fn first_command_after_install(modular: &Path, repo: &Path, plugins: &Path) -> (
     assert!(status.success(), "the daemon did not start");
     std::fs::rename(&aside, &kotlin).expect("install the Kotlin plugin");
     let first = time(modular, repo, &["find", "getBean"]);
-    let status = Command::new(modular)
+    // That command stops the daemon, which runs without the plugin; one still
+    // running means the time measured is not that of the install.
+    let output = Command::new(modular)
         .args(["daemon", "stop"])
         .current_dir(repo)
-        .status()
+        .output()
         .expect("stop the daemon");
-    assert!(status.success(), "the daemon did not stop");
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "no daemon running\n",
+        "the first command after the install left the daemon running"
+    );
     let kotlin_files = kotlin_files(repo);
     (first, format!("kotlin, {kotlin_files} files"))
 }
