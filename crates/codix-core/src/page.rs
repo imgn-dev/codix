@@ -104,8 +104,16 @@ impl Page {
     ) -> (Paged<T>, Option<String>) {
         let total = all.len();
         if self.count {
+            let breakdown = breakdown(&all);
             let items = Vec::new();
-            return (Paged { items, total }, None);
+            return (
+                Paged {
+                    items,
+                    total,
+                    breakdown,
+                },
+                None,
+            );
         }
         let start = self.after.as_deref().map_or(0, |after| {
             let cursor = cursor(&all, after, anchor);
@@ -138,8 +146,21 @@ impl Page {
                 next = Some(last.root_path.as_str().to_owned());
             }
         }
+        // Paging on, a reader has chosen to read through.
+        let breakdown = if self.after.is_none() && end - start < total {
+            breakdown(&all)
+        } else {
+            Vec::new()
+        };
         let items = all.into_iter().skip(start).take(end - start).collect();
-        (Paged { items, total }, next)
+        (
+            Paged {
+                items,
+                total,
+                breakdown,
+            },
+            next,
+        )
     }
 }
 
@@ -160,6 +181,79 @@ pub struct Paged<T> {
     pub items: Vec<T>,
     /// Number of results before paging.
     pub total: usize,
+    /// Where the results are, when a first page does not hold them all or
+    /// they are counted: the places below the directory they share, most
+    /// results first, at most 8.
+    pub breakdown: Vec<Place>,
+}
+
+/// A directory or a file holding some of the results.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Place {
+    /// Path relative to the cwd, as `--path` takes it.
+    pub path: String,
+    /// Root-relative path.
+    pub root_path: String,
+    /// Results there.
+    pub count: usize,
+}
+
+/// The places a breakdown shows.
+const PLACES: usize = 8;
+
+/// The directories a result is in, outermost first.
+fn directory<T: Ranked>(r: &T) -> Vec<&str> {
+    let mut parts: Vec<&str> = r.location().root_path.as_str().split('/').collect();
+    parts.pop();
+    parts
+}
+
+/// Where `all` are: grouped by the first path component below the deepest
+/// directory they all share, a directory or a file directly in it. Nothing
+/// when they are all in one file.
+fn breakdown<T: Ranked>(all: &[T]) -> Vec<Place> {
+    let Some(first) = all.first() else {
+        return Vec::new();
+    };
+    let mut shared = directory(first);
+    for r in &all[1..] {
+        let parts = directory(r);
+        let same = shared
+            .iter()
+            .zip(&parts)
+            .take_while(|(a, b)| a == b)
+            .count();
+        shared.truncate(same);
+    }
+    let mut places: Vec<Place> = Vec::new();
+    for r in all {
+        let l = r.location();
+        let root = l.root_path.as_str();
+        let parts: Vec<&str> = root.split('/').collect();
+        let key = parts[..=shared.len()].join("/");
+        if let Some(place) = places.iter_mut().find(|p| p.root_path == key) {
+            place.count += 1;
+            continue;
+        }
+        // The path as shown from the cwd ends as the root-relative one does.
+        let tail = &root[key.len()..];
+        let path = l.path.strip_suffix(tail).unwrap_or(&key).to_owned();
+        places.push(Place {
+            path,
+            root_path: key,
+            count: 1,
+        });
+    }
+    if places.len() < 2 {
+        return Vec::new();
+    }
+    places.sort_by(|a, b| {
+        b.count
+            .cmp(&a.count)
+            .then_with(|| a.root_path.cmp(&b.root_path))
+    });
+    places.truncate(PLACES);
+    places
 }
 
 impl<T> Outcome for Paged<T> {
@@ -429,6 +523,68 @@ mod tests {
             page(usize::MAX, Some("a.rs")).apply(mentions(&["a.rs", "b.rs"], 2), None);
         assert_eq!(keys(&paged.items), ["b.rs:1:1", "b.rs:2:1"]);
         assert_eq!(next, None);
+    }
+
+    fn places(all: &[R]) -> Vec<(String, String, usize)> {
+        breakdown(all)
+            .into_iter()
+            .map(|p| (p.path, p.root_path, p.count))
+            .collect()
+    }
+
+    #[test]
+    fn a_breakdown_groups_below_the_shared_directory() {
+        let mut all = mentions(&["src/a/x.rs", "src/a/y.rs", "src/b/z.rs", "src/top.rs"], 1);
+        all.push(r(false, "src/a/deep/w.rs", 1, 1));
+        assert_eq!(
+            places(&all),
+            [
+                ("src/a".to_owned(), "src/a".to_owned(), 3),
+                ("src/b".to_owned(), "src/b".to_owned(), 1),
+                ("src/top.rs".to_owned(), "src/top.rs".to_owned(), 1),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_breakdown_shows_paths_from_the_cwd() {
+        let mut all = mentions(&["src/a/x.rs", "src/b/y.rs"], 1);
+        for r in &mut all {
+            r.1.path = format!("../{}", r.1.root_path.as_str());
+        }
+        assert_eq!(places(&all)[0].0, "../src/a");
+    }
+
+    #[test]
+    fn a_breakdown_needs_two_places_and_keeps_eight() {
+        assert_eq!(places(&mentions(&["src/a/x.rs"], 3)), []);
+        let files: Vec<String> = (0..10).map(|i| format!("d{i}/f.rs")).collect();
+        let files: Vec<&str> = files.iter().map(String::as_str).collect();
+        assert_eq!(places(&mentions(&files, 1)).len(), PLACES);
+    }
+
+    #[test]
+    fn only_a_first_page_that_does_not_fit_has_a_breakdown() {
+        let all = || mentions(&["a/x.rs", "b/y.rs"], 2);
+        assert_eq!(page(10, None).apply(all(), None).0.breakdown.len(), 0);
+        assert_eq!(page(2, None).apply(all(), None).0.breakdown.len(), 2);
+        assert_eq!(
+            page(1, Some("a/x.rs:1:1"))
+                .apply(all(), None)
+                .0
+                .breakdown
+                .len(),
+            0
+        );
+        assert_eq!(
+            page(10, None)
+                .counted()
+                .apply(all(), None)
+                .0
+                .breakdown
+                .len(),
+            2
+        );
     }
 
     #[test]

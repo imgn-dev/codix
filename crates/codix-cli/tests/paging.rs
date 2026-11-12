@@ -189,7 +189,13 @@ fn count_gives_the_totals_and_all_every_result() {
 
     let counted = codix(&root, &["grep", "legacy\\(", "--count"]);
     assert_eq!(counted.code, Some(0), "{}", counted.stderr);
-    assert_eq!(counted.stdout, "6 results\n");
+    assert!(
+        counted
+            .stdout
+            .starts_with("6 results\nby place:\n  2  A.java  "),
+        "{}",
+        counted.stdout
+    );
     let counted = json(&root, &["grep", "legacy\\(", "--count"]);
     assert_eq!(counted["result"]["matches"]["total"], 6);
     assert_eq!(counted["result"]["matches"]["items"], serde_json::json!([]));
@@ -204,4 +210,54 @@ fn count_gives_the_totals_and_all_every_result() {
 
     let both = codix(&root, &["grep", "legacy\\(", "--all", "--limit", "2"]);
     assert_eq!(both.code, Some(2), "{}", both.stderr);
+}
+
+#[test]
+fn results_that_do_not_fit_say_where_they_are() {
+    let files: Vec<(String, String)> = [("src/a", "A"), ("src/a", "B"), ("src/b", "C")]
+        .iter()
+        .map(|(dir, c)| (format!("{dir}/{c}.java"), two_calls(c, "legacy")))
+        .collect();
+    let files: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(p, c)| (p.as_str(), c.as_str()))
+        .collect();
+    let (_guard, root) = indexed(CODIX, &files);
+
+    let found = json(&root, &["grep", "legacy\\(", "--limit", "2"]);
+    let breakdown: Vec<(&str, u64)> = found["result"]["matches"]["breakdown"]
+        .as_array()
+        .expect("a breakdown")
+        .iter()
+        .map(|p| {
+            (
+                p["path"].as_str().expect("a path"),
+                p["count"].as_u64().expect("a count"),
+            )
+        })
+        .collect();
+    assert_eq!(breakdown, [("src/a", 4), ("src/b", 2)]);
+
+    let text = codix(&root, &["grep", "legacy\\(", "--limit", "2"]);
+    let line = text
+        .stdout
+        .lines()
+        .find(|l| l.starts_with("  4  src/a  "))
+        .unwrap_or_else(|| panic!("{}", text.stdout));
+    assert!(line.ends_with(" --limit 2 --path src/a"), "{line}");
+    let narrowed = json(&root, &["grep", "legacy\\(", "--path", "src/a", "--count"]);
+    assert_eq!(narrowed["result"]["matches"]["total"], 4);
+
+    // Paging on, the breakdown is not repeated.
+    let after = found["result"]["next"]["after"]
+        .as_str()
+        .expect("a next page");
+    let second = json(
+        &root,
+        &["grep", "legacy\\(", "--limit", "2", "--after", after],
+    );
+    assert_eq!(
+        second["result"]["matches"]["breakdown"],
+        serde_json::json!([])
+    );
 }

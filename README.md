@@ -130,8 +130,9 @@ Queries keep the index fresh themselves: lookups recheck the files they return,
 and `grep` scans for changes first. Results are capped at 50 (`--limit`); the
 last line is the command for the next page, ready to copy, which starts after
 the last result shown (`--after`), so results fixed meanwhile shift nothing.
-`--count` gives how many results there are, and `--all` every result, for
-scripts.
+When a first page does not hold every result, it ends with where they are,
+by directory, each with the command that keeps only that one. `--count` gives
+how many results there are and where, and `--all` every result, for scripts.
 
 Every command takes `--json` for stable, versioned output (`schema_version`).
 Errors have a stable code, a cause and a hint:

@@ -7,6 +7,13 @@
     "Paged": {
       "description": "One page of results and the total they were taken from.",
       "properties": {
+        "breakdown": {
+          "description": "Where the results are, when a first page does not hold them all or\nthey are counted: the places below the directory they share, most\nresults first, at most 8.",
+          "items": {
+            "$ref": "#/$defs/Place"
+          },
+          "type": "array"
+        },
         "items": {
           "description": "The results in this page.",
           "items": {
@@ -23,7 +30,33 @@
       },
       "required": [
         "items",
-        "total"
+        "total",
+        "breakdown"
+      ],
+      "type": "object"
+    },
+    "Place": {
+      "description": "A directory or a file holding some of the results.",
+      "properties": {
+        "count": {
+          "description": "Results there.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Path relative to the cwd, as `--path` takes it.",
+          "type": "string"
+        },
+        "root_path": {
+          "description": "Root-relative path.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "count"
       ],
       "type": "object"
     },

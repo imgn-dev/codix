@@ -56,10 +56,16 @@ fn request(style: Style, fields: &[(&'static str, String)]) -> String {
     if let Some(command) = style.command {
         return command(fields);
     }
-    let arguments: serde_json::Map<String, serde_json::Value> = fields
-        .iter()
-        .map(|(field, value)| ((*field).to_owned(), value.clone().into()))
-        .collect();
+    let mut arguments = serde_json::Map::new();
+    for (field, value) in fields {
+        if *field == "path" {
+            // A place replaces the directories a request is limited to.
+            arguments.insert("path".to_owned(), vec![value.clone()].into());
+            arguments.insert("here".to_owned(), false.into());
+        } else {
+            arguments.insert((*field).to_owned(), value.clone().into());
+        }
+    }
     serde_json::Value::Object(arguments).to_string()
 }
 
@@ -159,6 +165,7 @@ impl TextRender for RefsResponse {
                 self.definitions, self.scoped, self.textual
             )?;
         }
+        breakdown(w, style, &self.references)?;
         renamed(w, self.renamed.as_ref())?;
         stale(w, self.possibly_stale)?;
         let fields = self
@@ -269,6 +276,7 @@ impl TextRender for FindResponse {
         if self.results.total > 0 && self.mode != MatchMode::Exact && self.corrected.is_none() {
             writeln!(w, "matched by {}", mode_name(self.mode))?;
         }
+        breakdown(w, style, &self.results)?;
         alternatives(w, style, &self.alternatives)?;
         stale(w, self.possibly_stale)?;
         let fields = self.next.as_ref().map(|n| {
@@ -279,6 +287,43 @@ impl TextRender for FindResponse {
         });
         next(w, style, fields)
     }
+}
+
+/// Where the results are when they do not all fit, each place with its
+/// request.
+fn breakdown<T>(w: &mut dyn Write, style: Style, page: &Paged<T>) -> io::Result<()> {
+    if page.breakdown.is_empty() {
+        return Ok(());
+    }
+    writeln!(w, "by place:")?;
+    let rows: Vec<Vec<String>> = page
+        .breakdown
+        .iter()
+        .map(|p| {
+            vec![
+                p.count.to_string(),
+                p.path.clone(),
+                request(style, &[("path", p.path.clone())]),
+            ]
+        })
+        .collect();
+    let widths = column_widths(&rows);
+    for row in &rows {
+        writeln!(
+            w,
+            "  {:>count$}{COLUMN_GAP}{:path$}{COLUMN_GAP}{}",
+            row[0],
+            row[1],
+            row[2],
+            count = widths[0],
+            path = widths[1]
+        )?;
+    }
+    let shown: usize = page.breakdown.iter().map(|p| p.count).sum();
+    if shown < page.total {
+        writeln!(w, "  {} more elsewhere", page.total - shown)?;
+    }
+    Ok(())
 }
 
 /// The close names a fuzzy match did not take, each with its request.
@@ -503,6 +548,7 @@ impl TextRender for ShowResponse {
 impl TextRender for GrepResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
         self.matches.render_text(w, style)?;
+        breakdown(w, style, &self.matches)?;
         stale(w, self.possibly_stale)?;
         let fields = self.next.as_ref().map(|n| vec![("after", n.after.clone())]);
         next(w, style, fields)
@@ -1097,6 +1143,7 @@ mod tests {
                 })
                 .collect(),
             total: n as usize,
+            breakdown: Vec::new(),
         }
     }
 

@@ -38,8 +38,17 @@ impl Invocation {
         let mut args = self.args.clone();
         // Another request starts at its first page unless `after` says where.
         self.remove_option(&mut args, "--after");
-        if fields.iter().any(|(field, _)| *field == "mode") {
-            args.retain(|a| !MODES.contains(&a.as_str()));
+        for (field, _) in fields {
+            match *field {
+                "symbol" | "query" | "after" => {}
+                "mode" => args.retain(|a| !MODES.contains(&a.as_str())),
+                // A place replaces the directories the command is limited to.
+                "path" => {
+                    self.remove_option(&mut args, "--path");
+                    args.retain(|a| a != "--here");
+                }
+                field => self.remove_option(&mut args, &format!("--{field}")),
+            }
         }
         let mut added = Vec::new();
         for (field, value) in fields {
@@ -247,6 +256,19 @@ mod tests {
                 &[("mode", "prefix"), ("after", "c.rs:3:1")]
             ),
             "codix find m --prefix --after c.rs:3:1"
+        );
+    }
+
+    #[test]
+    fn a_path_replaces_the_scope() {
+        assert_eq!(
+            next(
+                &[
+                    "codix", "refs", "x", "--path", "a", "--path=b", "--after", "a/f.rs"
+                ],
+                &[("path", "a/c")]
+            ),
+            "codix refs x --path a/c"
         );
     }
 
