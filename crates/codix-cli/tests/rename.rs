@@ -107,9 +107,7 @@ fn unresolved_references_refuse_unless_excluded() {
     let undone = codix(&root, &["apply", undo_id]);
     assert_eq!(undone.code, Some(0), "{}", undone.stderr);
     assert!(
-        undone
-            .stdout
-            .ends_with("codix undo now reverts the apply before the one undone\n"),
+        undone.stdout.ends_with("nothing is left to undo\n"),
         "{}",
         undone.stdout
     );

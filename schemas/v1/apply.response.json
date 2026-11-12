@@ -101,6 +101,14 @@
       },
       "type": "array"
     },
+    "next_undo": {
+      "default": null,
+      "description": "After an undo, what `undo` would revert next, if anything.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "rebased": {
       "description": "Whether files had changed since planning, outside the edited\nregions, so the plan was made again on them.",
       "type": "boolean"

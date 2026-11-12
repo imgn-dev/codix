@@ -63,6 +63,9 @@ pub struct ApplyResponse {
     /// Whether it was an undo: `undo` then goes on to the apply before.
     #[serde(default)]
     pub undo: bool,
+    /// After an undo, what `undo` would revert next, if anything.
+    #[serde(default)]
+    pub next_undo: Option<String>,
     /// The references that may mean the renamed symbol and were left
     /// unchanged, as the preview listed them: the code may no longer build.
     #[serde(default)]
@@ -122,6 +125,12 @@ impl Operation for ApplyOp {
             })?;
         recover(project, &mut store)?;
         write(ctx, project, &config, &mut store, &row, &current)?;
+        let undo = row.operation == crate::undo::UndoOp::NAME;
+        let next_undo = if undo {
+            crate::undo::next(&mut store)?.map(|entry| entry.description)
+        } else {
+            None
+        };
         store.delete_preview(&request.id)?;
         Ok(ApplyResponse {
             id: request.id,
@@ -133,7 +142,8 @@ impl Operation for ApplyOp {
                 .collect(),
             sites: current.edits.sites(),
             rebased: current.rebased,
-            undo: row.operation == crate::undo::UndoOp::NAME,
+            undo,
+            next_undo,
             left: row
                 .response
                 .excluded

@@ -42,8 +42,10 @@ pub struct AtResponse {
 }
 
 impl Outcome for AtResponse {
+    /// A place outside every symbol is an answer too; a place codix could not
+    /// read is not.
     fn has_results(&self) -> bool {
-        self.places.iter().any(|p| p.enclosing.is_some())
+        self.places.iter().any(|p| p.error.is_none())
     }
 }
 

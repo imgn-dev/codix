@@ -13,7 +13,7 @@ use crate::op::{Context, Operation};
 use crate::project::FileId;
 use crate::query::indexed;
 use crate::render::since_epoch;
-use crate::store::{EntryState, PreviewRow, Store};
+use crate::store::{EntryState, JournalEntry, PreviewRow, Store};
 
 /// `undo`: plans reverting the latest apply.
 pub struct UndoOp;
@@ -76,6 +76,14 @@ fn edits_back(current: &str, original: &str) -> Vec<Edit> {
     edits
 }
 
+/// The apply `undo` reverts next: the latest not undone, an undo excepted.
+pub(crate) fn next(store: &mut Store) -> Result<Option<JournalEntry>, Error> {
+    Ok(store
+        .entries(EntryState::Done)?
+        .into_iter()
+        .find(|e| e.operation != UndoOp::NAME))
+}
+
 impl Operation for UndoOp {
     const NAME: &'static str = "undo";
     type Request = UndoRequest;
@@ -84,11 +92,7 @@ impl Operation for UndoOp {
     fn run(&self, ctx: &Context, _: UndoRequest) -> Result<PreviewResponse, Error> {
         let (project, _) = indexed(ctx)?;
         let mut store = Store::open(&project.index_path())?;
-        let entry = store
-            .entries(EntryState::Done)?
-            .into_iter()
-            .find(|e| e.operation != Self::NAME)
-            .ok_or(Error::NothingToUndo)?;
+        let entry = next(&mut store)?.ok_or(Error::NothingToUndo)?;
         let mut edits = Vec::new();
         let mut files = Vec::new();
         let mut text = String::new();

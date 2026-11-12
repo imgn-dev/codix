@@ -191,7 +191,7 @@ fn refs_of_an_ambiguous_name_covers_every_match() {
     assert_eq!(text.code, Some(0), "{}", text.stderr);
     assert!(
         text.stdout.starts_with(
-            "2 matches:\n  src/A.java:2:18  method  A.f\n  src/B.java:2:18  method  B.f\n"
+            "2 matches, before the filters:\n  src/A.java:2:18  method  A.f\n  src/B.java:2:18  method  B.f\n"
         ),
         "{}",
         text.stdout
@@ -323,6 +323,13 @@ fn nothing_found_says_what_to_try() {
             .ends_with("no symbol named \"Zebra\", even a few edits away\n"),
         "{}",
         none.stdout
+    );
+    let glob = codix(&root, &root, &["find", "Zebra.*", "--glob"]);
+    assert!(
+        glob.stdout
+            .ends_with("no qualified name matches \"Zebra.*\"\n"),
+        "{}",
+        glob.stdout
     );
     let narrowed = codix(&root, &root, &["find", "Invoice", "--kind", "method"]);
     assert!(

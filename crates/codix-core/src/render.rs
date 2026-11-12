@@ -162,7 +162,7 @@ impl TextRender for RefsResponse {
                     || t.kind != first.kind
             })
         {
-            writeln!(w, "{} matches:", self.targets.len())?;
+            writeln!(w, "{} matches, before the filters:", self.targets.len())?;
             for target in &self.targets {
                 writeln!(w, "  {}", symbol_line(target, style))?;
             }
@@ -272,7 +272,10 @@ impl TextRender for ApplyResponse {
         };
         if self.undo {
             // An undo is not undone: the next one goes further back.
-            writeln!(w, "{undo} now reverts the apply before the one undone")
+            match &self.next_undo {
+                Some(next) => writeln!(w, "{undo} would now revert: {next}"),
+                None => writeln!(w, "nothing is left to undo"),
+            }
         } else {
             writeln!(w, "undo with: {undo}")
         }
@@ -324,11 +327,15 @@ impl TextRender for FindResponse {
                     self.query
                 )?;
             } else {
-                writeln!(
-                    w,
-                    "no symbol named \"{}\", even a few edits away",
-                    self.query
-                )?;
+                let q = &self.query;
+                match self.mode {
+                    MatchMode::Glob => writeln!(w, "no qualified name matches \"{q}\"")?,
+                    MatchMode::Exact => writeln!(w, "no symbol named exactly \"{q}\"")?,
+                    MatchMode::Prefix => writeln!(w, "no symbol name starts with \"{q}\"")?,
+                    MatchMode::Fuzzy => {
+                        writeln!(w, "no symbol named \"{q}\", even a few edits away")?;
+                    }
+                }
             }
         }
         if self.results.total > 0 && self.mode != MatchMode::Exact && self.corrected.is_none() {
@@ -886,8 +893,13 @@ impl TextRender for Capabilities {
 /// Files by how the index holds them, as `status` and `capabilities` say.
 fn file_counts(f: &FileCounts) -> String {
     format!(
-        "files: {} indexed, {} text, {} pending, {} errors, {} skipped",
-        f.indexed, f.text, f.pending, f.errors, f.skipped
+        "files: {} ({} indexed, {} text, {} pending, {} errors, {} skipped)",
+        f.indexed + f.text + f.pending + f.errors + f.skipped,
+        f.indexed,
+        f.text,
+        f.pending,
+        f.errors,
+        f.skipped
     )
 }
 

@@ -84,7 +84,7 @@ fn missing_lines(stdout: &str) -> Vec<String> {
 fn expected_counts() -> String {
     let parsed = 1 + usize::from(cfg!(with_lang_xml)) + usize::from(cfg!(with_lang_markdown));
     format!(
-        "files: {parsed} indexed, {} text, 0 pending, 0 errors, 0 skipped",
+        "files: 3 ({parsed} indexed, {} text, 0 pending, 0 errors, 0 skipped)",
         3 - parsed
     )
 }

@@ -5,6 +5,7 @@
 //! symbol but that codix cannot bind, in other files or through another
 //! object, are `textual`: they match by name only.
 
+use std::collections::HashSet;
 use std::fs;
 
 use serde::{Deserialize, Serialize};
@@ -420,8 +421,23 @@ impl Operation for RefsOp {
             })
         })?;
         let mut results = Vec::new();
+        // Each match's file, through its scopes; then, once per name, the
+        // uses elsewhere that only the name connects.
+        let mut names: Vec<String> = Vec::new();
+        let mut own: HashSet<&str> = HashSet::new();
         for target in &targets {
-            results.extend(references_of(ctx, project, &snapshot, target)?);
+            let Target::Definitions { file, .. } = target;
+            own.insert(file.id.as_str());
+            let (found, visible) = references_of(ctx, target);
+            results.extend(found);
+            if let Some(name) = visible
+                && !names.contains(&name)
+            {
+                names.push(name);
+            }
+        }
+        for name in &names {
+            results.extend(by_name(ctx, project, &snapshot, name, &own, &results)?);
         }
         // A place found for several matches keeps its best reading: the
         // definition, then a binding, then a name match.
@@ -491,14 +507,9 @@ impl Operation for RefsOp {
     }
 }
 
-/// The references to the definitions of `target`: bound in their file, and
-/// by name elsewhere when the symbol is visible there.
-fn references_of(
-    ctx: &Context,
-    project: &Project,
-    snapshot: &Snapshot<'_>,
-    target: &Target,
-) -> Result<Vec<RefResult>, Error> {
+/// The references to the definitions of `target` in their file, and the name
+/// to look for elsewhere when the symbol is visible there.
+fn references_of(ctx: &Context, target: &Target) -> (Vec<RefResult>, Option<String>) {
     let Target::Definitions { file, definitions } = target;
     let model = &file.model;
     let first = &model.definitions[definitions[0]];
@@ -550,30 +561,48 @@ fn references_of(
             target,
         });
     }
-    if visible_elsewhere {
-        for r in snapshot.refs_named(&first.name)? {
-            if r.path == file.id.as_str() || r.state == RefState::Bound {
-                continue;
-            }
-            results.push(RefResult {
-                location: ctx.location(
-                    &FileId::from_canonical(r.path.as_str()),
-                    r.start.line,
-                    r.start.column,
-                ),
-                context: r.context.as_str().to_owned(),
-                confidence: TEXTUAL.to_owned(),
-                enclosing: r.enclosing.as_deref().map(qualified_part),
-                target: None,
-            });
+    (results, visible_elsewhere.then(|| first.name.clone()))
+}
+
+/// The uses of `name` outside the files in `own`, which their scopes cover,
+/// matched by name only; and in files without scopes, every whole word, but
+/// at the places `found` already holds.
+fn by_name(
+    ctx: &Context,
+    project: &Project,
+    snapshot: &Snapshot<'_>,
+    name: &str,
+    own: &HashSet<&str>,
+    found: &[RefResult],
+) -> Result<Vec<RefResult>, Error> {
+    let mut results = Vec::new();
+    for r in snapshot.refs_named(name)? {
+        if own.contains(r.path.as_str()) || r.state == RefState::Bound {
+            continue;
         }
-        let defined: Vec<Location> = results.iter().map(|r| r.location.clone()).collect();
-        results.extend(
-            tier_1_matches(ctx, project, snapshot, &first.name)?
-                .into_iter()
-                .filter(|r| !defined.contains(&r.location)),
-        );
+        results.push(RefResult {
+            location: ctx.location(
+                &FileId::from_canonical(r.path.as_str()),
+                r.start.line,
+                r.start.column,
+            ),
+            context: r.context.as_str().to_owned(),
+            confidence: TEXTUAL.to_owned(),
+            enclosing: r.enclosing.as_deref().map(qualified_part),
+            target: None,
+        });
     }
+    let place = |l: &Location| (l.root_path.as_str().to_owned(), l.line, l.column);
+    let known: HashSet<(String, u32, u32)> = found
+        .iter()
+        .chain(&results)
+        .map(|r| place(&r.location))
+        .collect();
+    let words: Vec<RefResult> = tier_1_matches(ctx, project, snapshot, name)?
+        .into_iter()
+        .filter(|r| !known.contains(&place(&r.location)))
+        .collect();
+    results.extend(words);
     Ok(results)
 }
 
