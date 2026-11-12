@@ -109,18 +109,14 @@ const CASES: &[(&str, &[&str])] = &[
             "src/billing/Cart.java",
         ],
     ),
-    (".", &["grep", "total"]),
-    (".", &["grep", "total(", "--json"]),
-    (
-        ".",
-        &["grep", "total", "--lang", "java", "--kind", "method"],
-    ),
+    (".", &["at", "src/billing/Cart.java:4"]),
+    (".", &["at", "src/billing/Invoice.java:7", "--json"]),
     (".", &["index"]),
     (".", &["index", "--json"]),
     (".", &["init"]),
     ("src/billing", &["find", "Invoice"]),
     ("src/billing", &["outline", "."]),
-    ("src/billing", &["grep", "total", "--here"]),
+    ("src/billing", &["at", "Invoice.java:7", "nowhere.java:1"]),
     ("..", &["--root", "{ROOT}", "find", "Cart"]),
 ];
 

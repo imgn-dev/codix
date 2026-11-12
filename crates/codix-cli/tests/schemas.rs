@@ -97,7 +97,15 @@ fn json_schemas_match_their_snapshots() {
     for entry in fs::read_dir(&dir).into_iter().flatten().flatten() {
         let file = entry.file_name().to_string_lossy().into_owned();
         if !names.contains(file.as_str()) {
-            problems.push(format!("{file}: its command is gone, {bump}"));
+            if !RELEASED && bless {
+                fs::remove_file(entry.path()).expect("remove the snapshot");
+            } else if RELEASED {
+                problems.push(format!("{file}: its command is gone, {bump}"));
+            } else {
+                problems.push(format!(
+                    "{file}: its command is gone, before a release: run with {BLESS_VAR}=1 to remove the snapshot"
+                ));
+            }
         }
     }
     assert!(problems.is_empty(), "{}", problems.join("\n"));

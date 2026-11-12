@@ -1,0 +1,6 @@
+src/billing/Invoice.java:7     method  Invoice.total
+src/billing/Invoice.java:7:16  method  Invoice.total
+src/billing/Cart.java:1        -                      package billing;
+docs/notes.txt:1               -
+src/billing/Cart.java:99       error: line 99 is past the end (5 lines)
+src/nowhere.java:3             error: no such file

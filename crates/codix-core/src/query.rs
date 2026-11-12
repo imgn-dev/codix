@@ -1,11 +1,9 @@
-//! The query commands: `find`, `def`, `outline`, `show` and `grep`. They read
-//! the index, keeping it fresh first: lookups recheck the files they return,
-//! and `grep`, which must not miss a change anywhere, scans first.
+//! The query commands: `find`, `def`, `outline` and `show`. They read the
+//! index, keeping it fresh first: lookups recheck the files they return.
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs;
 
-use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::Error;
@@ -19,9 +17,6 @@ use crate::refs::DefAt;
 use crate::scan::{rescan, scan_within};
 use crate::store::{FileStatus, MatchMode, NameQuery, Snapshot, Store, SymbolHit};
 use crate::symbol_id::{SymbolRef, resolve_all_where};
-
-/// Longest line text shown with a `grep` match, in characters.
-const MAX_LINE: usize = 200;
 
 /// A symbol in query results.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
@@ -58,7 +53,7 @@ impl Ranked for SymbolResult {
 }
 
 impl SymbolResult {
-    fn new(ctx: &Context, hit: SymbolHit) -> Self {
+    pub(crate) fn new(ctx: &Context, hit: SymbolHit) -> Self {
         let start = hit.symbol.name_range.start;
         Self {
             location: ctx.location(&FileId::from_canonical(hit.path), start.line, start.column),
@@ -109,7 +104,7 @@ pub(crate) fn indexed(ctx: &Context) -> Result<(&Project, Config), Error> {
 /// Runs a lookup, rechecks the files it returned, and when any had changed,
 /// reindexes them and runs it again. The flag is set when the write lock
 /// stayed busy, so changed files could not be reindexed.
-fn lookup<T>(
+pub(crate) fn lookup<T>(
     ctx: &Context,
     project: &Project,
     config: &Config,
@@ -705,176 +700,4 @@ fn source(
         first_line: u32::try_from(first).unwrap_or(u32::MAX),
         lines,
     })
-}
-
-/// `grep`: a regular expression over the indexed files, with the enclosing
-/// symbol of each match.
-pub struct GrepOp;
-
-/// Request for [`GrepOp`].
-#[derive(Debug, Clone, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct GrepRequest {
-    /// Regular expression, matched line by line.
-    pub pattern: String,
-    /// Search files of this language; repeatable.
-    #[serde(default, rename = "lang")]
-    pub languages: Vec<String>,
-    /// Keep matches inside a symbol of this kind; repeatable.
-    #[serde(default, rename = "kind")]
-    pub kinds: Vec<String>,
-    /// Directories to search.
-    #[serde(flatten)]
-    pub scope: ScopeRequest,
-    /// Page to return.
-    #[serde(flatten)]
-    pub page: Page,
-}
-
-/// One match.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct GrepMatch {
-    /// Where the match starts.
-    #[serde(flatten)]
-    pub location: Location,
-    /// The line, cut to 200 characters.
-    pub text: String,
-    /// Qualified name of the innermost symbol around the match.
-    pub enclosing: Option<String>,
-    /// Kind of that symbol.
-    pub enclosing_kind: Option<String>,
-}
-
-impl Ranked for GrepMatch {
-    fn is_definition(&self) -> bool {
-        false
-    }
-
-    fn location(&self) -> &Location {
-        &self.location
-    }
-}
-
-/// What [`GrepOp`] answers.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct GrepResponse {
-    /// Matches, by path and position.
-    pub matches: Paged<GrepMatch>,
-    /// The next page, when matches remain: the request with these fields
-    /// changed.
-    pub next: Option<GrepNext>,
-    /// Whether another process held the write lock, so the scan before the
-    /// search could not run.
-    pub possibly_stale: bool,
-}
-
-/// What changes in a [`GrepRequest`] for its next page.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct GrepNext {
-    /// Where the next page starts.
-    pub after: String,
-}
-
-impl Outcome for GrepResponse {
-    fn has_results(&self) -> bool {
-        self.matches.has_results()
-    }
-}
-
-impl Operation for GrepOp {
-    const NAME: &'static str = "grep";
-    type Request = GrepRequest;
-    type Response = GrepResponse;
-
-    fn run(&self, ctx: &Context, request: GrepRequest) -> Result<GrepResponse, Error> {
-        let (project, config) = indexed(ctx)?;
-        let regex = Regex::new(&request.pattern).map_err(|e| Error::Usage {
-            cause: format!(
-                "invalid regular expression: {}",
-                e.to_string().lines().last().unwrap_or_default()
-            ),
-            hint: "grep takes Rust regex syntax; escape special characters with \\".to_owned(),
-        })?;
-        let scope = ctx.scope(&request.scope)?;
-        let possibly_stale = complete(ctx, project, &config)?;
-        let mut store = Store::open(&project.index_path())?;
-        let snapshot = store.snapshot()?;
-        let mut matches = Vec::new();
-        for row in snapshot.files()? {
-            let id = FileId::from_canonical(row.path.as_str());
-            let searchable = matches!(row.status, FileStatus::Indexed | FileStatus::SearchOnly);
-            if !searchable
-                || !scope.contains(&id)
-                || !(request.languages.is_empty() || request.languages.contains(&row.language))
-            {
-                continue;
-            }
-            let Ok(text) = fs::read_to_string(project.path_of(&id)) else {
-                continue;
-            };
-            let found = search(ctx, &id, &text, &regex);
-            if found.is_empty() {
-                continue;
-            }
-            let symbols = snapshot.symbols_in(&row.path)?;
-            for (mut m, byte) in found {
-                if let Some(enclosing) = enclosing(&symbols, byte) {
-                    m.enclosing = Some(enclosing.symbol.qualified_name.clone());
-                    m.enclosing_kind = Some(enclosing.symbol.kind.clone());
-                }
-                if request.kinds.is_empty()
-                    || m.enclosing_kind
-                        .as_ref()
-                        .is_some_and(|k| request.kinds.contains(k))
-                {
-                    matches.push(m);
-                }
-            }
-        }
-        sort_results(&mut matches, None);
-        let (matches, after) = request.page.apply(matches, None);
-        Ok(GrepResponse {
-            matches,
-            next: after.map(|after| GrepNext { after }),
-            possibly_stale,
-        })
-    }
-}
-
-/// Every match in `text`, with its byte offset.
-fn search(ctx: &Context, id: &FileId, text: &str, regex: &Regex) -> Vec<(GrepMatch, usize)> {
-    let mut found = Vec::new();
-    let mut offset = 0;
-    for (number, line) in text.split_inclusive('\n').enumerate() {
-        let content = line.trim_end_matches(['\n', '\r']);
-        for m in regex.find_iter(content) {
-            let column = content[..m.start()].chars().count() + 1;
-            let shown: String = content.chars().take(MAX_LINE).collect();
-            found.push((
-                GrepMatch {
-                    location: ctx.location(
-                        id,
-                        u32::try_from(number + 1).unwrap_or(u32::MAX),
-                        u32::try_from(column).unwrap_or(u32::MAX),
-                    ),
-                    text: shown,
-                    enclosing: None,
-                    enclosing_kind: None,
-                },
-                offset + m.start(),
-            ));
-        }
-        offset += line.len();
-    }
-    found
-}
-
-/// The innermost symbol whose range holds `byte`.
-fn enclosing(symbols: &[SymbolHit], byte: usize) -> Option<&SymbolHit> {
-    symbols
-        .iter()
-        .filter(|hit| {
-            let r = hit.symbol.range;
-            (r.start.byte as usize) <= byte && byte < r.end.byte as usize
-        })
-        .min_by_key(|hit| hit.symbol.range.end.byte - hit.symbol.range.start.byte)
 }

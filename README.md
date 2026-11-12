@@ -24,7 +24,7 @@ cp target/release/codix ~/.local/bin/
 ```
 
 `--features full` includes every provider. The default build has Java, Go,
-Maven, Gradle and git; `minimal` has none, for plain-text search only.
+Maven, Gradle and git; `minimal` has none, and keeps every file as text.
 `codix capabilities` lists what a build supports. The modular flavour instead
 loads providers as plugins (see Plugins).
 
@@ -123,14 +123,16 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   name only, in another file or through another object; `--confidence scoped`
   or `--confidence textual` keeps one of them. `def file:line:col` follows the
   name at that place to its definition.
-- `grep <regex>` searches the indexed files and names the symbol around each
-  match; `--kind method` keeps matches inside methods.
+- `at <path:line>…` names the symbol around each place, as other tools print
+  them: `rg -n 'mutex_lock\(' fs/ext4 | codix at -` annotates each match with
+  the function holding it. codix does not search text; your own grep does it
+  better.
 - `index` brings the index up to date; `status` shows what changed since, the
   build modules found in Maven and Gradle files, and anything codix could not
   read in them.
 
-Queries keep the index fresh themselves: lookups recheck the files they return,
-and `grep` scans for changes first. Results are capped at 50 (`--limit`); the
+Queries keep the index fresh themselves: lookups recheck the files they
+return, and `refs` scans for changes first. Results are capped at 50 (`--limit`); the
 last line is the command for the next page, ready to copy, which starts after
 the last result shown (`--after`), so results fixed meanwhile shift nothing.
 When a first page does not hold every result, it ends with where they are,

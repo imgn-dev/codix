@@ -195,8 +195,8 @@
           "type": "string"
         },
         {
-          "const": "search",
-          "description": "Keys, headings or text, for search only.",
+          "const": "text",
+          "description": "Text without symbols: files codix keeps track of, nothing more.",
           "type": "string"
         },
         {

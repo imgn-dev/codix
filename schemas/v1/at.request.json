@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`AtOp`].",
+  "properties": {
+    "places": {
+      "description": "Places as `path:line` or `path:line:col`, any text after a further colon kept, as `rg -n`, `rg --vimgrep` and compilers print them.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "places"
+  ],
+  "title": "AtRequest",
+  "type": "object"
+}

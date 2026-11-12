@@ -31,32 +31,46 @@ fn places(items: &Value) -> Vec<String> {
 }
 
 fn two_calls(class: &str, call: &str) -> String {
-    format!("class {class} {{\n    void f() {{ {call}(); }}\n    void g() {{ {call}(); }}\n}}\n")
+    format!(
+        "class {class} {{\n    void f() {{ Legacy.{call}(); }}\n    void g() {{ Legacy.{call}(); }}\n}}\n"
+    )
 }
 
-#[test]
-fn fixing_a_page_skips_nothing_on_the_next() {
-    let files: Vec<(String, String)> = ["A", "B", "C", "D", "E"]
-        .iter()
-        .map(|c| (format!("{c}.java"), two_calls(c, "legacy")))
-        .collect();
+const LEGACY: &str =
+    "class Legacy {\n    static void legacy() {}\n    static void modern() {}\n}\n";
+
+/// `Legacy.java` in `dir`, and each class in its directory calling it twice.
+fn callers(dir: &str, classes: &[(&str, &str)]) -> (tempfile::TempDir, std::path::PathBuf) {
+    let mut files: Vec<(String, String)> = vec![(format!("{dir}Legacy.java"), LEGACY.to_owned())];
+    files.extend(
+        classes
+            .iter()
+            .map(|(d, c)| (format!("{d}{c}.java"), two_calls(c, "legacy"))),
+    );
     let files: Vec<(&str, &str)> = files
         .iter()
         .map(|(p, c)| (p.as_str(), c.as_str()))
         .collect();
-    let (_guard, root) = indexed(CODIX, &files);
+    indexed(CODIX, &files)
+}
 
-    let first = json(&root, &["grep", "legacy\\(", "--limit", "4"]);
+#[test]
+fn fixing_a_page_skips_nothing_on_the_next() {
+    let classes = [("", "A"), ("", "B"), ("", "C"), ("", "D"), ("", "E")];
+    let (_guard, root) = callers("", &classes);
+
+    let first = json(&root, &["refs", "Legacy.legacy", "--limit", "4"]);
     let result = &first["result"];
+    // The page ends before B.java rather than cutting it.
     assert_eq!(
-        places(&result["matches"]["items"]),
-        ["A.java:2", "A.java:3", "B.java:2", "B.java:3"]
+        places(&result["references"]["items"]),
+        ["Legacy.java:2", "A.java:2", "A.java:3"]
     );
-    assert_eq!(result["matches"]["total"], 10);
+    assert_eq!(result["references"]["total"], 11);
     let after = result["next"]["after"].as_str().expect("a next page");
-    assert_eq!(after, "B.java");
+    assert_eq!(after, "A.java");
 
-    // The first page's matches are fixed.
+    // The first page's uses are fixed, and the next file's too.
     for class in ["A", "B"] {
         std::fs::write(
             root.join(format!("{class}.java")),
@@ -66,14 +80,14 @@ fn fixing_a_page_skips_nothing_on_the_next() {
     }
     let second = json(
         &root,
-        &["grep", "legacy\\(", "--limit", "4", "--after", after],
+        &["refs", "Legacy.legacy", "--limit", "4", "--after", after],
     );
     let result = &second["result"];
     assert_eq!(
-        places(&result["matches"]["items"]),
+        places(&result["references"]["items"]),
         ["C.java:2", "C.java:3", "D.java:2", "D.java:3"]
     );
-    assert_eq!(result["matches"]["total"], 6);
+    assert_eq!(result["references"]["total"], 7);
     assert_eq!(result["next"]["after"], "D.java");
 }
 
@@ -179,55 +193,44 @@ fn a_fuzzy_find_shows_the_closest_name_and_offers_the_others() {
 
 #[test]
 fn count_gives_the_totals_and_all_every_result() {
-    let files: Vec<(String, String)> = ["A", "B", "C"]
-        .iter()
-        .map(|c| (format!("{c}.java"), two_calls(c, "legacy")))
-        .collect();
-    let files: Vec<(&str, &str)> = files
-        .iter()
-        .map(|(p, c)| (p.as_str(), c.as_str()))
-        .collect();
-    let (_guard, root) = indexed(CODIX, &files);
+    let (_guard, root) = callers("", &[("", "A"), ("", "B"), ("", "C")]);
 
-    let counted = codix(&root, &["grep", "legacy\\(", "--count"]);
+    let counted = codix(&root, &["refs", "Legacy.legacy", "--count"]);
     assert_eq!(counted.code, Some(0), "{}", counted.stderr);
     assert!(
         counted
             .stdout
-            .starts_with("6 results\nby place:\n  2  A.java  "),
+            .starts_with("7 results\n1 definition, 0 scoped, 6 textual\nby place:\n  2  A.java  "),
         "{}",
         counted.stdout
     );
-    let counted = json(&root, &["grep", "legacy\\(", "--count"]);
-    assert_eq!(counted["result"]["matches"]["total"], 6);
-    assert_eq!(counted["result"]["matches"]["items"], serde_json::json!([]));
+    let counted = json(&root, &["refs", "Legacy.legacy", "--count"]);
+    assert_eq!(counted["result"]["references"]["total"], 7);
+    assert_eq!(
+        counted["result"]["references"]["items"],
+        serde_json::json!([])
+    );
     assert!(counted["result"]["next"].is_null());
 
-    let all = json(&root, &["grep", "legacy\\(", "--all"]);
+    let all = json(&root, &["refs", "Legacy.legacy", "--all"]);
     assert_eq!(
-        all["result"]["matches"]["items"].as_array().map(Vec::len),
-        Some(6)
+        all["result"]["references"]["items"]
+            .as_array()
+            .map(Vec::len),
+        Some(7)
     );
     assert!(all["result"]["next"].is_null());
 
-    let both = codix(&root, &["grep", "legacy\\(", "--all", "--limit", "2"]);
+    let both = codix(&root, &["refs", "Legacy.legacy", "--all", "--limit", "2"]);
     assert_eq!(both.code, Some(2), "{}", both.stderr);
 }
 
 #[test]
 fn results_that_do_not_fit_say_where_they_are() {
-    let files: Vec<(String, String)> = [("src/a", "A"), ("src/a", "B"), ("src/b", "C")]
-        .iter()
-        .map(|(dir, c)| (format!("{dir}/{c}.java"), two_calls(c, "legacy")))
-        .collect();
-    let files: Vec<(&str, &str)> = files
-        .iter()
-        .map(|(p, c)| (p.as_str(), c.as_str()))
-        .collect();
-    let (_guard, root) = indexed(CODIX, &files);
+    let (_guard, root) = callers("src/", &[("src/a/", "A"), ("src/a/", "B"), ("src/b/", "C")]);
 
-    let found = json(&root, &["grep", "legacy\\(", "--limit", "2"]);
-    let breakdown: Vec<(&str, u64)> = found["result"]["matches"]["breakdown"]
+    let found = json(&root, &["refs", "Legacy.legacy", "--limit", "2"]);
+    let breakdown: Vec<(&str, u64)> = found["result"]["references"]["breakdown"]
         .as_array()
         .expect("a breakdown")
         .iter()
@@ -238,17 +241,23 @@ fn results_that_do_not_fit_say_where_they_are() {
             )
         })
         .collect();
-    assert_eq!(breakdown, [("src/a", 4), ("src/b", 2)]);
+    assert_eq!(
+        breakdown,
+        [("src/a", 4), ("src/b", 2), ("src/Legacy.java", 1)]
+    );
 
-    let text = codix(&root, &["grep", "legacy\\(", "--limit", "2"]);
+    let text = codix(&root, &["refs", "Legacy.legacy", "--limit", "2"]);
     let line = text
         .stdout
         .lines()
         .find(|l| l.starts_with("  4  src/a  "))
         .unwrap_or_else(|| panic!("{}", text.stdout));
     assert!(line.ends_with(" --limit 2 --path src/a"), "{line}");
-    let narrowed = json(&root, &["grep", "legacy\\(", "--path", "src/a", "--count"]);
-    assert_eq!(narrowed["result"]["matches"]["total"], 4);
+    let narrowed = json(
+        &root,
+        &["refs", "Legacy.legacy", "--path", "src/a", "--count"],
+    );
+    assert_eq!(narrowed["result"]["references"]["total"], 4);
 
     // Paging on, the breakdown is not repeated.
     let after = found["result"]["next"]["after"]
@@ -256,55 +265,47 @@ fn results_that_do_not_fit_say_where_they_are() {
         .expect("a next page");
     let second = json(
         &root,
-        &["grep", "legacy\\(", "--limit", "2", "--after", after],
+        &["refs", "Legacy.legacy", "--limit", "2", "--after", after],
     );
     assert_eq!(
-        second["result"]["matches"]["breakdown"],
+        second["result"]["references"]["breakdown"],
         serde_json::json!([])
     );
 }
 
 #[test]
 fn by_file_is_a_worklist_paged_by_file() {
-    let files: Vec<(String, String)> = ["A", "B", "C"]
-        .iter()
-        .map(|c| (format!("{c}.java"), two_calls(c, "legacy")))
-        .collect();
-    let files: Vec<(&str, &str)> = files
-        .iter()
-        .map(|(p, c)| (p.as_str(), c.as_str()))
-        .collect();
-    let (_guard, root) = indexed(CODIX, &files);
+    let (_guard, root) = callers("", &[("", "A"), ("", "B"), ("", "C")]);
 
-    let text = codix(&root, &["grep", "legacy\\(", "--files", "--limit", "2"]);
+    let text = codix(&root, &["refs", "Legacy.legacy", "--files", "--limit", "2"]);
     assert_eq!(text.code, Some(0), "{}", text.stderr);
     assert!(
         text.stdout
-            .starts_with("A.java  2\nB.java  2\n2 of 3 files\n"),
+            .starts_with("Legacy.java  1\nA.java       2\n2 of 4 files\n"),
         "{}",
         text.stdout
     );
     let last = text.stdout.lines().last().expect("a next page");
     assert!(
-        last.ends_with(" --files --limit 2 --after B.java"),
+        last.ends_with(" --files --limit 2 --after A.java"),
         "{last}"
     );
 
     let second = json(
         &root,
         &[
-            "grep",
-            "legacy\\(",
+            "refs",
+            "Legacy.legacy",
             "--files",
             "--limit",
             "2",
             "--after",
-            "B.java",
+            "A.java",
         ],
     );
-    let matches = &second["result"]["matches"];
-    assert_eq!(matches["files"][0]["path"], "C.java");
-    assert_eq!(matches["files"][0]["count"], 2);
-    assert_eq!(matches["total"], 3);
+    let references = &second["result"]["references"];
+    assert_eq!(references["files"][0]["path"], "B.java");
+    assert_eq!(references["files"][0]["count"], 2);
+    assert_eq!(references["total"], 4);
     assert!(second["result"]["next"].is_null());
 }

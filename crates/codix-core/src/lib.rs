@@ -2,6 +2,7 @@
 //! resolver framework and edit engine.
 
 pub mod apply;
+pub mod at;
 pub mod build;
 pub mod capabilities;
 pub mod config;

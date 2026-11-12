@@ -5,12 +5,13 @@ use serde_json::Value;
 
 use crate::Error;
 use crate::apply::ApplyOp;
+use crate::at::AtOp;
 use crate::capabilities::{CapabilitiesOp, LanguagesOp};
 use crate::config::ConfigOp;
 use crate::indexing::{IndexOp, InitOp, StatusOp};
 use crate::op::{Context, Operation};
 use crate::previews::{DiscardOp, PreviewsOp};
-use crate::query::{DefOp, FindOp, GrepOp, OutlineOp, ShowOp};
+use crate::query::{DefOp, FindOp, OutlineOp, ShowOp};
 use crate::refs::RefsOp;
 use crate::rename::RenameOp;
 use crate::undo::UndoOp;
@@ -56,7 +57,7 @@ operations!(
     RefsOp,
     OutlineOp,
     ShowOp,
-    GrepOp,
+    AtOp,
     RenameOp,
     ApplyOp,
     UndoOp,

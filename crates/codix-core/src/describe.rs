@@ -33,7 +33,7 @@ impl Description {
         let tier = match self.tier {
             Some(Tier::Symbols) => "\nNeeds: tier 1 (symbols); see `codix capabilities`.",
             Some(Tier::Scopes) => "\nNeeds: tier 2 (scopes); see `codix capabilities`.",
-            Some(Tier::Search | Tier::NotInBuild) => "\nNeeds: any indexed text file.",
+            Some(Tier::Text | Tier::NotInBuild) => "\nNeeds: any indexed file.",
             None => "",
         };
         format!(
@@ -59,7 +59,7 @@ pub fn markdown() -> String {
         let needs = match d.tier {
             Some(Tier::Symbols) => "\n- **Needs:** tier 1 (symbols)",
             Some(Tier::Scopes) => "\n- **Needs:** tier 2 (scopes)",
-            Some(Tier::Search | Tier::NotInBuild) => "\n- **Needs:** any indexed text file",
+            Some(Tier::Text | Tier::NotInBuild) => "\n- **Needs:** any indexed file",
             None => "",
         };
         // Writing to a String cannot fail.
@@ -81,7 +81,7 @@ pub fn agent_guide() -> String {
          This project has a codix index. To find and read code, prefer these commands to grep \
          and to reading whole files:\n\n"
     );
-    for d in ["find", "def", "refs", "outline", "show", "grep"]
+    for d in ["find", "def", "refs", "outline", "show", "at"]
         .iter()
         .filter_map(|name| describe(name))
     {
@@ -202,12 +202,12 @@ pub const COMMANDS: &[Description] = &[
         example: "codix show Invoice.total --context 2",
     },
     Description {
-        name: "grep",
-        summary: "Search file contents with a regular expression; each match names its enclosing symbol.",
-        when: "For text that is not a symbol name, such as strings, comments or call sites. For names, prefer find.",
-        returns: "Matching lines with location and enclosing symbol.",
-        tier: Some(Tier::Search),
-        example: "codix grep \"TODO|FIXME\" --lang java",
+        name: "at",
+        summary: "Name the symbol around each place: a file and line, as other tools print them.",
+        when: "To know which function or class holds a line, such as each match of your own grep: `rg -n pattern | codix at -`.",
+        returns: "For each place, the innermost enclosing symbol, its kind and qualified name, then any text that followed the place.",
+        tier: Some(Tier::Symbols),
+        example: "codix at src/billing/Invoice.java:12",
     },
     Description {
         name: "rename",

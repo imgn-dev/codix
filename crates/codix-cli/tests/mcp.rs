@@ -222,7 +222,7 @@ fn calls_in_flight_are_answered_independently() {
     client.send_request(
         2,
         "tools/call",
-        &json!({ "name": "grep", "arguments": { "pattern": "total" } }),
+        &json!({ "name": "at", "arguments": { "places": ["src/Invoice.java:2", "src/Cart.java:2"] } }),
     );
     client.send_request(
         3,
@@ -230,14 +230,14 @@ fn calls_in_flight_are_answered_independently() {
         &json!({ "name": "status", "arguments": {} }),
     );
     let status = client.response(3);
-    let grep = client.response(2);
+    let at = client.response(2);
     assert_eq!(status["result"]["isError"], false, "{status}");
-    let grep = grep["result"]["content"][0]["text"]
+    let at = at["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or_default();
     assert!(
-        grep.contains("src/Invoice.java:2:") && grep.contains("src/Cart.java:2:"),
-        "{grep}"
+        at.contains("Invoice.total") && at.contains("Cart.total"),
+        "{at}"
     );
 }
 

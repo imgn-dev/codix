@@ -1,0 +1,131 @@
+{
+  "$defs": {
+    "AtPlace": {
+      "description": "One place and what encloses it.",
+      "properties": {
+        "enclosing": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SymbolResult"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The innermost symbol holding the place; none outside every symbol."
+        },
+        "error": {
+          "description": "Why the place could not be read: not a place, a file codix does not\nknow, or a line past the end.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "place": {
+          "description": "The place as given, without its text.",
+          "type": "string"
+        },
+        "text": {
+          "description": "The text that followed the place, if any.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "place"
+      ],
+      "type": "object"
+    },
+    "FileId": {
+      "description": "A file or directory identity: its root-relative path with `/` separators,\nthe case found on disk, and symlinks resolved. The root itself is `\"\"`.",
+      "type": "string"
+    },
+    "SymbolResult": {
+      "description": "A symbol in query results.",
+      "properties": {
+        "column": {
+          "description": "1-based column, in Unicode scalar values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "confidence": {
+          "description": "How it was found: `scoped` when the name at a location binds to it\nwithin its file, `textual` when found by name, `low` in or around a\nparse error.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Kind from the shared vocabulary.",
+          "type": "string"
+        },
+        "language": {
+          "description": "Language of the file.",
+          "type": "string"
+        },
+        "line": {
+          "description": "1-based line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Simple name.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path relative to the cwd, with `/` separators.",
+          "type": "string"
+        },
+        "qualified_name": {
+          "description": "Qualified name within the file.",
+          "type": "string"
+        },
+        "root_path": {
+          "$ref": "#/$defs/FileId",
+          "description": "Root-relative path."
+        },
+        "signature": {
+          "description": "Declaration without the body, when captured.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_id": {
+          "description": "Symbol ID, accepted by every command naming a symbol.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "line",
+        "column",
+        "symbol_id",
+        "kind",
+        "name",
+        "qualified_name",
+        "language",
+        "confidence"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What [`AtOp`] answers.",
+  "properties": {
+    "places": {
+      "description": "Every place, in the order given.",
+      "items": {
+        "$ref": "#/$defs/AtPlace"
+      },
+      "type": "array"
+    }
+  },
+  "required": [
+    "places"
+  ],
+  "title": "AtResponse",
+  "type": "object"
+}

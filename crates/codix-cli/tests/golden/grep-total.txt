@@ -1,7 +1,0 @@
-src/billing/Cart.java:4:10           Cart.total          long total() { return 0; }
-src/billing/Invoice.java:6:17        Invoice.total       public long total() {
-src/billing/Invoice.java:7:16        Invoice.total       return total;
-src/billing/Invoice.java:10:10       Invoice.total       long total(long discount) {
-src/billing/Invoice.java:11:16       Invoice.total       return total - discount;
-tests/billing/InvoiceTest.java:2:10  InvoiceTest.totals  void totals() {}
-6 results

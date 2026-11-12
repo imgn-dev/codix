@@ -174,8 +174,8 @@ pub struct StatusRequest {}
 pub struct FileCounts {
     /// Parsed for symbols.
     pub indexed: usize,
-    /// Searched as text only.
-    pub search_only: usize,
+    /// Kept as text, without symbols.
+    pub text: usize,
     /// Waiting to be reparsed.
     pub pending: usize,
     /// Could not be read or parsed.
@@ -242,7 +242,7 @@ impl Operation for StatusOp {
         for row in &rows {
             match row.status {
                 FileStatus::Indexed => files.indexed += 1,
-                FileStatus::SearchOnly => files.search_only += 1,
+                FileStatus::SearchOnly => files.text += 1,
                 FileStatus::Pending => files.pending += 1,
                 FileStatus::Skipped => files.skipped += 1,
                 FileStatus::Error => {

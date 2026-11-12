@@ -66,7 +66,7 @@ fn a_vcs_plugin_behaves_as_a_compiled_in_one() {
     let status: Value =
         serde_json::from_str(&codix(&root, &plugins, &["status", "--json"]).stdout).expect("JSON");
     let files = &status["result"]["files"];
-    assert_eq!(files["search_only"], 1, ".hg is skipped: {status}");
+    assert_eq!(files["text"], 1, ".hg is skipped: {status}");
     assert_eq!(status["result"]["missing"], serde_json::json!([]));
 
     let languages: Value =

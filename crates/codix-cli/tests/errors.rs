@@ -152,19 +152,6 @@ fn usage_from_a_zero_limit() {
 }
 
 #[test]
-fn usage_from_a_bad_regex() {
-    let (_guard, root) = indexed(&[("README", "hi\n")]);
-    let out = codix(&root, &root, &["grep", "a("]);
-    assert_eq!(out.code, Some(2));
-    assert!(
-        out.stderr
-            .starts_with("error[usage]: invalid regular expression: "),
-        "{}",
-        out.stderr
-    );
-}
-
-#[test]
 fn usage_names_the_missing_argument() {
     let (_guard, root) = files_only(&[]);
     let out = codix(&root, &root, &["config"]);

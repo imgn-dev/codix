@@ -111,9 +111,14 @@ fn live_changes_reach_the_index_without_an_index_command() {
     let daemon = &status(runtime.path(), &root)["result"]["daemon"];
     assert_eq!(daemon["watch"]["unwatched"], 0, "{daemon}");
     assert!(daemon["watch"]["last_batch_ms"].is_u64(), "{daemon}");
-    // Text search, which every build has, unlike Java symbols.
-    let found = codix(runtime.path(), &root, &["grep", "class C", "--json"], &[]);
-    assert!(found.stdout.contains("moved/C.java"), "{}", found.stdout);
+    // The moved file is known where it is now, in every build.
+    let found = codix(
+        runtime.path(),
+        &root,
+        &["at", "moved/C.java:1", "--json"],
+        &[],
+    );
+    assert!(found.stdout.contains("\"error\":null"), "{}", found.stdout);
 }
 
 #[test]

@@ -1,7 +1,5 @@
-//! `find`, `def`, `outline`, `show` and `grep`, and their freshness.
+//! `find`, `def`, `outline`, `show` and `at`, and their freshness.
 #![cfg(with_lang_java)]
-
-use std::fs;
 
 use codix_testkit::assert_golden;
 use codix_testkit::fixture::{BILLING, write};
@@ -289,16 +287,19 @@ fn show_with_context() {
 }
 
 #[test]
-fn grep_names_the_enclosing_symbol() {
-    check("", &["grep", "total", "--kind", "method"], "grep-total");
-    let (_guard, root) = indexed(BILLING);
-    let text_files = codix(&root, &root, &["grep", "invoices", "--lang", "text"]);
-    assert!(
-        text_files
-            .stdout
-            .starts_with("docs/notes.txt:1:14  -  total of all invoices"),
-        "{}",
-        text_files.stdout
+fn at_names_the_enclosing_symbol() {
+    check(
+        "",
+        &[
+            "at",
+            "src/billing/Invoice.java:7",
+            "src/billing/Invoice.java:7:16",
+            "src/billing/Cart.java:1:package billing;",
+            "docs/notes.txt:1",
+            "src/billing/Cart.java:99",
+            "src/nowhere.java:3",
+        ],
+        "at-billing",
     );
 }
 
@@ -316,21 +317,18 @@ fn an_edit_between_two_queries_is_seen_by_the_second() {
     assert!(out.stdout.contains("class Basket"), "{}", out.stdout);
     assert_eq!(codix(&root, &root, &["find", "Cart"]).code, Some(1));
 
-    // grep scans first, so it finds text in a file no lookup returned.
+    // `at` rechecks the files it is given, even one no index has seen yet.
     write(
         &root,
         "src/billing/Tax.java",
         "class Tax { long rate() { return 20; } }\n",
     );
-    let out = codix(&root, &root, &["grep", "rate"]);
-    assert!(
-        out.stdout
-            .starts_with("src/billing/Tax.java:1:18  Tax.rate"),
+    let out = codix(&root, &root, &["at", "src/billing/Tax.java:1:18"]);
+    assert_eq!(
+        out.stdout, "src/billing/Tax.java:1:18  method  Tax.rate\n",
         "{}",
-        out.stdout
+        out.stderr
     );
-    fs::remove_file(root.join("src/billing/Tax.java")).unwrap();
-    assert_eq!(codix(&root, &root, &["grep", "rate"]).code, Some(1));
 }
 
 /// A method used in its own file and through another object in another one.

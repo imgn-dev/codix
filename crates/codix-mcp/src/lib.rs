@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use codix_core::Error;
 use codix_core::apply::ApplyOp;
+use codix_core::at::AtOp;
 use codix_core::capabilities::{CapabilitiesOp, LanguagesOp};
 use codix_core::config::ConfigOp;
 use codix_core::daemon::running;
@@ -19,7 +20,7 @@ use codix_core::describe::describe;
 use codix_core::indexing::{IndexOp, InitOp, StatusOp};
 use codix_core::op::{Context, Operation, Warning};
 use codix_core::previews::{DiscardOp, PreviewsOp};
-use codix_core::query::{DefOp, FindOp, GrepOp, OutlineOp, ShowOp};
+use codix_core::query::{DefOp, FindOp, OutlineOp, ShowOp};
 use codix_core::refs::RefsOp;
 use codix_core::rename::RenameOp;
 use codix_core::render::{Style, TextRender};
@@ -155,7 +156,7 @@ operations!(
     RefsOp,
     OutlineOp,
     ShowOp,
-    GrepOp,
+    AtOp,
     RenameOp,
     ApplyOp,
     UndoOp,

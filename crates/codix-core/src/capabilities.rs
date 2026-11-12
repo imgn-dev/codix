@@ -21,8 +21,8 @@ pub enum Tier {
     Symbols,
     /// Tier 2: tier 1, and scope-aware references and renames within a file.
     Scopes,
-    /// Keys, headings or text, for search only.
-    Search,
+    /// Text without symbols: files codix keeps track of, nothing more.
+    Text,
     /// Known to codix but left out of this build.
     NotInBuild,
 }
@@ -130,7 +130,7 @@ impl Operation for CapabilitiesOp {
             let mut languages: Vec<ProjectLanguage> = counts
                 .into_iter()
                 .map(|(name, files)| ProjectLanguage {
-                    tier: tiers.get(name.as_str()).copied().unwrap_or(Tier::Search),
+                    tier: tiers.get(name.as_str()).copied().unwrap_or(Tier::Text),
                     name,
                     files,
                 })
@@ -159,11 +159,9 @@ pub fn capabilities() -> Capabilities {
         .map(|name| {
             let descriptor = registry.languages.iter().find(|d| d.name == *name);
             let tier = match descriptor {
-                None if *name == crate::detect::TEXT => Tier::Search,
+                None if *name == crate::detect::TEXT => Tier::Text,
                 None => Tier::NotInBuild,
-                Some(d) if d.search_only || !registry.grammars.contains_key(&d.name) => {
-                    Tier::Search
-                }
+                Some(d) if d.search_only || !registry.grammars.contains_key(&d.name) => Tier::Text,
                 Some(d) if registry.grammars[&d.name].locals.is_some() => Tier::Scopes,
                 Some(_) => Tier::Symbols,
             };
@@ -402,7 +400,7 @@ impl Operation for LanguagesOp {
             if !languages.iter().any(|l| l.name == *name) {
                 languages.push(LanguageInfo {
                     name: (*name).to_owned(),
-                    tier: Tier::Search,
+                    tier: Tier::Text,
                     extensions: ambiguous_of(name),
                     filenames: Vec::new(),
                 });

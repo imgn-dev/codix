@@ -7,6 +7,7 @@ use serde::Serialize;
 
 use crate::Error;
 use crate::apply::ApplyResponse;
+use crate::at::AtResponse;
 use crate::capabilities::{
     Capabilities, LanguagesResponse, ProviderInfo, ProviderSource, ProviderStatus, Tier,
 };
@@ -19,8 +20,8 @@ use crate::page::{Location, Paged};
 use crate::previews::{DiscardResponse, PreviewsResponse, State};
 use crate::providers::MissingProvider;
 use crate::query::{
-    Alternative, DefResponse, FindResponse, GrepMatch, GrepResponse, OutlineNode, OutlineResponse,
-    Renamed, ShowResponse, SymbolResult,
+    Alternative, DefResponse, FindResponse, OutlineNode, OutlineResponse, Renamed, ShowResponse,
+    SymbolResult,
 };
 use crate::refs::{RefResult, RefsResponse};
 use crate::scan::ScanReport;
@@ -298,19 +299,6 @@ impl TextRender for DiscardResponse {
             [] => writeln!(w, "no pending previews"),
             ids => writeln!(w, "discarded {}", ids.join(", ")),
         }
-    }
-}
-
-impl Row for GrepMatch {
-    fn location(&self) -> &Location {
-        &self.location
-    }
-
-    fn columns(&self) -> Vec<String> {
-        vec![
-            self.enclosing.clone().unwrap_or_else(|| "-".to_owned()),
-            self.text.trim().to_owned(),
-        ]
     }
 }
 
@@ -617,13 +605,47 @@ fn symbol_line(s: &SymbolResult, style: Style) -> String {
     )
 }
 
-impl TextRender for GrepResponse {
+impl TextRender for AtResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
-        self.matches.render_text(w, style)?;
-        breakdown(w, style, &self.matches)?;
-        stale(w, self.possibly_stale)?;
-        let fields = self.next.as_ref().map(|n| vec![("after", n.after.clone())]);
-        next(w, style, fields)
+        let rows: Vec<Vec<String>> = self
+            .places
+            .iter()
+            .map(|p| match (&p.error, &p.enclosing) {
+                (Some(error), _) => vec![p.place.clone(), format!("error: {error}")],
+                (None, Some(s)) => vec![p.place.clone(), s.kind.clone(), s.qualified_name.clone()],
+                (None, None) => vec![p.place.clone(), "-".to_owned(), String::new()],
+            })
+            .collect();
+        // The places' columns align; an error takes the rest of its line.
+        let place = rows.iter().map(|r| r[0].chars().count()).max().unwrap_or(0);
+        let kind = rows
+            .iter()
+            .filter(|r| r.len() == 3)
+            .map(|r| r[1].chars().count())
+            .max()
+            .unwrap_or(0);
+        let name = rows
+            .iter()
+            .filter(|r| r.len() == 3)
+            .map(|r| r[2].chars().count())
+            .max()
+            .unwrap_or(0);
+        for (row, p) in rows.iter().zip(&self.places) {
+            let mut line = style.paint("36", &row[0]);
+            line.push_str(&" ".repeat(place - row[0].chars().count()));
+            line.push_str(COLUMN_GAP);
+            if row.len() == 2 {
+                line.push_str(&row[1]);
+            } else {
+                line = format!("{line}{:kind$}{COLUMN_GAP}{:name$}", row[1], row[2]);
+                if let Some(text) = &p.text {
+                    line.push_str(COLUMN_GAP);
+                    line.push_str(text.trim());
+                }
+            }
+            writeln!(w, "{}", line.trim_end())?;
+        }
+        Ok(())
     }
 }
 
@@ -814,7 +836,7 @@ impl TextRender for Capabilities {
             let needs = match command.tier {
                 Some(Tier::Symbols) => "needs tier 1 (symbols)",
                 Some(Tier::Scopes) => "needs tier 2 (scopes)",
-                Some(Tier::Search | Tier::NotInBuild) => "any indexed text",
+                Some(Tier::Text | Tier::NotInBuild) => "any indexed file",
                 None => "any project",
             };
             writeln!(w, "  {:width$}{COLUMN_GAP}{needs}", command.name)?;
@@ -857,7 +879,7 @@ fn tier_text(tier: Tier) -> &'static str {
     match tier {
         Tier::Symbols => "tier 1 (symbols)",
         Tier::Scopes => "tier 2 (scopes)",
-        Tier::Search => "search only",
+        Tier::Text => "text",
         Tier::NotInBuild => "not in this build",
     }
 }
@@ -1000,8 +1022,8 @@ impl TextRender for StatusResponse {
         writeln!(w, "project: {}", self.root.display())?;
         writeln!(
             w,
-            "files: {} indexed, {} search only, {} pending, {} errors, {} skipped",
-            f.indexed, f.search_only, f.pending, f.errors, f.skipped
+            "files: {} indexed, {} text, {} pending, {} errors, {} skipped",
+            f.indexed, f.text, f.pending, f.errors, f.skipped
         )?;
         match &self.daemon {
             Some(status) => {
@@ -1214,19 +1236,20 @@ mod tests {
 
     use super::*;
 
-    fn page(n: u32) -> Paged<GrepMatch> {
+    fn page(n: u32) -> Paged<RefResult> {
         Paged {
             items: (1..=n)
-                .map(|i| GrepMatch {
+                .map(|i| RefResult {
                     location: Location {
                         path: "src/a.rs".to_owned(),
                         root_path: FileId::from_canonical("src/a.rs"),
                         line: i,
                         column: 1,
                     },
-                    text: format!("f{i}"),
-                    enclosing: Some("def".to_owned()),
-                    enclosing_kind: None,
+                    context: "call".to_owned(),
+                    confidence: "scoped".to_owned(),
+                    enclosing: Some(format!("f{i}")),
+                    target: None,
                 })
                 .collect(),
             total: n as usize,
@@ -1235,7 +1258,7 @@ mod tests {
         }
     }
 
-    fn text(page: &Paged<GrepMatch>, color: bool) -> String {
+    fn text(page: &Paged<RefResult>, color: bool) -> String {
         let mut out = Vec::new();
         page.render_text(
             &mut out,
@@ -1328,15 +1351,17 @@ apply with: codix apply 3f9a2c41
 
     #[test]
     fn color_marks_locations_only_when_enabled() {
-        assert!(text(&page(1), true).starts_with("\x1b[36msrc/a.rs:1:1\x1b[0m  def  f1\n"));
+        assert!(
+            text(&page(1), true).starts_with("\x1b[36msrc/a.rs:1:1\x1b[0m  call  f1  scoped\n")
+        );
         assert!(!text(&page(1), false).contains('\x1b'));
     }
 
     #[test]
     fn columns_align_on_the_widest_cell() {
         let out = text(&page(10), false);
-        assert!(out.contains("src/a.rs:9:1   def  f9\n"));
-        assert!(out.contains("src/a.rs:10:1  def  f10\n"));
+        assert!(out.contains("src/a.rs:9:1   call  f9   scoped\n"));
+        assert!(out.contains("src/a.rs:10:1  call  f10  scoped\n"));
     }
 
     #[test]

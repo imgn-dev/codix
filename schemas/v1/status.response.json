@@ -113,14 +113,14 @@
           "minimum": 0,
           "type": "integer"
         },
-        "search_only": {
-          "description": "Searched as text only.",
+        "skipped": {
+          "description": "Binary, kept out of search.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
         },
-        "skipped": {
-          "description": "Binary, kept out of search.",
+        "text": {
+          "description": "Kept as text, without symbols.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
@@ -128,7 +128,7 @@
       },
       "required": [
         "indexed",
-        "search_only",
+        "text",
         "pending",
         "errors",
         "skipped"

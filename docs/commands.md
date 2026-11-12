@@ -128,16 +128,16 @@ Print the source of a symbol.
 codix show Invoice.total --context 2
 ```
 
-## `codix grep`
+## `codix at`
 
-Search file contents with a regular expression; each match names its enclosing symbol.
+Name the symbol around each place: a file and line, as other tools print them.
 
-- **When:** For text that is not a symbol name, such as strings, comments or call sites. For names, prefer find.
-- **Returns:** Matching lines with location and enclosing symbol.
-- **Needs:** any indexed text file
+- **When:** To know which function or class holds a line, such as each match of your own grep: `rg -n pattern | codix at -`.
+- **Returns:** For each place, the innermost enclosing symbol, its kind and qualified name, then any text that followed the place.
+- **Needs:** tier 1 (symbols)
 
 ```
-codix grep "TODO|FIXME" --lang java
+codix at src/billing/Invoice.java:12
 ```
 
 ## `codix rename`

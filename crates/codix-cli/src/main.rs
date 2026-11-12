@@ -64,6 +64,7 @@ use clap::error::ErrorKind;
 use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use codix_core::Error;
 use codix_core::apply::{ApplyOp, ApplyRequest};
+use codix_core::at::{AtOp, AtRequest};
 use codix_core::capabilities::{
     CapabilitiesOp, CapabilitiesRequest, LanguagesOp, LanguagesRequest,
 };
@@ -77,8 +78,8 @@ use codix_core::preflight::{Allow, Overrides};
 use codix_core::previews::{DiscardOp, DiscardRequest, PreviewsOp, PreviewsRequest};
 use codix_core::project::{ScopeRequest, Sources};
 use codix_core::query::{
-    DEFAULT_SOURCES, DefOp, DefRequest, FindOp, FindRequest, GrepOp, GrepRequest, OutlineOp,
-    OutlineRequest, ShowOp, ShowRequest,
+    DEFAULT_SOURCES, DefOp, DefRequest, FindOp, FindRequest, OutlineOp, OutlineRequest, ShowOp,
+    ShowRequest,
 };
 use codix_core::refs::{Confidence, RefContext, RefsOp, RefsRequest};
 use codix_core::rename::{RenameOp, RenameRequest};
@@ -166,7 +167,11 @@ enum Command {
         #[arg(long, default_value_t = DEFAULT_SOURCES, value_name = "N")]
         limit: usize,
     },
-    Grep(GrepArgs),
+    At {
+        /// Places as `path:line` or `path:line:col`, any text after a further colon kept, as `rg -n`, `rg --vimgrep` and compilers print them.
+        #[arg(required = true, value_name = "PLACE")]
+        places: Vec<String>,
+    },
     Rename(RenameArgs),
     Apply {
         /// The preview ID, as `rename` or `undo` returned it.
@@ -453,22 +458,6 @@ struct NarrowArgs {
 }
 
 #[derive(Args)]
-struct GrepArgs {
-    /// Regular expression, matched line by line.
-    pattern: String,
-    /// Search files of this language; repeatable.
-    #[arg(long = "lang", value_name = "LANGUAGE")]
-    languages: Vec<String>,
-    /// Keep matches inside a symbol of this kind; repeatable.
-    #[arg(long = "kind", value_name = "KIND")]
-    kinds: Vec<String>,
-    #[command(flatten)]
-    scope: ScopeArgs,
-    #[command(flatten)]
-    page: PageArgs,
-}
-
-#[derive(Args)]
 struct ScopeArgs {
     /// Limit results to the current directory's subtree.
     #[arg(long)]
@@ -653,6 +642,28 @@ fn command_line(fields: &[(&'static str, String)]) -> String {
     INVOCATION
         .get()
         .map_or_else(String::new, |invocation| invocation.next(fields))
+}
+
+/// The places given, `-` replaced by the lines of standard input, as another
+/// tool printed them.
+fn stdin_places(places: Vec<String>) -> Result<Vec<String>, Error> {
+    let mut all = Vec::new();
+    for place in places {
+        if place != "-" {
+            all.push(place);
+            continue;
+        }
+        for line in io::stdin().lines() {
+            let line = line.map_err(|source| Error::Io {
+                path: "<stdin>".into(),
+                source,
+            })?;
+            if !line.trim().is_empty() {
+                all.push(line);
+            }
+        }
+    }
+    Ok(all)
 }
 
 /// Runs an operation through the project's daemon when one runs, otherwise
@@ -909,15 +920,9 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
             Ok(()) => exit::SUCCESS,
             Err(error) => output.error(&error),
         },
-        Command::Grep(args) => {
-            let request = args.page.page().map(|page| GrepRequest {
-                pattern: args.pattern,
-                languages: args.languages,
-                kinds: args.kinds,
-                scope: args.scope.request(),
-                page,
-            });
-            run(output, &GrepOp, ctx, request)
+        Command::At { places } => {
+            let request = stdin_places(places).map(|places| AtRequest { places });
+            run(output, &AtOp, ctx, request)
         }
     }
 }
@@ -1125,8 +1130,8 @@ mod tests {
                         Tier::Symbols
                     }
                 }
-                Some(_) => Tier::Search,
-                None if language.name == "text" => Tier::Search,
+                Some(_) => Tier::Text,
+                None if language.name == "text" => Tier::Text,
                 None => Tier::NotInBuild,
             };
             assert_eq!(language.tier, expected, "{}", language.name);
