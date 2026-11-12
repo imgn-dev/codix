@@ -12,6 +12,7 @@ use crate::capabilities::{
 };
 use crate::config::{ConfigResponse, Setting};
 use crate::edit::{Exclusion, PreviewResponse};
+use crate::error::Candidate;
 use crate::indexing::{InitResponse, StatusResponse};
 use crate::op::Warning;
 use crate::page::{Location, Paged};
@@ -152,6 +153,19 @@ impl Row for RefResult {
 
 impl TextRender for RefsResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        // Several symbols, not overloads of one: which, before their uses.
+        if let [first, ..] = self.targets.as_slice()
+            && self.targets.iter().any(|t| {
+                t.location.root_path != first.location.root_path
+                    || t.qualified_name != first.qualified_name
+                    || t.kind != first.kind
+            })
+        {
+            writeln!(w, "{} matches:", self.targets.len())?;
+            for target in &self.targets {
+                writeln!(w, "  {}", symbol_line(target, style))?;
+            }
+        }
         self.references.render_text(w, style)?;
         if self.references.total > 0 {
             let definitions = if self.definitions == 1 {
@@ -390,7 +404,7 @@ fn stale(w: &mut dyn Write, possibly_stale: bool) -> io::Result<()> {
 
 impl TextRender for DefResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
-        for d in std::iter::once(&self.definition).chain(&self.overloads) {
+        for d in &self.definitions {
             let mut line = format!(
                 "{}  {}  {}",
                 style.paint("36", &location(&d.location)),
@@ -404,8 +418,16 @@ impl TextRender for DefResponse {
             writeln!(w, "{line}")?;
             writeln!(w, "{}", d.symbol_id)?;
         }
-        if !self.overloads.is_empty() {
-            writeln!(w, "{} overloads", self.overloads.len() + 1)?;
+        if let [first, ..] = self.definitions.as_slice()
+            && self.definitions.len() > 1
+        {
+            let overloads = self.definitions.iter().all(|d| {
+                d.location.root_path == first.location.root_path
+                    && d.qualified_name == first.qualified_name
+                    && d.kind == first.kind
+            });
+            let noun = if overloads { "overloads" } else { "matches" };
+            writeln!(w, "{} {noun}", self.definitions.len())?;
         }
         renamed(w, self.renamed.as_ref())?;
         stale(w, self.possibly_stale)
@@ -527,22 +549,46 @@ impl TextRender for OutlineResponse {
 
 impl TextRender for ShowResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
-        let s = &self.symbol;
-        writeln!(
-            w,
-            "{}  {}  {}",
-            style.paint("36", &location(&s.location)),
-            s.kind,
-            s.qualified_name
-        )?;
-        let last = self.first_line as usize + self.lines.len();
-        let width = last.saturating_sub(1).to_string().len();
-        for (i, line) in self.lines.iter().enumerate() {
-            writeln!(w, "{:>width$} | {line}", self.first_line as usize + i)?;
+        // Several matches: the list first, then each one's source.
+        if self.total > 1 {
+            writeln!(w, "{} matches:", self.total)?;
+            for source in &self.sources {
+                writeln!(w, "  {}", symbol_line(&source.symbol, style))?;
+            }
+            if self.sources.len() < self.total {
+                writeln!(
+                    w,
+                    "  {} more; narrow with --kind or --path, or raise --limit",
+                    self.total - self.sources.len()
+                )?;
+            }
+        }
+        for (i, source) in self.sources.iter().enumerate() {
+            if self.total > 1 {
+                writeln!(w)?;
+            }
+            if i == 0 || self.total > 1 {
+                writeln!(w, "{}", symbol_line(&source.symbol, style))?;
+            }
+            let last = source.first_line as usize + source.lines.len();
+            let width = last.saturating_sub(1).to_string().len();
+            for (n, line) in source.lines.iter().enumerate() {
+                writeln!(w, "{:>width$} | {line}", source.first_line as usize + n)?;
+            }
         }
         renamed(w, self.renamed.as_ref())?;
         stale(w, self.possibly_stale)
     }
+}
+
+/// `path:line:col  kind  Qualified.name`.
+fn symbol_line(s: &SymbolResult, style: Style) -> String {
+    format!(
+        "{}  {}  {}",
+        style.paint("36", &location(&s.location)),
+        s.kind,
+        s.qualified_name
+    )
 }
 
 impl TextRender for GrepResponse {
@@ -1039,9 +1085,9 @@ struct ErrorBody<'a> {
     cause: String,
     /// The next step.
     hint: String,
-    /// Symbol IDs that match, for `ambiguous_symbol`.
-    #[serde(skip_serializing_if = "<[String]>::is_empty")]
-    candidates: &'a [String],
+    /// The symbols that match, for `ambiguous_symbol`.
+    #[serde(skip_serializing_if = "<[Candidate]>::is_empty")]
+    candidates: &'a [Candidate],
 }
 
 /// The schema of every response's JSON envelope, any result.

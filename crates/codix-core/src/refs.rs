@@ -18,7 +18,7 @@ use crate::project::{FileId, Project, ScopeRequest};
 use crate::query::{Renamed, SymbolResult, complete, following, indexed};
 use crate::scope::{Binding, Defines, FileModel, Receiver};
 use crate::store::{FileStatus, RefState, Snapshot, Store, SymbolHit};
-use crate::symbol_id::{SymbolRef, resolve_overloads_where};
+use crate::symbol_id::{SymbolRef, resolve_all_where, resolve_overloads_where};
 
 /// A file read from disk, with its model.
 pub struct Analyzed {
@@ -206,6 +206,55 @@ pub(crate) fn target(
     Ok(Target::Definitions { file, definitions })
 }
 
+/// Resolves a symbol argument to every symbol it names, as `def` lists them:
+/// one target per file, holding the matches there and their overloads.
+pub(crate) fn targets(
+    ctx: &Context,
+    project: &Project,
+    config: &Config,
+    snapshot: &Snapshot<'_>,
+    input: &str,
+    keep: &dyn Fn(&SymbolHit) -> bool,
+) -> Result<Vec<Target>, Error> {
+    if matches!(SymbolRef::parse(input)?, SymbolRef::Location { .. }) {
+        return target(ctx, project, config, snapshot, input, keep).map(|t| vec![t]);
+    }
+    let hits = resolve_all_where(snapshot, project, ctx.cwd(), input, keep)?;
+    let mut targets = Vec::new();
+    let mut paths: Vec<&str> = hits.iter().map(|h| h.path.as_str()).collect();
+    paths.dedup();
+    for path in paths {
+        let wanted: Vec<&str> = hits
+            .iter()
+            .filter(|h| h.path == path)
+            .map(|h| h.symbol.symbol_id.as_str())
+            .collect();
+        let Some(file) = analyze(project, config, &FileId::from_canonical(path))? else {
+            continue;
+        };
+        let mut definitions: Vec<usize> = Vec::new();
+        for (d, definition) in file.model.definitions.iter().enumerate() {
+            if let Defines::Symbol(i) = definition.defines
+                && wanted.contains(&file.model.symbols[i].symbol_id.as_str())
+                && !definitions.contains(&d)
+            {
+                definitions.extend(file.model.overloads(d));
+            }
+        }
+        definitions.sort_unstable();
+        definitions.dedup();
+        if !definitions.is_empty() {
+            targets.push(Target::Definitions { file, definitions });
+        }
+    }
+    if targets.is_empty() {
+        return Err(Error::UnknownSymbol {
+            query: input.to_owned(),
+        });
+    }
+    Ok(targets)
+}
+
 /// `refs`: every reference to a symbol or a local.
 pub struct RefsOp;
 
@@ -252,6 +301,9 @@ pub struct RefResult {
     pub confidence: String,
     /// Qualified name of the innermost enclosing symbol.
     pub enclosing: Option<String>,
+    /// The ID of the symbol it refers to, of those the input names; none
+    /// when matched by name only.
+    pub target: Option<String>,
 }
 
 impl Ranked for RefResult {
@@ -267,9 +319,9 @@ impl Ranked for RefResult {
 /// What [`RefsOp`] answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct RefsResponse {
-    /// The symbol's ID, and its overloads' after it; or a local's
-    /// `file:line:col`.
-    pub targets: Vec<String>,
+    /// Every symbol the input names, and the overloads of each, by path and
+    /// position; a local's ID is its `file:line:col`.
+    pub targets: Vec<SymbolResult>,
     /// The definitions first, then references in their file, then by path.
     pub references: Paged<RefResult>,
     /// Definitions among the results, before paging.
@@ -317,92 +369,66 @@ impl Operation for RefsOp {
         let possibly_stale = complete(ctx, project, &config)?;
         let mut store = Store::open(&project.index_path())?;
         let snapshot = store.snapshot()?;
-        let (Target::Definitions { file, definitions }, renamed) =
-            following(&request.symbol, |input| {
-                target(ctx, project, &config, &snapshot, input, &|hit| {
-                    request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind)
-                })
-            })?;
-        let model = &file.model;
-        let first = &model.definitions[definitions[0]];
-        let targets: Vec<String> = definitions
-            .iter()
-            .map(|&d| symbol_result(ctx, &file, d, SCOPED).symbol_id)
-            .collect();
-        let enclosing = |byte: usize| {
-            model
-                .enclosing_symbol(byte)
-                .map(|i| model.symbols[i].qualified_name.clone())
-        };
+        let (targets, renamed) = following(&request.symbol, |input| {
+            targets(ctx, project, &config, &snapshot, input, &|hit| {
+                request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind)
+            })
+        })?;
         let mut results = Vec::new();
-        for &d in &definitions {
-            let at = model.definitions[d].name_range.start;
-            results.push(RefResult {
-                location: ctx.location(&file.id, at.line, at.column),
-                context: "def".to_owned(),
-                confidence: SCOPED.to_owned(),
-                enclosing: None,
-            });
+        for target in &targets {
+            results.extend(references_of(ctx, project, &snapshot, target)?);
         }
-        let visible_elsewhere = match &first.defines {
-            Defines::Symbol(i) => model.symbols[*i].visibility.as_deref() != Some("private"),
-            Defines::Local { .. } => false,
+        // A place found for several matches keeps its best reading: the
+        // definition, then a binding, then a name match.
+        let rank = |r: &RefResult| match (r.context.as_str(), r.confidence.as_str()) {
+            ("def", _) => 0,
+            (_, SCOPED) => 1,
+            _ => 2,
         };
-        for r in &model.references {
-            let confidence = match r.binding {
-                Binding::Bound(d) if definitions.contains(&d) => SCOPED,
-                Binding::Free | Binding::Uncertain
-                    if visible_elsewhere
-                        && r.name == first.name
-                        && (r.receiver != Receiver::None || r.binding == Binding::Uncertain) =>
-                {
-                    TEXTUAL
-                }
-                _ => continue,
-            };
-            let at = r.range.start;
-            results.push(RefResult {
-                location: ctx.location(&file.id, at.line, at.column),
-                context: r.context.as_str().to_owned(),
-                confidence: confidence.to_owned(),
-                enclosing: enclosing(at.byte as usize),
-            });
-        }
-        if visible_elsewhere {
-            for r in snapshot.refs_named(&first.name)? {
-                if r.path == file.id.as_str() || r.state == RefState::Bound {
-                    continue;
-                }
-                results.push(RefResult {
-                    location: ctx.location(
-                        &FileId::from_canonical(r.path.as_str()),
-                        r.start.line,
-                        r.start.column,
-                    ),
-                    context: r.context.as_str().to_owned(),
-                    confidence: TEXTUAL.to_owned(),
-                    enclosing: r.enclosing.as_deref().map(qualified_part),
-                });
-            }
-            let defined: Vec<Location> = results.iter().map(|r| r.location.clone()).collect();
-            results.extend(
-                tier_1_matches(ctx, project, &snapshot, &first.name)?
-                    .into_iter()
-                    .filter(|r| !defined.contains(&r.location)),
-            );
-        }
+        results.sort_by(|a, b| {
+            (
+                &a.location.root_path,
+                a.location.line,
+                a.location.column,
+                rank(a),
+            )
+                .cmp(&(
+                    &b.location.root_path,
+                    b.location.line,
+                    b.location.column,
+                    rank(b),
+                ))
+        });
+        results.dedup_by(|a, b| a.location == b.location);
         results.retain(|r| scope.contains(&r.location.root_path) && kept(request.confidence, r));
-        sort_results(&mut results, Some(file.id.as_str()));
+        let Target::Definitions { file: anchor, .. } = &targets[0];
+        let anchor = anchor.id.as_str().to_owned();
+        sort_results(&mut results, Some(&anchor));
         let (definitions, scoped, textual) = counts(&results);
-        // A symbol is pinned by its ID, which follows renames; a local has
-        // only its place.
-        let symbol = match first.defines {
-            Defines::Symbol(_) => targets[0].clone(),
-            Defines::Local { .. } => request.symbol.clone(),
+        let matched: Vec<SymbolResult> = targets
+            .iter()
+            .flat_map(|Target::Definitions { file, definitions }| {
+                definitions
+                    .iter()
+                    .map(|&d| symbol_result(ctx, file, d, SCOPED))
+            })
+            .collect();
+        // One symbol is pinned by its ID, which follows renames; a local has
+        // only its place, and several matches keep the name that found them.
+        let symbol = match targets.as_slice() {
+            [Target::Definitions { file, definitions }]
+                if matches!(
+                    file.model.definitions[definitions[0]].defines,
+                    Defines::Symbol(_)
+                ) =>
+            {
+                matched[0].symbol_id.clone()
+            }
+            _ => request.symbol.clone(),
         };
-        let (references, after) = request.page.apply(results, Some(file.id.as_str()));
+        let (references, after) = request.page.apply(results, Some(&anchor));
         Ok(RefsResponse {
-            targets,
+            targets: matched,
             references,
             definitions,
             scoped,
@@ -412,6 +438,92 @@ impl Operation for RefsOp {
             renamed,
         })
     }
+}
+
+/// The references to the definitions of `target`: bound in their file, and
+/// by name elsewhere when the symbol is visible there.
+fn references_of(
+    ctx: &Context,
+    project: &Project,
+    snapshot: &Snapshot<'_>,
+    target: &Target,
+) -> Result<Vec<RefResult>, Error> {
+    let Target::Definitions { file, definitions } = target;
+    let model = &file.model;
+    let first = &model.definitions[definitions[0]];
+    let id_of = |d: usize| match model.definitions[d].defines {
+        Defines::Symbol(i) => model.symbols[i].symbol_id.clone(),
+        Defines::Local { .. } => {
+            let at = model.definitions[d].name_range.start;
+            format!("{}:{}:{}", file.id.as_str(), at.line, at.column)
+        }
+    };
+    let enclosing = |byte: usize| {
+        model
+            .enclosing_symbol(byte)
+            .map(|i| model.symbols[i].qualified_name.clone())
+    };
+    let mut results = Vec::new();
+    for &d in definitions {
+        let at = model.definitions[d].name_range.start;
+        results.push(RefResult {
+            location: ctx.location(&file.id, at.line, at.column),
+            context: "def".to_owned(),
+            confidence: SCOPED.to_owned(),
+            enclosing: None,
+            target: Some(id_of(d)),
+        });
+    }
+    let visible_elsewhere = match &first.defines {
+        Defines::Symbol(i) => model.symbols[*i].visibility.as_deref() != Some("private"),
+        Defines::Local { .. } => false,
+    };
+    for r in &model.references {
+        let (confidence, target) = match r.binding {
+            Binding::Bound(d) if definitions.contains(&d) => (SCOPED, Some(id_of(d))),
+            Binding::Free | Binding::Uncertain
+                if visible_elsewhere
+                    && r.name == first.name
+                    && (r.receiver != Receiver::None || r.binding == Binding::Uncertain) =>
+            {
+                (TEXTUAL, None)
+            }
+            _ => continue,
+        };
+        let at = r.range.start;
+        results.push(RefResult {
+            location: ctx.location(&file.id, at.line, at.column),
+            context: r.context.as_str().to_owned(),
+            confidence: confidence.to_owned(),
+            enclosing: enclosing(at.byte as usize),
+            target,
+        });
+    }
+    if visible_elsewhere {
+        for r in snapshot.refs_named(&first.name)? {
+            if r.path == file.id.as_str() || r.state == RefState::Bound {
+                continue;
+            }
+            results.push(RefResult {
+                location: ctx.location(
+                    &FileId::from_canonical(r.path.as_str()),
+                    r.start.line,
+                    r.start.column,
+                ),
+                context: r.context.as_str().to_owned(),
+                confidence: TEXTUAL.to_owned(),
+                enclosing: r.enclosing.as_deref().map(qualified_part),
+                target: None,
+            });
+        }
+        let defined: Vec<Location> = results.iter().map(|r| r.location.clone()).collect();
+        results.extend(
+            tier_1_matches(ctx, project, snapshot, &first.name)?
+                .into_iter()
+                .filter(|r| !defined.contains(&r.location)),
+        );
+    }
+    Ok(results)
 }
 
 /// Whether `result` stays when references of `confidence` only are kept:
@@ -483,6 +595,7 @@ fn tier_1_matches(
                     context: "read".to_owned(),
                     confidence: TEXTUAL.to_owned(),
                     enclosing: None,
+                    target: None,
                 });
             }
         }

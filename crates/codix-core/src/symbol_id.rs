@@ -6,7 +6,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 use crate::Error;
-use crate::project::Project;
+use crate::error::Candidate;
+use crate::project::{FileId, Project};
 use crate::store::{Snapshot, SymbolHit, SymbolRow};
 
 /// Hex digits of the hash when they suffice to tell symbols apart.
@@ -176,7 +177,31 @@ pub fn resolve_where(
     input: &str,
     keep: &dyn Fn(&SymbolHit) -> bool,
 ) -> Result<SymbolHit, Error> {
-    one(input, candidates(snapshot, project, cwd, input, keep)?)
+    let matches = candidates(snapshot, project, cwd, input, keep)?;
+    one(project, cwd, input, matches)
+}
+
+/// Every symbol `input` names that `keep` accepts, by path and position:
+/// what a lookup answers when a name is ambiguous. None is `unknown_symbol`.
+pub fn resolve_all_where(
+    snapshot: &Snapshot<'_>,
+    project: &Project,
+    cwd: &Path,
+    input: &str,
+    keep: &dyn Fn(&SymbolHit) -> bool,
+) -> Result<Vec<SymbolHit>, Error> {
+    let mut matches = candidates(snapshot, project, cwd, input, keep)?;
+    if matches.is_empty() {
+        return Err(Error::UnknownSymbol {
+            query: input.to_owned(),
+        });
+    }
+    matches.sort_by(|a, b| {
+        a.path
+            .cmp(&b.path)
+            .then(a.symbol.range.start.byte.cmp(&b.symbol.range.start.byte))
+    });
+    Ok(matches)
 }
 
 /// Like [`resolve_where`], answering every overload when the matches are
@@ -193,7 +218,7 @@ pub fn resolve_overloads_where(
         matches.sort_by_key(|hit| hit.symbol.range.start.byte);
         return Ok(matches);
     }
-    one(input, matches).map(|hit| vec![hit])
+    one(project, cwd, input, matches).map(|hit| vec![hit])
 }
 
 /// Whether every match is a method, function or constructor of the same kind,
@@ -295,7 +320,12 @@ fn innermost_at(symbols: Vec<SymbolHit>, line: u32, column: u32) -> Vec<SymbolHi
         .collect()
 }
 
-fn one(input: &str, mut matches: Vec<SymbolHit>) -> Result<SymbolHit, Error> {
+fn one(
+    project: &Project,
+    cwd: &Path,
+    input: &str,
+    mut matches: Vec<SymbolHit>,
+) -> Result<SymbolHit, Error> {
     match matches.len() {
         0 => Err(Error::UnknownSymbol {
             query: input.to_owned(),
@@ -306,9 +336,22 @@ fn one(input: &str, mut matches: Vec<SymbolHit>) -> Result<SymbolHit, Error> {
             candidates: matches
                 .into_iter()
                 .take(MAX_CANDIDATES)
-                .map(|hit| hit.symbol.symbol_id)
+                .map(|hit| candidate(project, cwd, hit))
                 .collect(),
         }),
+    }
+}
+
+/// A match as an ambiguity lists it.
+pub(crate) fn candidate(project: &Project, cwd: &Path, hit: SymbolHit) -> Candidate {
+    let at = hit.symbol.name_range.start;
+    Candidate {
+        path: project.display(cwd, &FileId::from_canonical(hit.path.as_str())),
+        symbol_id: hit.symbol.symbol_id,
+        kind: hit.symbol.kind,
+        line: at.line,
+        column: at.column,
+        signature: hit.symbol.signature,
     }
 }
 

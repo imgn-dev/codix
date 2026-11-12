@@ -91,7 +91,9 @@ fn the_next_page_of_refs_keeps_its_symbol_through_a_rename() {
     assert_eq!(result["definitions"], 1);
     assert_eq!(result["scoped"], 4);
     assert_eq!(result["textual"], 0);
-    let id = result["targets"][0].as_str().expect("a target");
+    let id = result["targets"][0]["symbol_id"]
+        .as_str()
+        .expect("a target");
     let next = &result["next"];
     assert_eq!(next["symbol"], id);
     let after = next["after"].as_str().expect("a next page");

@@ -85,7 +85,7 @@ codix find Invoice --kind class
 Show where a symbol is defined.
 
 - **When:** To go from a name, a symbol ID or a `file:line:col` to its definition.
-- **Returns:** The definition's location, signature and ID; every overload when the name has several in one file; the candidates when it is ambiguous.
+- **Returns:** The definition's location, signature and ID; for a name with several symbols, every one of them.
 - **Needs:** tier 1 (symbols)
 
 ```
@@ -97,7 +97,7 @@ codix def Invoice.total
 List every reference to a symbol or local variable, definition first.
 
 - **When:** Instead of grep to find who uses a name: references are bound by scope, so a different variable with the same name is not one of them.
-- **Returns:** Each site with its context (call, type, read, write) and enclosing symbol; `scoped` when bound by scope, `textual` when matched by name in another file or through another object.
+- **Returns:** Each site with its context (call, type, read, write), enclosing symbol and target; `scoped` when bound by scope, `textual` when matched by name only. A name with several symbols covers them all.
 - **Needs:** tier 1 (symbols)
 
 ```
@@ -121,7 +121,7 @@ codix outline src/billing/Invoice.java
 Print the source of a symbol.
 
 - **When:** Instead of reading a file to see one class, method or function.
-- **Returns:** The symbol's lines, with --context lines around them.
+- **Returns:** The symbol's lines, with --context lines around them; for a name with several symbols, the list, then each one's lines, at most --limit.
 - **Needs:** tier 1 (symbols)
 
 ```

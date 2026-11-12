@@ -215,30 +215,40 @@ mod with_java {
 
     #[test]
     fn ambiguous_symbol_lists_candidates() {
-        let (_guard, root) = indexed(&[(
-            "A.java",
-            "class A {\n  void f(int x) {}\n  void f(long x) {}\n}\n",
-        )]);
-        // `def` answers every overload; `show` has to know which body to print.
-        let out = codix(&root, &root, &["show", "f"]);
+        let (_guard, root) = indexed(&[
+            ("A.java", "class A {\n  void f(int x) {}\n}\n"),
+            ("B.java", "class B {\n  void f(long x) {}\n}\n"),
+        ]);
+        // Lookups answer every match; a rename has to know which to edit.
+        let out = codix(&root, &root, &["rename", "f", "g"]);
         assert_eq!(out.code, Some(3));
         let lines: Vec<&str> = out.stderr.lines().collect();
         assert_eq!(lines[0], "error[ambiguous_symbol]: \"f\" matches 2 symbols");
+        assert_eq!(lines[1], "  method  A.java:2:8  void f(int x)");
         assert!(
-            lines[1].starts_with("  java:A.java::A.f#")
-                && lines[2].starts_with("  java:A.java::A.f#")
+            lines[2].starts_with("    java:A.java::A.f#"),
+            "{}",
+            out.stderr
+        );
+        assert_eq!(lines[3], "  method  B.java:2:8  void f(long x)");
+        assert!(
+            lines[4].starts_with("    java:B.java::B.f#"),
+            "{}",
+            out.stderr
         );
         assert_eq!(
-            lines[3],
-            "hint: pass a full symbol ID, or narrow with --kind or --path"
+            lines[5],
+            "hint: pass one of the IDs above, or narrow with --kind or --path"
         );
 
         let json: serde_json::Value =
-            serde_json::from_str(&codix(&root, &root, &["show", "f", "--json"]).stdout).unwrap();
-        assert_eq!(
-            json["error"]["candidates"].as_array().map(Vec::len),
-            Some(2)
-        );
+            serde_json::from_str(&codix(&root, &root, &["rename", "f", "g", "--json"]).stdout)
+                .unwrap();
+        let candidates = &json["error"]["candidates"];
+        assert_eq!(candidates.as_array().map(Vec::len), Some(2));
+        assert_eq!(candidates[1]["path"], "B.java");
+        assert_eq!(candidates[1]["line"], 2);
+        assert_eq!(candidates[1]["signature"], "void f(long x)");
     }
 
     #[test]

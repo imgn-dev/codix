@@ -95,13 +95,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "What [`DefOp`] answers.",
   "properties": {
-    "definition": {
-      "$ref": "#/$defs/SymbolResult",
-      "description": "The definition; for overloads, the first one in its file."
-    },
-    "overloads": {
-      "default": [],
-      "description": "The other overloads of the same name in the same file.",
+    "definitions": {
+      "description": "Every symbol the input names, by path and position: one, the\noverloads of a name in its file, or every match of an ambiguous name.",
       "items": {
         "$ref": "#/$defs/SymbolResult"
       },
@@ -125,7 +120,7 @@
     }
   },
   "required": [
-    "definition",
+    "definitions",
     "possibly_stale"
   ],
   "title": "DefResponse",

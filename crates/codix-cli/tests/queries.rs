@@ -73,7 +73,7 @@ fn def_by_name_id_and_location() {
     let json: Value =
         serde_json::from_str(&codix(&root, &root, &["def", "Cart.total", "--json"]).stdout)
             .unwrap();
-    let id = json["result"]["definition"]["symbol_id"]
+    let id = json["result"]["definitions"][0]["symbol_id"]
         .as_str()
         .unwrap()
         .to_owned();
@@ -144,11 +144,19 @@ fn def_lists_every_overload_of_a_name() {
         .stdout,
     )
     .expect("JSON");
-    assert_eq!(json["result"]["definition"]["line"], 6);
-    assert_eq!(json["result"]["overloads"][0]["line"], 10);
-    // The field of the same name is another symbol, not an overload.
+    assert_eq!(json["result"]["definitions"][0]["line"], 6);
+    assert_eq!(json["result"]["definitions"][1]["line"], 10);
+    // The field of the same name is another symbol, not an overload: all
+    // three are listed as matches.
     let all = codix(&root, &root, &["def", "Invoice.total"]);
-    assert_eq!(all.code, Some(3), "{}", all.stdout);
+    assert_eq!(all.code, Some(0), "{}", all.stderr);
+    assert!(
+        all.stdout
+            .starts_with("src/billing/Invoice.java:4:18  field  Invoice.total"),
+        "{}",
+        all.stdout
+    );
+    assert!(all.stdout.ends_with("\n3 matches\n"), "{}", all.stdout);
 }
 
 #[test]
@@ -170,14 +178,99 @@ fn a_type_is_found_rather_than_its_own_constructors() {
 }
 
 #[test]
-fn show_still_asks_which_overload() {
+fn refs_of_an_ambiguous_name_covers_every_match() {
+    let (_guard, root) = indexed(&[
+        (
+            "src/A.java",
+            "class A {\n    private void f() {}\n    void g() { f(); }\n}\n",
+        ),
+        (
+            "src/B.java",
+            "class B {\n    private void f() {}\n    void h() { f(); f(); }\n}\n",
+        ),
+    ]);
+    let text = codix(&root, &root, &["refs", "f"]);
+    assert_eq!(text.code, Some(0), "{}", text.stderr);
+    assert!(
+        text.stdout.starts_with(
+            "2 matches:\n  src/A.java:2:18  method  A.f\n  src/B.java:2:18  method  B.f\n"
+        ),
+        "{}",
+        text.stdout
+    );
+    assert!(
+        text.stdout
+            .contains("5 results\n2 definitions, 3 scoped, 0 textual\n"),
+        "{}",
+        text.stdout
+    );
+
+    let json: Value =
+        serde_json::from_str(&codix(&root, &root, &["refs", "f", "--json"]).stdout).expect("JSON");
+    let result = &json["result"];
+    let a = result["targets"][0]["symbol_id"].as_str().expect("A.f");
+    let b = result["targets"][1]["symbol_id"].as_str().expect("B.f");
+    let targets: Vec<(&str, &str)> = result["references"]["items"]
+        .as_array()
+        .expect("items")
+        .iter()
+        .map(|r| {
+            (
+                r["path"].as_str().unwrap_or_default(),
+                r["target"].as_str().unwrap_or_default(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        targets,
+        [
+            ("src/A.java", a),
+            ("src/A.java", a),
+            ("src/B.java", b),
+            ("src/B.java", b),
+            ("src/B.java", b)
+        ]
+    );
+}
+
+#[test]
+fn show_prints_every_match_after_listing_them() {
     let (_guard, root) = indexed(BILLING);
     let out = codix(&root, &root, &["show", "Invoice.total", "--kind", "method"]);
-    assert_eq!(out.code, Some(3), "{}", out.stdout);
+    assert_eq!(out.code, Some(0), "{}", out.stderr);
     assert!(
-        out.stderr.starts_with("error[ambiguous_symbol]"),
+        out.stdout.starts_with(
+            "2 matches:\n  src/billing/Invoice.java:6:17  method  Invoice.total\n  src/billing/Invoice.java:10:10  method  Invoice.total\n\n"
+        ),
         "{}",
-        out.stderr
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("public long total() {"),
+        "{}",
+        out.stdout
+    );
+    assert!(
+        out.stdout.contains("long total(long discount) {"),
+        "{}",
+        out.stdout
+    );
+
+    let one = codix(
+        &root,
+        &root,
+        &["show", "Invoice.total", "--kind", "method", "--limit", "1"],
+    );
+    assert!(
+        one.stdout
+            .contains("  1 more; narrow with --kind or --path, or raise --limit"),
+        "{}",
+        one.stdout
+    );
+    assert!(
+        !one.stdout.contains("long total(long discount) {"),
+        "{}",
+        one.stdout
     );
 }
 
@@ -347,12 +440,12 @@ fn def_at_a_name_follows_its_binding() {
     );
     let call = codix(&root, &root, &["def", "src/Invoice.java:11:21", "--json"]);
     let json: Value = serde_json::from_str(&call.stdout).unwrap();
-    assert_eq!(json["result"]["definition"]["kind"], "method");
-    assert_eq!(json["result"]["definition"]["confidence"], "scoped");
+    assert_eq!(json["result"]["definitions"][0]["kind"], "method");
+    assert_eq!(json["result"]["definitions"][0]["confidence"], "scoped");
 
     let local = codix(&root, &root, &["def", "src/Invoice.java:12:16", "--json"]);
     let json: Value = serde_json::from_str(&local.stdout).unwrap();
-    let definition = &json["result"]["definition"];
+    let definition = &json["result"]["definitions"][0];
     assert_eq!(
         (
             &definition["kind"],
@@ -366,9 +459,11 @@ fn def_at_a_name_follows_its_binding() {
         )
     );
 
-    // Through another object, the name is looked up by name.
+    // Through another object, the name is looked up by name: every symbol
+    // of that name.
     let other = codix(&root, &root, &["def", "src/Report.java:5:24"]);
-    assert_eq!(other.code, Some(3), "{}", other.stdout);
+    assert_eq!(other.code, Some(0), "{}", other.stderr);
+    assert!(other.stdout.ends_with("\n2 matches\n"), "{}", other.stdout);
     let narrowed = codix(
         &root,
         &root,

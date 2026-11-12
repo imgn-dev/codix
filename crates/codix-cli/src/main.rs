@@ -77,8 +77,8 @@ use codix_core::preflight::{Allow, Overrides};
 use codix_core::previews::{DiscardOp, DiscardRequest, PreviewsOp, PreviewsRequest};
 use codix_core::project::ScopeRequest;
 use codix_core::query::{
-    DefOp, DefRequest, FindOp, FindRequest, GrepOp, GrepRequest, OutlineOp, OutlineRequest, ShowOp,
-    ShowRequest,
+    DEFAULT_SOURCES, DefOp, DefRequest, FindOp, FindRequest, GrepOp, GrepRequest, OutlineOp,
+    OutlineRequest, ShowOp, ShowRequest,
 };
 use codix_core::refs::{Confidence, RefsOp, RefsRequest};
 use codix_core::rename::{RenameOp, RenameRequest};
@@ -162,6 +162,9 @@ enum Command {
         /// Lines shown before and after the symbol.
         #[arg(long, default_value_t = 0, value_name = "N")]
         context: usize,
+        /// Most symbols shown when the name matches several.
+        #[arg(long, default_value_t = DEFAULT_SOURCES, value_name = "N")]
+        limit: usize,
     },
     Grep(GrepArgs),
     Rename(RenameArgs),
@@ -829,12 +832,14 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
             symbol,
             narrow,
             context,
+            limit,
         } => {
             let request = ShowRequest {
                 symbol,
                 kinds: narrow.kinds,
                 scope: narrow.scope.request(),
                 context,
+                limit,
             };
             run(output, &ShowOp, ctx, Ok(request))
         }
@@ -911,8 +916,9 @@ mod tests {
                     (key.clone(), trimmed(help))
                 })
                 .collect();
-            // `--all` is the CLI's alone: an agent passes `limit`.
-            if inputs.contains_key("limit") {
+            // A paged command's `--all` is the CLI's alone: an agent passes
+            // `limit`.
+            if inputs.contains_key("after") {
                 assert!(flags.remove("all").is_some(), "{name} --all");
             }
             // One `mode` property stands for the four mode flags.

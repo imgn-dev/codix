@@ -216,7 +216,7 @@ pub(crate) fn measure(codix: &Path, repo: &Path, label: &str, dirs: &[&str]) -> 
         let (_, json, _) = codix_json(codix, repo, &["def", id]);
         let renamed = json["result"]["renamed"]["to"]
             .as_str()
-            .or_else(|| json["result"]["definition"]["symbol_id"].as_str())
+            .or_else(|| json["result"]["definitions"][0]["symbol_id"].as_str())
             .unwrap_or_default()
             .to_owned();
         let back = rename(codix, repo, &renamed, name);

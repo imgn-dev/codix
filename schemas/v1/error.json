@@ -1,12 +1,56 @@
 {
   "$defs": {
+    "Candidate": {
+      "description": "A symbol an ambiguous name matches: enough to tell it from the others,\nand its ID to name it.",
+      "properties": {
+        "column": {
+          "description": "1-based column of its name.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "description": "Its kind, such as `method`.",
+          "type": "string"
+        },
+        "line": {
+          "description": "1-based line of its name.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Path of its file, relative to the cwd.",
+          "type": "string"
+        },
+        "signature": {
+          "description": "Its signature, when it has one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_id": {
+          "description": "Its ID.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "symbol_id",
+        "kind",
+        "path",
+        "line",
+        "column"
+      ],
+      "type": "object"
+    },
     "ErrorBody": {
       "description": "An error, as `--json` prints it.",
       "properties": {
         "candidates": {
-          "description": "Symbol IDs that match, for `ambiguous_symbol`.",
+          "description": "The symbols that match, for `ambiguous_symbol`.",
           "items": {
-            "type": "string"
+            "$ref": "#/$defs/Candidate"
           },
           "type": "array"
         },

@@ -111,8 +111,10 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   a misspelled name gives the symbols of the closest name, and the other close
   names with the command for each. `--exact`, `--prefix`, `--fuzzy` and
   `--glob` (on qualified names, such as `'Invoice.*'`) choose one. `--kind`, `--lang`, `--path` and `--here` narrow.
-- `def` gives the definition, or every overload of a name in one file;
-  `--kind` and `--path` narrow an ambiguous name.
+- `def` gives the definition, or every symbol of a name that has several.
+  `show`, `refs` and `def` answer for every symbol a name matches, listing
+  them first; `--kind` and `--path` narrow, and `rename`, which edits, asks
+  which one.
   Results carry symbol IDs, such as
   `java:src/billing/Invoice.java::Invoice.total#381c`; every command accepts an
   ID, its path part without the hash, `file:line:col`, or a name.

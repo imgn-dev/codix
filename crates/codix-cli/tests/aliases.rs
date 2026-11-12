@@ -16,7 +16,7 @@ fn codix(root: &Path, args: &[&str]) -> codix_testkit::Run {
 fn id_of(root: &Path, symbol: &str) -> String {
     let out = codix(root, &["def", symbol, "--json"]);
     let json: Value = serde_json::from_str(&out.stdout).expect("JSON");
-    json["result"]["definition"]["symbol_id"]
+    json["result"]["definitions"][0]["symbol_id"]
         .as_str()
         .expect("an ID")
         .to_owned()

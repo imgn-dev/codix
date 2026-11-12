@@ -18,7 +18,7 @@ use crate::project::{FileId, Project, ScopeRequest};
 use crate::refs::DefAt;
 use crate::scan::{rescan, scan_within};
 use crate::store::{FileStatus, MatchMode, NameQuery, Snapshot, Store, SymbolHit};
-use crate::symbol_id::{SymbolRef, resolve_overloads_where, resolve_where};
+use crate::symbol_id::{SymbolRef, resolve_all_where};
 
 /// Longest line text shown with a `grep` match, in characters.
 const MAX_LINE: usize = 200;
@@ -375,11 +375,9 @@ pub struct DefRequest {
 /// What [`DefOp`] answers.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 pub struct DefResponse {
-    /// The definition; for overloads, the first one in its file.
-    pub definition: SymbolResult,
-    /// The other overloads of the same name in the same file.
-    #[serde(default)]
-    pub overloads: Vec<SymbolResult>,
+    /// Every symbol the input names, by path and position: one, the
+    /// overloads of a name in its file, or every match of an ambiguous name.
+    pub definitions: Vec<SymbolResult>,
     /// See [`FindResponse::possibly_stale`].
     pub possibly_stale: bool,
     /// When the ID given was the symbol's before codix renamed it.
@@ -406,11 +404,9 @@ impl Operation for DefOp {
         let mut name = request.symbol.clone();
         if let SymbolRef::Location { file, line, column } = SymbolRef::parse(&request.symbol)? {
             match crate::refs::def_at(ctx, project, &config, &file, line, column)? {
-                Some(DefAt::Found(mut results)) => {
-                    let definition = results.remove(0);
+                Some(DefAt::Found(definitions)) => {
                     return Ok(DefResponse {
-                        definition,
-                        overloads: results,
+                        definitions,
                         possibly_stale: false,
                         renamed: None,
                     });
@@ -421,7 +417,7 @@ impl Operation for DefOp {
         }
         let ((hits, possibly_stale), renamed) = following(&name, |name| {
             lookup(ctx, project, &config, |snapshot| {
-                let hits = resolve_overloads_where(snapshot, project, ctx.cwd(), name, &|hit| {
+                let hits = resolve_all_where(snapshot, project, ctx.cwd(), name, &|hit| {
                     (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
                         && scope.contains(&FileId::from_canonical(hit.path.as_str()))
                 })?;
@@ -429,13 +425,11 @@ impl Operation for DefOp {
                 Ok((hits, paths))
             })
         })?;
-        let mut results = hits.into_iter().map(|hit| SymbolResult::new(ctx, hit));
-        let definition = results.next().ok_or_else(|| Error::Internal {
-            message: "a lookup answered no symbol".to_owned(),
-        })?;
         Ok(DefResponse {
-            definition,
-            overloads: results.collect(),
+            definitions: hits
+                .into_iter()
+                .map(|hit| SymbolResult::new(ctx, hit))
+                .collect(),
             possibly_stale,
             renamed,
         })
@@ -598,17 +592,37 @@ pub struct ShowRequest {
     /// Lines shown before and after the symbol.
     #[serde(default)]
     pub context: usize,
+    /// Most symbols shown when the name matches several.
+    #[serde(default = "default_sources")]
+    #[schemars(range(min = 1))]
+    pub limit: usize,
 }
 
-/// What [`ShowOp`] answers.
+/// Sources `show` prints by default.
+pub const DEFAULT_SOURCES: usize = 10;
+
+fn default_sources() -> usize {
+    DEFAULT_SOURCES
+}
+
+/// One symbol's source.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
-pub struct ShowResponse {
+pub struct Source {
     /// The symbol.
     pub symbol: SymbolResult,
     /// 1-based number of the first line in `lines`.
     pub first_line: u32,
     /// The symbol's lines, with the context asked for.
     pub lines: Vec<String>,
+}
+
+/// What [`ShowOp`] answers.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct ShowResponse {
+    /// Every symbol the input names, by path and position, at most `limit`.
+    pub sources: Vec<Source>,
+    /// How many symbols the input names.
+    pub total: usize,
     /// See [`FindResponse::possibly_stale`].
     pub possibly_stale: bool,
     /// When the ID given was the symbol's before codix renamed it.
@@ -630,44 +644,67 @@ impl Operation for ShowOp {
     fn run(&self, ctx: &Context, request: ShowRequest) -> Result<ShowResponse, Error> {
         let (project, config) = indexed(ctx)?;
         let scope = ctx.scope(&request.scope)?;
-        let ((hit, possibly_stale), renamed) = following(&request.symbol, |input| {
+        if request.limit == 0 {
+            return Err(Error::Usage {
+                cause: "--limit must be at least 1".to_owned(),
+                hint: format!("omit --limit for the default of {DEFAULT_SOURCES}"),
+            });
+        }
+        let ((hits, possibly_stale), renamed) = following(&request.symbol, |input| {
             lookup(ctx, project, &config, |snapshot| {
-                let hit = resolve_where(snapshot, project, ctx.cwd(), input, &|hit| {
+                let hits = resolve_all_where(snapshot, project, ctx.cwd(), input, &|hit| {
                     (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
                         && scope.contains(&FileId::from_canonical(hit.path.as_str()))
                 })?;
-                let path = hit.path.clone();
-                Ok((hit, vec![path]))
+                let paths = distinct(hits.iter().map(|h| h.path.clone()));
+                Ok((hits, paths))
             })
         })?;
-        let path = project.path_of(&FileId::from_canonical(hit.path.as_str()));
-        let text = fs::read_to_string(&path).map_err(|source| Error::Io { path, source })?;
-        let all: Vec<&str> = text.lines().collect();
-        let range = hit.symbol.range;
-        let first = (range.start.line as usize)
-            .saturating_sub(request.context)
-            .max(1);
-        // A range ending at column 1 stops before that line.
-        let end_line = if range.end.column == 1 && range.end.line > range.start.line {
-            range.end.line - 1
-        } else {
-            range.end.line
-        } as usize;
-        let last = (end_line + request.context).min(all.len());
-        let lines = all
-            .get(first - 1..last)
-            .unwrap_or_default()
-            .iter()
-            .map(|l| (*l).to_owned())
-            .collect();
+        let total = hits.len();
+        let sources = hits
+            .into_iter()
+            .take(request.limit)
+            .map(|hit| source(ctx, project, hit, request.context))
+            .collect::<Result<_, _>>()?;
         Ok(ShowResponse {
-            symbol: SymbolResult::new(ctx, hit),
-            first_line: u32::try_from(first).unwrap_or(u32::MAX),
-            lines,
+            sources,
+            total,
             possibly_stale,
             renamed,
         })
     }
+}
+
+/// The lines of `hit`'s symbol, with `context` lines around them.
+fn source(
+    ctx: &Context,
+    project: &Project,
+    hit: SymbolHit,
+    context: usize,
+) -> Result<Source, Error> {
+    let path = project.path_of(&FileId::from_canonical(hit.path.as_str()));
+    let text = fs::read_to_string(&path).map_err(|source| Error::Io { path, source })?;
+    let all: Vec<&str> = text.lines().collect();
+    let range = hit.symbol.range;
+    let first = (range.start.line as usize).saturating_sub(context).max(1);
+    // A range ending at column 1 stops before that line.
+    let end_line = if range.end.column == 1 && range.end.line > range.start.line {
+        range.end.line - 1
+    } else {
+        range.end.line
+    } as usize;
+    let last = (end_line + context).min(all.len());
+    let lines = all
+        .get(first - 1..last)
+        .unwrap_or_default()
+        .iter()
+        .map(|l| (*l).to_owned())
+        .collect();
+    Ok(Source {
+        symbol: SymbolResult::new(ctx, hit),
+        first_line: u32::try_from(first).unwrap_or(u32::MAX),
+        lines,
+    })
 }
 
 /// `grep`: a regular expression over the indexed files, with the enclosing

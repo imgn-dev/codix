@@ -105,6 +105,13 @@
         "root_path": {
           "$ref": "#/$defs/FileId",
           "description": "Root-relative path."
+        },
+        "target": {
+          "description": "The ID of the symbol it refers to, of those the input names; none\nwhen matched by name only.",
+          "type": [
+            "string",
+            "null"
+          ]
         }
       },
       "required": [
@@ -150,6 +157,75 @@
       "required": [
         "from",
         "to"
+      ],
+      "type": "object"
+    },
+    "SymbolResult": {
+      "description": "A symbol in query results.",
+      "properties": {
+        "column": {
+          "description": "1-based column, in Unicode scalar values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "confidence": {
+          "description": "How it was found: `scoped` when the name at a location binds to it\nwithin its file, `textual` when found by name, `low` in or around a\nparse error.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Kind from the shared vocabulary.",
+          "type": "string"
+        },
+        "language": {
+          "description": "Language of the file.",
+          "type": "string"
+        },
+        "line": {
+          "description": "1-based line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Simple name.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path relative to the cwd, with `/` separators.",
+          "type": "string"
+        },
+        "qualified_name": {
+          "description": "Qualified name within the file.",
+          "type": "string"
+        },
+        "root_path": {
+          "$ref": "#/$defs/FileId",
+          "description": "Root-relative path."
+        },
+        "signature": {
+          "description": "Declaration without the body, when captured.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_id": {
+          "description": "Symbol ID, accepted by every command naming a symbol.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "line",
+        "column",
+        "symbol_id",
+        "kind",
+        "name",
+        "qualified_name",
+        "language",
+        "confidence"
       ],
       "type": "object"
     }
@@ -201,9 +277,9 @@
       "type": "integer"
     },
     "targets": {
-      "description": "The symbol's ID, and its overloads' after it; or a local's\n`file:line:col`.",
+      "description": "Every symbol the input names, and the overloads of each, by path and\nposition; a local's ID is its `file:line:col`.",
       "items": {
-        "type": "string"
+        "$ref": "#/$defs/SymbolResult"
       },
       "type": "array"
     },

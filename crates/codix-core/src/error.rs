@@ -27,6 +27,39 @@ pub mod exit {
     pub const NO_PROJECT: u8 = 6;
 }
 
+/// A symbol an ambiguous name matches: enough to tell it from the others,
+/// and its ID to name it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+pub struct Candidate {
+    /// Its ID.
+    pub symbol_id: String,
+    /// Its kind, such as `method`.
+    pub kind: String,
+    /// Path of its file, relative to the cwd.
+    pub path: String,
+    /// 1-based line of its name.
+    pub line: u32,
+    /// 1-based column of its name.
+    pub column: u32,
+    /// Its signature, when it has one.
+    pub signature: Option<String>,
+}
+
+impl fmt::Display for Candidate {
+    /// `kind  path:line:col  signature`, then the ID on its own line.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "{}  {}:{}:{}",
+            self.kind, self.path, self.line, self.column
+        )?;
+        if let Some(signature) = &self.signature {
+            write!(f, "  {signature}")?;
+        }
+        write!(f, "\n    {}", self.symbol_id)
+    }
+}
+
 /// An operation failure.
 #[derive(Debug)]
 pub enum Error {
@@ -44,8 +77,8 @@ pub enum Error {
     AmbiguousSymbol {
         /// The input as given.
         query: String,
-        /// Symbol IDs of every match.
-        candidates: Vec<String>,
+        /// Every match, at most 20.
+        candidates: Vec<Candidate>,
     },
     /// The input matches no symbol.
     UnknownSymbol {
@@ -139,8 +172,8 @@ pub struct ErrorReport {
     pub cause: String,
     /// The next step.
     pub hint: String,
-    /// Symbol IDs listed with the error.
-    pub candidates: Vec<String>,
+    /// Symbols listed with the error.
+    pub candidates: Vec<Candidate>,
     /// Sites listed with the error, such as those refusing an edit.
     #[serde(default)]
     pub sites: Vec<Site>,
@@ -226,7 +259,7 @@ impl Error {
                 "run `codix init` at the project root".to_owned()
             }
             Self::AmbiguousSymbol { .. } => {
-                "pass a full symbol ID, or narrow with --kind or --path".to_owned()
+                "pass one of the IDs above, or narrow with --kind or --path".to_owned()
             }
             Self::UnknownSymbol { .. } => {
                 "check the name with `codix find`, or pass a full symbol ID".to_owned()
@@ -258,8 +291,8 @@ impl Error {
         }
     }
 
-    /// Symbol IDs listed with the error; empty for most errors.
-    pub fn candidates(&self) -> &[String] {
+    /// Symbols listed with the error; empty for most errors.
+    pub fn candidates(&self) -> &[Candidate] {
         match self {
             Self::AmbiguousSymbol { candidates, .. } => candidates,
             Self::Remote(report) => &report.candidates,
