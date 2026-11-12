@@ -267,6 +267,37 @@ fn refs_lists_scoped_references_then_textual_ones_elsewhere() {
 }
 
 #[test]
+fn refs_keeps_one_certainty_and_the_definitions() {
+    let (_guard, root) = indexed(REFS);
+    let refs = |confidence| {
+        codix(
+            &root,
+            &root,
+            &[
+                "refs",
+                "Invoice.total",
+                "--kind",
+                "method",
+                "--confidence",
+                confidence,
+            ],
+        )
+        .stdout
+    };
+    let textual = refs("textual");
+    assert!(textual.starts_with("src/Invoice.java:6:17"), "{textual}");
+    assert!(textual.contains("src/Report.java:5:24"), "{textual}");
+    assert!(!textual.contains("Invoice.withTax"), "{textual}");
+    assert!(
+        textual.ends_with("2 results\n1 definition, 0 scoped, 1 textual\n"),
+        "{textual}"
+    );
+    let scoped = refs("scoped");
+    assert!(scoped.contains("Invoice.withTax"), "{scoped}");
+    assert!(!scoped.contains("Report.java"), "{scoped}");
+}
+
+#[test]
 fn refs_of_a_private_field_or_a_local_stay_in_their_file() {
     let (_guard, root) = indexed(REFS);
     let field = codix(&root, &root, &["refs", "Invoice.total", "--kind", "field"]);

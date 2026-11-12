@@ -217,12 +217,25 @@ pub struct RefsRequest {
     /// Consider symbols of this kind only; repeatable.
     #[serde(default, rename = "kind")]
     pub kinds: Vec<String>,
+    /// Keep the references of this certainty only; the definitions stay.
+    #[serde(default)]
+    pub confidence: Option<Confidence>,
     /// Directories to keep.
     #[serde(flatten)]
     pub scope: ScopeRequest,
     /// Page to return.
     #[serde(flatten)]
     pub page: Page,
+}
+
+/// How sure codix is that a reference is to the symbol.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Confidence {
+    /// Bound to the symbol by scope.
+    Scoped,
+    /// Matched by name only.
+    Textual,
 }
 
 /// One reference, or the definition itself.
@@ -378,7 +391,7 @@ impl Operation for RefsOp {
                     .filter(|r| !defined.contains(&r.location)),
             );
         }
-        results.retain(|r| scope.contains(&r.location.root_path));
+        results.retain(|r| scope.contains(&r.location.root_path) && kept(request.confidence, r));
         sort_results(&mut results, Some(file.id.as_str()));
         let (definitions, scoped, textual) = counts(&results);
         // A symbol is pinned by its ID, which follows renames; a local has
@@ -399,6 +412,17 @@ impl Operation for RefsOp {
             renamed,
         })
     }
+}
+
+/// Whether `result` stays when references of `confidence` only are kept:
+/// definitions always do.
+fn kept(confidence: Option<Confidence>, result: &RefResult) -> bool {
+    result.is_definition()
+        || match confidence {
+            Some(Confidence::Scoped) => result.confidence == SCOPED,
+            Some(Confidence::Textual) => result.confidence == TEXTUAL,
+            None => true,
+        }
 }
 
 /// The definitions, the references bound by scope, and those matched by name

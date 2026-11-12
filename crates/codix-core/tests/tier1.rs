@@ -42,6 +42,7 @@ fn references_at_tier_1_are_whole_word_matches() {
             RefsRequest {
                 symbol: "Invoice.total".to_owned(),
                 kinds: Vec::new(),
+                confidence: None,
                 scope: ScopeRequest::default(),
                 page: Page::default(),
             },

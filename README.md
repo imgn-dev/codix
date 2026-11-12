@@ -118,8 +118,9 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   ID, its path part without the hash, `file:line:col`, or a name.
 - `refs` lists what refers to a symbol or a local variable, definition first:
   `scoped` when its file's scopes bind it there, `textual` when it matches by
-  name only, in another file or through another object. `def file:line:col`
-  follows the name at that place to its definition.
+  name only, in another file or through another object; `--confidence scoped`
+  or `--confidence textual` keeps one of them. `def file:line:col` follows the
+  name at that place to its definition.
 - `grep <regex>` searches the indexed files and names the symbol around each
   match; `--kind method` keeps matches inside methods.
 - `index` brings the index up to date; `status` shows what changed since, the

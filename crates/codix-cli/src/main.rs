@@ -80,7 +80,7 @@ use codix_core::query::{
     DefOp, DefRequest, FindOp, FindRequest, GrepOp, GrepRequest, OutlineOp, OutlineRequest, ShowOp,
     ShowRequest,
 };
-use codix_core::refs::{RefsOp, RefsRequest};
+use codix_core::refs::{Confidence, RefsOp, RefsRequest};
 use codix_core::rename::{RenameOp, RenameRequest};
 use codix_core::render::{self, Style, TextRender};
 use codix_core::store::MatchMode;
@@ -318,6 +318,9 @@ struct RefsArgs {
     /// Consider symbols of this kind only; repeatable.
     #[arg(long = "kind", value_name = "KIND")]
     kinds: Vec<String>,
+    /// Keep the references of this certainty only; the definitions stay.
+    #[arg(long, value_enum, value_name = "CONFIDENCE")]
+    confidence: Option<ConfidenceArg>,
     #[command(flatten)]
     scope: ScopeArgs,
     #[command(flatten)]
@@ -369,9 +372,26 @@ impl RefsArgs {
         Ok(RefsRequest {
             symbol: self.symbol,
             kinds: self.kinds,
+            confidence: self.confidence.map(Confidence::from),
             scope: self.scope.request(),
             page,
         })
+    }
+}
+
+/// The certainties `--confidence` takes.
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum ConfidenceArg {
+    Scoped,
+    Textual,
+}
+
+impl From<ConfidenceArg> for Confidence {
+    fn from(arg: ConfidenceArg) -> Self {
+        match arg {
+            ConfidenceArg::Scoped => Self::Scoped,
+            ConfidenceArg::Textual => Self::Textual,
+        }
     }
 }
 

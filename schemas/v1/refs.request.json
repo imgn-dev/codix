@@ -1,4 +1,21 @@
 {
+  "$defs": {
+    "Confidence": {
+      "description": "How sure codix is that a reference is to the symbol.",
+      "oneOf": [
+        {
+          "const": "scoped",
+          "description": "Bound to the symbol by scope.",
+          "type": "string"
+        },
+        {
+          "const": "textual",
+          "description": "Matched by name only.",
+          "type": "string"
+        }
+      ]
+    }
+  },
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "Request for [`RefsOp`].",
   "properties": {
@@ -9,6 +26,18 @@
         "string",
         "null"
       ]
+    },
+    "confidence": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Confidence"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Keep the references of this certainty only; the definitions stay."
     },
     "count": {
       "default": false,
