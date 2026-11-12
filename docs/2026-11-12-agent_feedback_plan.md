@@ -15,6 +15,7 @@ run at the end.
 | Failed | 7, 4 of them ambiguous names | 8, 6 of them ambiguous names |
 | Wasted, by their own count | about 9 | about 8 |
 | Time in codix | 21 s | 115 s, about 80 s of it `grep` |
+| `grep` calls | 8 | 13 |
 
 - **Ambiguous names: 10 of the 124 calls.** The error lists bare IDs such as
   `…getBean#7197` and `…#d92b`, with no kind, line or signature, so each one
@@ -40,8 +41,12 @@ run at the end.
 - **Undo is hard to read.** Applying an undo says "undo with: codix undo",
   which both agents read as a second undo; it is a redo. The undo preview of a
   4-site rename was one 114-line hunk.
-- **`grep` is slow on Linux:** 10–12 s a call, reading 86,000 files one after
-  the other.
+- **`grep` adds little, slowly.** On Linux it takes 10–12 s a call: it reads
+  86,000 files one after the other (ripgrep takes 1.75 s on all cores, 11.4 s
+  on one). The agents used it to double-check `refs`, to count by place (a
+  paging feature, not grep's), and to search text ripgrep finds as well. Its
+  own contribution, the enclosing symbol of each match, needs no search of
+  its own.
 - **Output that costs a call or misleads:** `status` lists every module;
   `outline` has no depth (343 lines for `mm_types.h`); `capabilities` says
   "10816 files indexed" where `status` counts 9930 indexed; "no results" looks
@@ -53,6 +58,16 @@ references across files (today every one is `textual`, and a cross-file
 rename is refused); a type hierarchy command (implementations of an
 interface); C parsing through attribute macros such as `__fastpath_inline`,
 which make rename refuse a site (223 of 1000 Linux renames in the benchmark).
+
+## Decisions taken
+
+On 2026-11-12:
+
+- **(c) `grep` is removed.** Agents with a shell have their own, faster and
+  richer. What it added, the enclosing symbol of a place, becomes its own
+  command, `codix at`, which also annotates another tool's results. Text-only
+  files lose their only use: they stay in the index and `status`, as known
+  files without symbols.
 
 ## Decisions to take
 
@@ -115,10 +130,42 @@ which make rename refuse a site (223 of 1000 Linux renames in the benchmark).
   and falls back to today's single edit when the file changed since.
 - Applying an undo says what it undid, and that `codix undo` would redo it.
 
-### Speed
+### `codix at`
 
-- `grep` searches files in parallel, one thread per core, results merged in
-  the usual order. Target on Linux: under 3 s.
+What encloses a place: for each `path:line[:col]`, the innermost symbol
+holding it, with its kind, qualified name (which names its containers),
+signature and ID.
+
+```
+codix at mm/slub.c:4142 kernel/sched/core.c:6050:9
+rg -n 'mutex_lock\(' fs/ext4 | codix at -
+```
+
+- **Places** are arguments, or lines on standard input with `-`, in the forms
+  `rg -n`, `rg --vimgrep`, `grep -n` and compilers print: `path:line:`,
+  `path:line:col:`, followed by any text. The text is kept, so the output is
+  the input annotated:
+  ```
+  fs/ext4/super.c:1234   function  ext4_put_super     mutex_lock(&sbi->s_lock);
+  fs/ext4/orphan.c:88    -                            mutex_lock(&orphan_lock);
+  ```
+- A place outside any symbol shows `-`; a file codix does not know, or a line
+  past its end, gets an error on its own line, not a failed command.
+- The files named are rechecked first, as lookups do, so the answer matches
+  the file as it is.
+- JSON and MCP: `places` in, one item per place out: the place, the text if
+  any, and the enclosing symbol or null.
+
+### Removing `grep`
+
+- The command, its MCP tool, its operation, its schemas, `docs/commands.md`
+  and the README section go. The paging tests that used `grep` move to `refs`
+  and `find`, and the tests of `watch`, daemon parity, errors and MCP to
+  other commands.
+- The capability tier `search only` becomes `text`: files codix keeps track
+  of without symbols.
+- The schema test lets a command's snapshots go before a release, as it lets
+  them change.
 
 ### Output
 
@@ -128,16 +175,18 @@ which make rename refuse a site (223 of 1000 Linux renames in the benchmark).
 - `capabilities` counts files as `status` does: indexed, search only,
   skipped.
 - "no results" names what found nothing and suggests the next step:
-  `no results for "dependancy" (case-sensitive; (?i) ignores case)`.
+  `no symbol named "Foo" in spring-context (--path); find Foo looks
+  everywhere`.
 - Help examples quote patterns a shell would expand (`'Invoice.*'`).
 - Suggested commands start with `codix` when the `codix` on `PATH` is the
   running binary, and with the path as invoked otherwise.
 
 ### Contract
 
-v1 changes in place (pre-release): ambiguity candidates become objects,
-symbols gain `declaration`, apply responses can carry `references_left`,
-requests gain `exclude_path`, `sources`, `context`, `sort`, `depth`. The index
+v1 changes in place (pre-release): `grep` goes and `at` comes; ambiguity
+candidates become objects, symbols gain `declaration`, apply responses can
+carry `references_left`, requests gain `exclude_path`, `sources`, `context`,
+`sort`, `depth`. The index
 schema changes too: indexes are rebuilt.
 
 ## Steps
@@ -155,7 +204,8 @@ One branch, one commit each, the full local suite after each:
    `--files --sort count`.
 5. **Rename, apply, undo**: single listing, `references_left`, per-site undo
    hunks, undo and redo messages.
-6. **Parallel `grep`**, measured on the Linux checkout.
+6. **`codix at` in, `grep` out**: the command and its MCP tool, standard
+   input in the forms tools print, then the removal and the tests moved.
 7. **Output**: `status`, `outline --depth`/`--kind`, `capabilities` counts,
    "no results" messages, quoted examples, `codix` in suggested commands.
 8. **The agents again**: the same two scenarios, logged the same way, to
