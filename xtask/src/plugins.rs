@@ -7,6 +7,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// The target this tool was built for, the default target of the plugins.
 pub const HOST: &str = env!("XTASK_TARGET");
@@ -264,10 +265,10 @@ pub fn build(out: &Path, options: &Options) -> Result<Vec<PathBuf>, String> {
         return Err(format!("no provider named {unknown}"));
     }
     let workspace = Workspace::read(&options.target)?;
-    let mut dirs = Vec::new();
-    for pack in PACKS.iter().filter(|p| wanted(p.language)) {
-        dirs.push(language_plugin_in(&workspace, pack, out, options)?);
-    }
+    let packs: Vec<&Pack> = PACKS.iter().filter(|p| wanted(p.language)).collect();
+    let mut dirs = in_parallel(&packs, |pack| {
+        language_plugin_in(&workspace, pack, out, options)
+    })?;
     for (name, crate_dir, executable) in BUILDS.iter().filter(|b| wanted(b.0)) {
         dirs.push(build_plugin(
             &workspace, name, crate_dir, executable, out, options,
@@ -283,6 +284,44 @@ pub fn build(out: &Path, options: &Options) -> Result<Vec<PathBuf>, String> {
         dirs.push(dir);
     }
     Ok(dirs)
+}
+
+/// Runs `work` on each of `items`, as many at a time as the machine has
+/// cores, since compiling a grammar keeps one busy; the results in the
+/// items' order, or the first error.
+fn in_parallel<T: Sync, R: Send>(
+    items: &[T],
+    work: impl Fn(&T) -> Result<R, String> + Sync,
+) -> Result<Vec<R>, String> {
+    let next = AtomicUsize::new(0);
+    let threads = std::thread::available_parallelism()
+        .map_or(1, usize::from)
+        .min(items.len());
+    let mut done: Vec<(usize, Result<R, String>)> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut done = Vec::new();
+                    loop {
+                        let i = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(item) = items.get(i) else {
+                            return done;
+                        };
+                        done.push((i, work(item)));
+                    }
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|worker| worker.join().unwrap_or_default())
+            .collect()
+    });
+    if done.len() != items.len() {
+        return Err("a build thread panicked".to_owned());
+    }
+    done.sort_by_key(|(i, _)| *i);
+    done.into_iter().map(|(_, result)| result).collect()
 }
 
 /// Builds the plugin of one language into `<out>/language/<language>/`, for

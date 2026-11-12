@@ -6,15 +6,45 @@ on:
     branches-ignore:
       - main
   pull_request:
+  # The dependency caches, built on main by `cache.yml`.
+  workflow_call:
 
 permissions:
   contents: read
 
 env:
   CARGO_TERM_COLOR: always
+  # Line tables keep the locations in panics; full debug information only
+  # slows compiling and, most of all, linking.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
-  check:
+  # What does not depend on the platform, once, on Linux.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      # Installs the toolchain and components pinned in rust-toolchain.toml.
+      - run: rustup toolchain install
+      # Branches restore main's dependencies; only main saves them.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-hack@0.6.46
+      - run: cargo fmt --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo clippy -p codix-cli --all-targets --no-default-features --features plugins,vcs-git -- -D warnings
+      # The published presets but `full`, which every platform tests; registry
+      # tests check each one links exactly its providers.
+      - run: cargo test -p codix-cli
+      - run: cargo test -p codix-cli --no-default-features --features minimal
+      # Each feature alone, which covers the presets and every provider feature.
+      - run: cargo hack --each-feature --no-dev-deps check
+
+  test:
     strategy:
       fail-fast: false
       matrix:
@@ -26,19 +56,17 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      # Installs the toolchain and components pinned in rust-toolchain.toml.
       - run: rustup toolchain install
-      - uses: taiki-e/install-action@v2
+      - uses: Swatinem/rust-cache@v2
         with:
-          tool: cargo-hack@0.6.46
-      - run: cargo fmt --check
-      - run: cargo clippy --all-targets -- -D warnings
-      - run: cargo clippy -p codix-cli --all-targets --no-default-features --features plugins,vcs-git -- -D warnings
-      - run: cargo test
-      # The published presets other than the default; registry tests check
-      # each one links exactly its providers.
-      - run: cargo test -p codix-cli --no-default-features --features minimal
-      - run: cargo test -p codix-cli --features full
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Windows-only code; Linux's lint covers the Unix code macOS shares.
+      - if: runner.os == 'Windows'
+        run: cargo clippy --all-targets --features codix-cli/full -- -D warnings
+      - if: runner.os == 'Windows'
+        run: cargo clippy -p codix-cli --all-targets --no-default-features --features plugins,vcs-git -- -D warnings
+      # Every provider compiled in: every language's tests.
+      - run: cargo test --workspace --features codix-cli/full
       # The core with git only, every other provider as a plugin: first with
       # none installed, then with every plugin, built as they ship.
       - run: cargo test -p codix-cli --no-default-features --features plugins,vcs-git
@@ -46,5 +74,3 @@ jobs:
       - run: cargo test -p codix-cli --no-default-features --features plugins,vcs-git
         env:
           CODIX_PLUGIN_PATH: ${{ github.workspace }}/target/plugins
-      # Each feature alone, which covers the presets and every provider feature.
-      - run: cargo hack --each-feature --no-dev-deps check

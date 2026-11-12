@@ -1,0 +1,22 @@
+name: Cache
+
+# Branches can restore caches saved on main, and CI does not otherwise run on
+# main: this runs it there when what the dependencies are built from changes,
+# so branches start from built dependencies.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - Cargo.lock
+      - rust-toolchain.toml
+      - .github/workflows/ci.yml
+      - .github/workflows/cache.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
