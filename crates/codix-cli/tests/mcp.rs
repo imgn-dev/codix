@@ -193,6 +193,8 @@ fn a_next_page_is_the_arguments_to_change() {
     );
     assert!(text(&second).starts_with("src/Invoice.java:2:"), "{second}");
     assert!(!text(&second).contains("next"), "{second}");
+    let counted = client.call(4, "find", &json!({ "query": "total", "count": true }));
+    assert_eq!(text(&counted), "2 results\n", "{counted}");
 }
 
 #[cfg(with_lang_java)]

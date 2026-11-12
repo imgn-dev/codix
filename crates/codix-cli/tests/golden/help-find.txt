@@ -49,6 +49,12 @@ Options:
       --after <PLACE>
           Return the results after this place, as a page's `next` gives it
 
+      --count
+          Return how many results there are, not the results
+
+      --all
+          Return every result, for scripts
+
   -h, --help
           Print help (see a summary with '-h')
 

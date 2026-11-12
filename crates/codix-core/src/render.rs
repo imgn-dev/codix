@@ -565,7 +565,8 @@ fn footer<T>(page: &Paged<T>) -> String {
     if page.total == 0 {
         return "no results".to_owned();
     }
-    if shown == page.total {
+    // No results shown of some: counted, or a place past the last.
+    if shown == page.total || shown == 0 {
         return format!("{} {noun}", page.total);
     }
     format!("{shown} of {} {noun}", page.total)

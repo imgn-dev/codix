@@ -21,6 +21,8 @@ pub struct Page {
     limit: usize,
     #[serde(skip_serializing_if = "Option::is_none")]
     after: Option<String>,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    count: bool,
 }
 
 /// [`Page`] as requests carry it, checked on the way in.
@@ -33,6 +35,9 @@ struct PageFields {
     /// Return the results after this place, as a page's `next` gives it.
     #[serde(default)]
     after: Option<String>,
+    /// Return how many results there are, not the results.
+    #[serde(default)]
+    count: bool,
 }
 
 fn default_limit() -> usize {
@@ -43,7 +48,8 @@ impl TryFrom<PageFields> for Page {
     type Error = String;
 
     fn try_from(fields: PageFields) -> Result<Self, String> {
-        Self::new(fields.limit, fields.after).map_err(|e| e.cause())
+        let page = Self::new(fields.limit, fields.after).map_err(|e| e.cause())?;
+        Ok(if fields.count { page.counted() } else { page })
     }
 }
 
@@ -62,7 +68,20 @@ impl Page {
                 hint: "pass the `after` of the previous response's next page".to_owned(),
             });
         }
-        Ok(Self { limit, after })
+        Ok(Self {
+            limit,
+            after,
+            count: false,
+        })
+    }
+
+    /// The same page, counted rather than listed.
+    #[must_use]
+    pub fn counted(self) -> Self {
+        Self {
+            count: true,
+            ..self
+        }
     }
 
     /// Maximum number of results.
@@ -84,11 +103,15 @@ impl Page {
         anchor: Option<&str>,
     ) -> (Paged<T>, Option<String>) {
         let total = all.len();
+        if self.count {
+            let items = Vec::new();
+            return (Paged { items, total }, None);
+        }
         let start = self.after.as_deref().map_or(0, |after| {
             let cursor = cursor(&all, after, anchor);
             all.partition_point(|r| key(r, anchor) <= cursor)
         });
-        let mut end = (start + self.limit).min(total);
+        let mut end = start.saturating_add(self.limit).min(total);
         let mut next = None;
         if end < total {
             let last = all[end - 1].location();
@@ -125,6 +148,7 @@ impl Default for Page {
         Self {
             limit: DEFAULT_LIMIT,
             after: None,
+            count: false,
         }
     }
 }
@@ -387,6 +411,24 @@ mod tests {
         assert_eq!(place("src/a.rs"), ("src/a.rs", None));
         assert_eq!(place("odd:name.rs"), ("odd:name.rs", None));
         assert_eq!(place("odd:1:x"), ("odd:1:x", None));
+    }
+
+    #[test]
+    fn a_counted_page_has_the_total_only() {
+        let (paged, next) = page(1, None)
+            .counted()
+            .apply(mentions(&["a.rs", "b.rs"], 2), None);
+        assert_eq!(paged.items, Vec::<R>::new());
+        assert_eq!(paged.total, 4);
+        assert_eq!(next, None);
+    }
+
+    #[test]
+    fn an_unbounded_page_takes_everything_after_its_place() {
+        let (paged, next) =
+            page(usize::MAX, Some("a.rs")).apply(mentions(&["a.rs", "b.rs"], 2), None);
+        assert_eq!(keys(&paged.items), ["b.rs:1:1", "b.rs:2:1"]);
+        assert_eq!(next, None);
     }
 
     #[test]

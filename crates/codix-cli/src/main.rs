@@ -448,11 +448,19 @@ struct PageArgs {
     /// Return the results after this place, as a page's `next` gives it.
     #[arg(long, value_name = "PLACE")]
     after: Option<String>,
+    /// Return how many results there are, not the results.
+    #[arg(long)]
+    count: bool,
+    /// Return every result, for scripts.
+    #[arg(long, conflicts_with = "limit")]
+    all: bool,
 }
 
 impl PageArgs {
     fn page(&self) -> Result<Page, Error> {
-        Page::new(self.limit, self.after.clone())
+        let limit = if self.all { usize::MAX } else { self.limit };
+        let page = Page::new(limit, self.after.clone())?;
+        Ok(if self.count { page.counted() } else { page })
     }
 }
 
@@ -874,6 +882,10 @@ mod tests {
                     (key.clone(), trimmed(help))
                 })
                 .collect();
+            // `--all` is the CLI's alone: an agent passes `limit`.
+            if inputs.contains_key("limit") {
+                assert!(flags.remove("all").is_some(), "{name} --all");
+            }
             // One `mode` property stands for the four mode flags.
             if name == "find" {
                 for mode in ["exact", "prefix", "fuzzy", "glob"] {

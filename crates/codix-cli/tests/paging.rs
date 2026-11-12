@@ -174,3 +174,34 @@ fn a_fuzzy_find_shows_the_closest_name_and_offers_the_others() {
     );
     assert_eq!(places(&second["result"]["results"]["items"]), ["B.java:2"]);
 }
+
+#[test]
+fn count_gives_the_totals_and_all_every_result() {
+    let files: Vec<(String, String)> = ["A", "B", "C"]
+        .iter()
+        .map(|c| (format!("{c}.java"), two_calls(c, "legacy")))
+        .collect();
+    let files: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(p, c)| (p.as_str(), c.as_str()))
+        .collect();
+    let (_guard, root) = indexed(CODIX, &files);
+
+    let counted = codix(&root, &["grep", "legacy\\(", "--count"]);
+    assert_eq!(counted.code, Some(0), "{}", counted.stderr);
+    assert_eq!(counted.stdout, "6 results\n");
+    let counted = json(&root, &["grep", "legacy\\(", "--count"]);
+    assert_eq!(counted["result"]["matches"]["total"], 6);
+    assert_eq!(counted["result"]["matches"]["items"], serde_json::json!([]));
+    assert!(counted["result"]["next"].is_null());
+
+    let all = json(&root, &["grep", "legacy\\(", "--all"]);
+    assert_eq!(
+        all["result"]["matches"]["items"].as_array().map(Vec::len),
+        Some(6)
+    );
+    assert!(all["result"]["next"].is_null());
+
+    let both = codix(&root, &["grep", "legacy\\(", "--all", "--limit", "2"]);
+    assert_eq!(both.code, Some(2), "{}", both.stderr);
+}

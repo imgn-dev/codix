@@ -10,6 +10,11 @@
         "null"
       ]
     },
+    "count": {
+      "default": false,
+      "description": "Return how many results there are, not the results.",
+      "type": "boolean"
+    },
     "here": {
       "default": false,
       "description": "Limit results to the current directory's subtree.",
