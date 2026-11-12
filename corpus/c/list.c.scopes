@@ -1,7 +1,6 @@
 7:19 read MAX_ITEMS -> 3:9
 11:12 type node -> 9:8
 19:16 type node -> 9:8
-25:5 read length -> 34:5
 25:25 type node -> 9:8
 25:31 parameter head
 27:15 type node -> 9:8

@@ -4,5 +4,6 @@
 7:9 field point.y | int y
 10:22 type_alias point_t | typedef struct point point_t
 12:12 variable counter | static int counter
+14:5 declaration sum | int sum(const int *values, int count)
 16:5 function sum | int sum(const int *values, int count)
 29:5 function area | int area(struct point *p, point_t q)

@@ -18,7 +18,9 @@ use crate::project::{FileId, Project, ScopeRequest};
 use crate::query::{Renamed, SymbolResult, complete, following, indexed};
 use crate::scope::{Binding, Defines, FileModel, Receiver};
 use crate::store::{FileStatus, RefState, Snapshot, Store, SymbolHit};
-use crate::symbol_id::{SymbolRef, resolve_all_where, resolve_overloads_where};
+use crate::symbol_id::{
+    DECLARATION, SymbolRef, resolve_all_where, resolve_overloads_where, same_function,
+};
 
 /// A file read from disk, with its model.
 pub struct Analyzed {
@@ -219,10 +221,22 @@ pub(crate) fn targets(
     if matches!(SymbolRef::parse(input)?, SymbolRef::Location { .. }) {
         return target(ctx, project, config, snapshot, input, keep).map(|t| vec![t]);
     }
-    let hits = resolve_all_where(snapshot, project, ctx.cwd(), input, keep)?;
+    let mut hits = resolve_all_where(snapshot, project, ctx.cwd(), input, keep)?;
+    // A C function's declarations are its own: their places count too.
+    let mut same = Vec::new();
+    for hit in &hits {
+        same.extend(same_function(snapshot, hit)?);
+    }
+    for hit in same {
+        if !hits
+            .iter()
+            .any(|h| h.path == hit.path && h.symbol.symbol_id == hit.symbol.symbol_id)
+        {
+            hits.push(hit);
+        }
+    }
     let mut targets = Vec::new();
-    let mut paths: Vec<&str> = hits.iter().map(|h| h.path.as_str()).collect();
-    paths.dedup();
+    let paths: std::collections::BTreeSet<&str> = hits.iter().map(|h| h.path.as_str()).collect();
     for path in paths {
         let wanted: Vec<&str> = hits
             .iter()
@@ -623,9 +637,20 @@ pub(crate) fn def_at(
     };
     Ok(match at(&analyzed.model, byte) {
         AtLocation::Definition(d) => {
-            let results = analyzed
-                .model
-                .overloads(d)
+            let model = &analyzed.model;
+            let mut order: Vec<usize> =
+                model.overloads(d).into_iter().filter(|&o| o != d).collect();
+            order.insert(0, d);
+            // On a name defined there, that definition first; at a use, the
+            // bodies before the C prototypes the use may have bound to.
+            if model.definition_at(byte).is_none() {
+                let declaration = |o: &usize| match model.definitions[*o].defines {
+                    Defines::Symbol(i) => model.symbols[i].kind == DECLARATION,
+                    Defines::Local { .. } => false,
+                };
+                order.sort_by_key(declaration);
+            }
+            let results = order
                 .into_iter()
                 .map(|o| symbol_result(ctx, &analyzed, o, SCOPED))
                 .collect();
@@ -638,7 +663,7 @@ pub(crate) fn def_at(
 
 /// What a location says for `def`.
 pub(crate) enum DefAt {
-    /// The definitions, overloads included, first one first.
+    /// The definition there, then its overloads.
     Found(Vec<SymbolResult>),
     /// A name its file does not bind: look it up by name.
     ByName(String),

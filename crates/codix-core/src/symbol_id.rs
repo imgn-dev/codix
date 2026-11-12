@@ -47,8 +47,10 @@ fn full_hash(kind: &str, signature: Option<&str>) -> String {
 
 /// Lengthens the hashes of symbols whose four-digit hashes collide within the
 /// same path part, until they differ. Symbols with the same kind and
-/// signature keep the same ID. Parent references are left to the caller,
-/// which knows which symbol each one means.
+/// signature, such as a C function defined in both branches of an `#if`,
+/// are told apart by their order in the file: `#14e7`, then `#14e7~2`.
+/// Parent references are left to the caller, which knows which symbol each
+/// one means.
 pub fn disambiguate(rows: &mut [SymbolRow], prefix: &str, path: &str) {
     let mut groups: HashMap<String, Vec<usize>> = HashMap::new();
     for (i, row) in rows.iter().enumerate() {
@@ -60,8 +62,10 @@ pub fn disambiguate(rows: &mut [SymbolRow], prefix: &str, path: &str) {
             .map(|&i| full_hash(&rows[i].kind, rows[i].signature.as_deref()))
             .collect();
         if hashes.iter().all(|h| *h == hashes[0]) {
-            // Same kind and signature: the same symbol twice, which a longer
-            // hash cannot tell apart; resolution reports it as ambiguous.
+            // A longer hash cannot tell them apart; their order can.
+            for (n, &i) in members.iter().enumerate().skip(1) {
+                rows[i].symbol_id = format!("{}~{}", rows[i].symbol_id, n + 1);
+            }
             continue;
         }
         let distinct = hashes.iter().collect::<HashSet<_>>().len();
@@ -137,11 +141,7 @@ impl SymbolRef {
             return Ok(Self::Name(input.to_owned()));
         };
         let (qualified_name, hash) = match qualified.rsplit_once('#') {
-            Some((name, hash))
-                if !hash.is_empty() && hash.chars().all(|c| c.is_ascii_hexdigit()) =>
-            {
-                (name, Some(hash.to_owned()))
-            }
+            Some((name, hash)) if is_hash(hash) => (name, Some(hash.to_owned())),
             Some(_) => return Err(usage("the hash after `#` must be hexadecimal")),
             None => (qualified, None),
         };
@@ -155,6 +155,16 @@ impl SymbolRef {
             hash,
         })
     }
+}
+
+/// Hexadecimal digits, then `~` and the occurrence of a symbol whose kind and
+/// signature repeat in its file.
+fn is_hash(hash: &str) -> bool {
+    let (digits, occurrence) = hash.split_once('~').unwrap_or((hash, "1"));
+    !digits.is_empty()
+        && digits.chars().all(|c| c.is_ascii_hexdigit())
+        && !occurrence.is_empty()
+        && occurrence.chars().all(|c| c.is_ascii_digit())
 }
 
 /// Finds the one symbol `input` names. Several matches are
@@ -196,12 +206,85 @@ pub fn resolve_all_where(
             query: input.to_owned(),
         });
     }
+    // Definitions first; a C prototype after the functions it declares.
     matches.sort_by(|a, b| {
-        a.path
-            .cmp(&b.path)
+        (a.symbol.kind == DECLARATION)
+            .cmp(&(b.symbol.kind == DECLARATION))
+            .then(a.path.cmp(&b.path))
             .then(a.symbol.range.start.byte.cmp(&b.symbol.range.start.byte))
     });
     Ok(matches)
+}
+
+/// The kind of a function declared without its body.
+pub(crate) const DECLARATION: &str = "declaration";
+
+/// The other symbols that are the same C or C++ function as `hit`: its
+/// declarations and definitions. They share the name, sit outside any type,
+/// take as many parameters, and are visible across files, or, when one is
+/// `static`, sit in the same file.
+pub(crate) fn same_function(
+    snapshot: &Snapshot<'_>,
+    hit: &SymbolHit,
+) -> Result<Vec<SymbolHit>, Error> {
+    let function = |h: &SymbolHit| {
+        matches!(h.language.as_str(), "c" | "cpp")
+            && matches!(h.symbol.kind.as_str(), "function" | DECLARATION)
+            && h.symbol.parent.is_none()
+            && h.symbol.qualified_name == h.symbol.name
+    };
+    if !function(hit) {
+        return Ok(Vec::new());
+    }
+    let arity = parameters(&hit.symbol.name, hit.symbol.signature.as_deref());
+    let local = is_static(hit.symbol.signature.as_deref());
+    Ok(snapshot
+        .symbols_named(&hit.symbol.name)?
+        .into_iter()
+        .filter(|other| {
+            function(other)
+                && other.symbol.symbol_id != hit.symbol.symbol_id
+                && parameters(&other.symbol.name, other.symbol.signature.as_deref()) == arity
+                && ((!local && !is_static(other.symbol.signature.as_deref()))
+                    || other.path == hit.path)
+        })
+        .collect())
+}
+
+/// How many parameters a C signature declares: the commas between the
+/// parentheses after the name, `(void)` and `()` taking none.
+fn parameters(name: &str, signature: Option<&str>) -> Option<usize> {
+    let signature = signature?;
+    let after = signature.find(&format!("{name}("))? + name.len() + 1;
+    let mut depth = 1;
+    let mut commas = 0;
+    let mut inside = String::new();
+    for c in signature[after..].chars() {
+        match c {
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            ',' if depth == 1 => commas += 1,
+            _ => {}
+        }
+        inside.push(c);
+    }
+    let inside = inside.trim();
+    Some(if inside.is_empty() || inside == "void" {
+        0
+    } else {
+        commas + 1
+    })
+}
+
+/// Whether a C signature declares a function `static`, visible in its file
+/// only.
+fn is_static(signature: Option<&str>) -> bool {
+    signature.is_some_and(|s| s.split(['(', ' ', '\t', '\n']).any(|w| w == "static"))
 }
 
 /// Like [`resolve_where`], answering every overload when the matches are
@@ -266,10 +349,15 @@ fn candidates(
             path,
             qualified_name,
             hash: Some(hash),
-        } => snapshot.symbols_with_id_prefix(&format!(
-            "{}{hash}",
-            path_part(&prefix, &path, &qualified_name)
-        ))?,
+        } => {
+            let id = format!("{}{hash}", path_part(&prefix, &path, &qualified_name));
+            let mut matches = snapshot.symbols_with_id_prefix(&id)?;
+            // `#14e7` is a prefix of `#14e7~2`, but names `#14e7` itself.
+            if matches.iter().any(|hit| hit.symbol.symbol_id == id) {
+                matches.retain(|hit| hit.symbol.symbol_id == id);
+            }
+            matches
+        }
         SymbolRef::Id {
             prefix,
             path,
@@ -457,13 +545,43 @@ mod tests {
     }
 
     #[test]
-    fn identical_definitions_keep_one_id() {
+    fn identical_definitions_are_numbered_in_file_order() {
         let mut rows = vec![
-            row("f", "method", "void f()", "j:a::f#0000"),
-            row("f", "method", "void f()", "j:a::f#0000"),
+            row("f", "function", "int f(int x)", "c:a::f#0000"),
+            row("f", "function", "int f(int x)", "c:a::f#0000"),
+            row("f", "function", "int f(int x)", "c:a::f#0000"),
         ];
-        disambiguate(&mut rows, "j", "a");
-        assert_eq!(rows[0].symbol_id, rows[1].symbol_id);
+        disambiguate(&mut rows, "c", "a");
+        let ids: Vec<&str> = rows.iter().map(|r| r.symbol_id.as_str()).collect();
+        assert_eq!(ids, ["c:a::f#0000", "c:a::f#0000~2", "c:a::f#0000~3"]);
+        assert_eq!(
+            SymbolRef::parse("c:a::f#0000~2").unwrap(),
+            id("c", "a", "f", Some("0000~2"))
+        );
+    }
+
+    #[test]
+    fn parameters_are_counted_between_the_name_s_parentheses() {
+        let count = |s| parameters("f", Some(s));
+        assert_eq!(count("int f(void)"), Some(0));
+        assert_eq!(count("int f()"), Some(0));
+        assert_eq!(
+            count("void *f(struct s *a, int (*cb)(int, int), ...)"),
+            Some(3)
+        );
+        assert_eq!(
+            count("static inline int f(int x) __attribute__((a, b))"),
+            Some(1)
+        );
+        assert_eq!(parameters("f", None), None);
+    }
+
+    #[test]
+    fn static_is_a_word_of_the_signature_before_its_parameters() {
+        assert!(is_static(Some("static int f(int x)")));
+        assert!(is_static(Some("static\tinline int f(void)")));
+        assert!(!is_static(Some("int static_f(void)")));
+        assert!(!is_static(None));
     }
 
     #[test]
@@ -471,6 +589,8 @@ mod tests {
         for bad in [
             "py:src/a.py::A#xyz",
             "py:src/a.py::#a3f9",
+            "py:src/a.py::A#a3f9~",
+            "py:src/a.py::A#a3f9~x",
             ":src/a.py::A",
             "src/a.java:0:1",
         ] {

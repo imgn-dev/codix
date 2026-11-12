@@ -16,6 +16,7 @@
           declarator: (identifier) @name)))
   ]) @definition.function
 
+; A prototype: the function's name, without its body.
 (declaration
   declarator: [
     (function_declarator
@@ -23,7 +24,7 @@
     (pointer_declarator
       declarator: (function_declarator
         declarator: (identifier) @name))
-  ]) @definition.function
+  ]) @definition.declaration
 
 (struct_specifier
   name: (type_identifier) @name

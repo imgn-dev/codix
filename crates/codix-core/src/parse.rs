@@ -106,33 +106,7 @@ pub(crate) fn symbols_of(
     for (row, parent) in rows.iter_mut().zip(parents) {
         row.parent = parent.map(|p| ids[p].clone());
     }
-    Ok(collapse_duplicates(rows))
-}
-
-/// One symbol per ID: a C prototype and its definition in the same file are
-/// the same symbol, kept as the larger of the two.
-fn collapse_duplicates(rows: Vec<SymbolRow>) -> Vec<SymbolRow> {
-    let size = |row: &SymbolRow| row.range.end.byte - row.range.start.byte;
-    let mut kept: HashMap<String, usize> = HashMap::new();
-    let mut out: Vec<SymbolRow> = Vec::with_capacity(rows.len());
-    for row in rows {
-        match kept.get(&row.symbol_id) {
-            Some(&i) if size(&out[i]) >= size(&row) => {}
-            Some(&i) => out[i] = row,
-            None => {
-                kept.insert(row.symbol_id.clone(), out.len());
-                out.push(row);
-            }
-        }
-    }
-    out.sort_by_key(|row| {
-        (
-            row.range.start.byte,
-            std::cmp::Reverse(row.range.end.byte),
-            row.name_range.start.byte,
-        )
-    });
-    out
+    Ok(rows)
 }
 
 fn definitions<'tree>(

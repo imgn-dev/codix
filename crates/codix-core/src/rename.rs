@@ -10,7 +10,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::Error;
 use crate::config::Config;
-use crate::edit::{Edit, EditSet, ExcludedSite, Exclusion, PreviewResponse, diff, plan_file};
+use crate::edit::{
+    Edit, EditSet, ExcludedSite, Exclusion, OverrideUse, PreviewResponse, diff, plan_file,
+};
 use crate::error::Site;
 use crate::op::{Context, Operation};
 use crate::preflight::{Overrides, Rename, check_rename};
@@ -20,6 +22,7 @@ use crate::refs::{Analyzed, Target, target};
 use crate::render::since_epoch;
 use crate::scope::{Binding, Defines, Receiver};
 use crate::store::{FileStatus, PreviewRow, RefState, Snapshot, Store, SymbolHit};
+use crate::symbol_id::{DECLARATION, same_function};
 
 /// `rename`: plans renaming a symbol or a local within its file.
 pub struct RenameOp;
@@ -49,8 +52,9 @@ pub struct RenameRequest {
 pub(crate) struct Plan {
     /// The edits.
     pub edits: EditSet,
-    /// The file, as planning read it.
-    pub file: Analyzed,
+    /// Every file edited, as planning read it: the file first, then those
+    /// holding the declarations of the same C function.
+    pub contents: Vec<(FileId, String)>,
     /// What planning answers, without an ID yet.
     pub response: PreviewResponse,
     /// The target as stored with the preview, to plan it again: a symbol's
@@ -82,17 +86,26 @@ impl Operation for RenameOp {
             .map_err(|e| Error::Internal {
                 message: format!("cannot store the rename request: {e}"),
             })?,
-            files: vec![plan_file(
-                plan.file.id.as_str(),
-                &plan.file.content,
-                &plan.edits.files[0].edits,
-            )],
+            files: plan
+                .edits
+                .files
+                .iter()
+                .map(|f| plan_file(&f.path, content_of(&plan.contents, &f.path), &f.edits))
+                .collect(),
             edits: plan.edits,
             response: plan.response,
         };
         store.insert_preview(&mut row)?;
         Ok(row.response)
     }
+}
+
+/// The content planning read for `path`.
+pub(crate) fn content_of<'a>(contents: &'a [(FileId, String)], path: &str) -> &'a str {
+    contents
+        .iter()
+        .find(|(id, _)| id.as_str() == path)
+        .map_or("", |(_, content)| content.as_str())
 }
 
 /// Removes expired previews.
@@ -160,16 +173,27 @@ pub(crate) fn plan(
             hint: "pass the new name".to_owned(),
         });
     }
-    if definitions.len() > 1 && !request.all_overloads {
+    // A C prototype is the function it declares, not an overload of it.
+    let overloads = definitions
+        .iter()
+        .filter(|&&d| symbol_of(&file, d).is_none_or(|s| s.kind != DECLARATION))
+        .count();
+    if overloads > 1 && !request.all_overloads {
         return Err(refused(
             "tier_too_low",
             format!(
-                "`{old_name}` has {} overloads, and references to one cannot be told from references to the others without types",
-                definitions.len()
+                "`{old_name}` has {overloads} overloads, and references to one cannot be told from references to the others without types"
             ),
             "pass --all-overloads to rename them together",
         ));
     }
+    let others = same_function_sites(
+        project,
+        snapshot,
+        &file,
+        &mut definitions,
+        &request.new_name,
+    )?;
     let Sites {
         edits,
         unresolved,
@@ -201,24 +225,123 @@ pub(crate) fn plan(
         reason: Exclusion::Mention,
         text: s.note,
     }));
+    let description = description(ctx, &file, definitions[0], &request.new_name);
+    let target = crate::refs::symbol_result(ctx, &file, definitions[0], "scoped").symbol_id;
+    assemble(
+        &file,
+        edits,
+        others,
+        description,
+        overrides,
+        excluded,
+        target,
+    )
+}
+
+/// The plan of edits in `file` and in `others`.
+fn assemble(
+    file: &Analyzed,
+    edits: Vec<Edit>,
+    others: Vec<(FileId, String, Vec<Edit>)>,
+    description: String,
+    overrides: Vec<OverrideUse>,
+    excluded: Vec<ExcludedSite>,
+    target: String,
+) -> Result<Plan, Error> {
+    let mut text = diff(file.id.as_str(), &file.content, &edits);
+    for (id, content, edits) in &others {
+        text.push_str(&diff(id.as_str(), content, edits));
+    }
     let response = PreviewResponse {
         id: String::new(),
-        description: description(ctx, &file, definitions[0], &request.new_name),
-        files: 1,
-        sites: edits.len(),
+        description,
+        files: 1 + others.len(),
+        sites: edits.len() + others.iter().map(|(_, _, e)| e.len()).sum::<usize>(),
         overrides,
         excluded,
         ambiguous: Vec::new(),
-        diff: diff(file.id.as_str(), &file.content, &edits),
+        diff: text,
     };
-    let edits = EditSet::new(edits.into_iter().map(|e| (file.id.as_str().to_owned(), e)))?;
-    let target = crate::refs::symbol_result(ctx, &file, definitions[0], "scoped").symbol_id;
+    let mut contents = vec![(file.id.clone(), file.content.clone())];
+    let mut all: Vec<(String, Edit)> = edits
+        .into_iter()
+        .map(|e| (file.id.as_str().to_owned(), e))
+        .collect();
+    for (id, content, edits) in others {
+        all.extend(edits.into_iter().map(|e| (id.as_str().to_owned(), e)));
+        contents.push((id, content));
+    }
     Ok(Plan {
-        edits,
-        file,
+        edits: EditSet::new(all)?,
+        contents,
         response,
         target,
     })
+}
+
+/// The declarations of the same C or C++ function as the renamed one: those
+/// in its file join `definitions`, so their uses are renamed too; those in
+/// other files are edited where their name is, file by file.
+fn same_function_sites(
+    project: &Project,
+    snapshot: &Snapshot<'_>,
+    file: &Analyzed,
+    definitions: &mut Vec<usize>,
+    new_name: &str,
+) -> Result<Vec<(FileId, String, Vec<Edit>)>, Error> {
+    let Some(symbol) = symbol_of(file, definitions[0]) else {
+        return Ok(Vec::new());
+    };
+    let Some(hit) = snapshot
+        .symbols_with_id_prefix(&symbol.symbol_id)?
+        .into_iter()
+        .find(|h| h.path == file.id.as_str() && h.symbol.symbol_id == symbol.symbol_id)
+    else {
+        return Ok(Vec::new());
+    };
+    let mut others: Vec<(FileId, String, Vec<Edit>)> = Vec::new();
+    for member in same_function(snapshot, &hit)? {
+        if member.path == file.id.as_str() {
+            let d = file.model.definitions.iter().position(|d| {
+                matches!(d.defines, Defines::Symbol(i)
+                    if file.model.symbols[i].symbol_id == member.symbol.symbol_id)
+            });
+            if let Some(d) = d
+                && !definitions.contains(&d)
+            {
+                definitions.push(d);
+            }
+            continue;
+        }
+        let id = FileId::from_canonical(member.path.as_str());
+        if !others.iter().any(|(other, _, _)| *other == id) {
+            let path = project.path_of(&id);
+            let content = fs::read_to_string(&path).map_err(|source| Error::Io { path, source })?;
+            others.push((id.clone(), content, Vec::new()));
+        }
+        let (_, content, edits) = others
+            .iter_mut()
+            .find(|(other, _, _)| *other == id)
+            .ok_or_else(|| Error::Internal {
+                message: "a file read for a rename went missing".to_owned(),
+            })?;
+        let range = member.symbol.name_range;
+        let (start, end) = (range.start.byte as usize, range.end.byte as usize);
+        // The index describes the file as it was scanned; check it still is.
+        if content.get(start..end) == Some(member.symbol.name.as_str()) {
+            edits.push(Edit {
+                start,
+                end,
+                replacement: new_name.to_owned(),
+            });
+        }
+    }
+    others.retain(|(_, _, edits)| !edits.is_empty());
+    for (_, _, edits) in &mut others {
+        edits.sort_by_key(|e| e.start);
+    }
+    definitions.sort_unstable();
+    Ok(others)
 }
 
 /// What a rename touches.

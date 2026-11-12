@@ -231,6 +231,8 @@ pub const SYMBOL_KINDS: &[&str] = &[
     "enum",
     "enum_member",
     "function",
+    // A function declared without its body, such as a C prototype.
+    "declaration",
     "method",
     "constructor",
     "field",

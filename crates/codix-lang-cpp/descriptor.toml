@@ -1,5 +1,5 @@
 name = "cpp"
-version = 1
+version = 2
 id_prefix = "cpp"
 
 [detect]

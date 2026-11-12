@@ -1,5 +1,4 @@
 10:16 type point -> 5:8
-14:5 read sum -> 16:5
 14:20 parameter values
 14:32 parameter count
 16:20 parameter values
@@ -33,6 +32,6 @@
 32:15 read x -> free
 32:19 read p -> 29:24
 32:22 read y -> free
-32:26 call sum -> 16:5
+32:26 call sum -> 14:5
 32:31 read q -> 29:35
 32:33 read x -> free

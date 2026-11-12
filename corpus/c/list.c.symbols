@@ -16,5 +16,6 @@
 23:7 struct bits | union bits
 23:18 field bits.i | int i
 23:27 field bits.f | float f
+25:5 declaration length | int length(const struct node *head)
 27:21 function push | static struct node *push(struct node *head, int value)
 34:5 function length | int length(const struct node *head)

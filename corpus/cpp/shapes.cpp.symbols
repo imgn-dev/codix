@@ -19,7 +19,7 @@
 33:27 enum_member geo::Kind::Square | Square
 36:7 class geo::Box | class Box
 38:7 method geo::Box::get | T get() const
-41:8 function geo::total | double total(const Shapes &shapes)
+41:8 declaration geo::total | double total(const Shapes &shapes)
 45:13 constructor geo::Shape::Shape | geo::Shape::Shape() : id_(0)
 47:18 method geo::Shape::operator== | bool geo::Shape::operator==(const Shape &other) const
 50:16 method geo::Box::get | T geo::Box<T>::get() const

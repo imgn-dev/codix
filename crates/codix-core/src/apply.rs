@@ -220,7 +220,10 @@ fn rebase(
     }
     let mut differing = Vec::new();
     for (planned, new) in row.files.iter().zip(&plan.edits.files) {
-        let now = regions(&plan.file.content, &new.edits);
+        let now = regions(
+            crate::rename::content_of(&plan.contents, &new.path),
+            &new.edits,
+        );
         for (i, region) in now.iter().enumerate() {
             let same = planned
                 .regions
@@ -261,7 +264,7 @@ fn rebase(
         ));
     }
     Ok(Current {
-        contents: vec![(plan.file.id.clone(), plan.file.content.clone())],
+        contents: plan.contents,
         edits: plan.edits,
         rebased: true,
     })

@@ -188,6 +188,8 @@ undo with: codix undo
 
 - A rename changes the definition and the references its file's scopes bind to
   it, and lists the other mentions of the name (comments, strings) unchanged.
+  A C or C++ function's prototypes, `declaration` symbols, are renamed with it,
+  in its file and in headers.
 - It is refused, with a typed error and the sites, when the new name is not a
   valid name or collides with another, when it would change what a reference
   means (shadowing), when a site is in a syntax error, when the file is
