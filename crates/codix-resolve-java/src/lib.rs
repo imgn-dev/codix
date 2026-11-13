@@ -595,19 +595,51 @@ fn is_type_like(name: &str) -> bool {
     name.starts_with(char::is_uppercase) && name.chars().any(char::is_lowercase)
 }
 
-/// A method's parameters as written, whitespace dropped: overrides share
-/// them.
+/// A method's parameter types as written, without names, modifiers or
+/// annotations: an override shares them.
 fn parameter_text(name: &str, signature: Option<&str>) -> String {
     let Some(signature) = signature else {
         return String::new();
     };
-    let start = signature
+    let Some(start) = signature
         .find(&format!("{name}("))
-        .map_or(0, |i| i + name.len());
-    signature[start..]
-        .chars()
-        .filter(|c| !c.is_whitespace())
-        .collect()
+        .map(|i| i + name.len() + 1)
+    else {
+        return String::new();
+    };
+    let mut depth = 1;
+    let mut parts = vec![String::new()];
+    for c in signature[start..].chars() {
+        match c {
+            '(' | '<' | '[' => depth += 1,
+            ')' | '>' | ']' => {
+                depth -= 1;
+                if depth == 0 {
+                    break;
+                }
+            }
+            ',' if depth == 1 => {
+                parts.push(String::new());
+                continue;
+            }
+            _ => {}
+        }
+        if let Some(last) = parts.last_mut() {
+            last.push(c);
+        }
+    }
+    parts
+        .iter()
+        .map(|p| {
+            let words: Vec<&str> = p
+                .split_whitespace()
+                .filter(|w| !w.starts_with('@') && *w != "final")
+                .collect();
+            // The last word is the parameter's name.
+            words[..words.len().saturating_sub(1)].join(" ")
+        })
+        .collect::<Vec<_>>()
+        .join(",")
 }
 
 /// Whether a call with `arity` arguments fits the parameters `signature`
@@ -656,8 +688,9 @@ fn fits(name: &str, signature: Option<&str>, arity: u32) -> bool {
     }
 }
 
-/// The files to resolve again because they use a name the changed files
-/// define, but the changed files.
+/// The files to resolve again because they use, unresolved, a name the
+/// changed files define, but the changed files: reindexing a file drops
+/// what was bound to its symbols, and what nothing bound may bind now.
 fn dependents(
     index: &Connection,
     model: &Model,
@@ -675,7 +708,9 @@ fn dependents(
         let marks = vec!["?"; chunk.len()].join(", ");
         let mut stmt = index.prepare(&format!(
             "SELECT DISTINCT r.file_id FROM v1_refs r JOIN v1_files f ON f.id = r.file_id
-             WHERE f.language = 'java' AND r.state != 'bound' AND r.name IN ({marks})"
+             LEFT JOIN v1_resolved x ON x.ref = r.id
+             WHERE f.language = 'java' AND r.state != 'bound' AND x.ref IS NULL
+               AND r.name IN ({marks})"
         ))?;
         for row in stmt.query_map(rusqlite::params_from_iter(chunk), |r| r.get::<_, i64>(0))? {
             let file = row?;
@@ -728,6 +763,23 @@ mod tests {
         assert!(fits("f", Some("void f(Map<String, Integer> m)"), 1));
         assert!(!fits("f", Some("void f()"), 1));
         assert!(fits("f", None, 3));
+    }
+
+    #[test]
+    fn overrides_share_their_parameter_types_whatever_the_names() {
+        let text = |s| parameter_text("f", Some(s));
+        assert_eq!(
+            text("Object f(String name)"),
+            text("Object f(final String beanName)")
+        );
+        assert_ne!(
+            text("Object f(String name)"),
+            text("Object f(Class<?> type)")
+        );
+        assert_eq!(
+            text("void f(Map<String, Integer> m, @Nullable Object... args)"),
+            "Map<String, Integer>,Object..."
+        );
     }
 
     #[test]

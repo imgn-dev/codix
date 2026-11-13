@@ -3,6 +3,7 @@ v1_symbols: id, symbol_id, file_id, name, kind, qualified_name, parent, start_by
 v1_refs: id, file_id, name, context, start_byte, end_byte, enclosing, target, state, receiver, receiver_type, arity
 v1_modules: name, build, root, source_roots, test_roots, parent
 v1_supertypes: symbol, name
+v1_resolved: ref, target, state
 v1_imports: file_id, kind, name, alias, is_static, wildcard, system, line
 
 scratch:

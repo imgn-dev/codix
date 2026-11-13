@@ -154,10 +154,10 @@ codix at src/billing/Invoice.java:12
 
 ## `codix rename`
 
-Plan renaming a symbol or local variable within its file; returns a preview to apply.
+Plan renaming a symbol or local variable everywhere it is bound; returns a preview to apply.
 
 - **When:** Instead of editing by hand or with sed: only the definition and the references bound to it change, and the plan is checked for collisions, shadowing and unresolved references first.
-- **Returns:** A preview: its ID, the sites, any override used, the sites left unchanged, the diff, and the `apply` command to run. Nothing is written before `apply`.
+- **Returns:** A preview: its ID, the sites, any override used, the sites left unchanged, the diff, and the `apply` command. Nothing is written before `apply`.
 - **Needs:** tier 2 (scopes)
 
 ```

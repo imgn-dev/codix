@@ -55,6 +55,10 @@ SELECT symbol, name FROM supertypes;
 
 CREATE VIEW v1_imports AS
 SELECT file_id, kind, name, alias, is_static, wildcard, system, line FROM imports;
+
+CREATE VIEW v1_resolved AS
+SELECT ref, target, CASE state WHEN 0 THEN 'bound' ELSE 'external' END AS state
+FROM resolutions;
 ";
 
 /// The columns of each view of [`VIEWS_SQL`]: the contract. Once released,
@@ -109,6 +113,7 @@ pub const VIEW_COLUMNS: &[(&str, &[&str])] = &[
         ],
     ),
     ("v1_supertypes", &["symbol", "name"]),
+    ("v1_resolved", &["ref", "target", "state"]),
     (
         "v1_imports",
         &[

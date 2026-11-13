@@ -225,7 +225,7 @@ fn refs_of_an_ambiguous_name_covers_every_match() {
     assert_eq!(text.code, Some(0), "{}", text.stderr);
     assert!(
         text.stdout.starts_with(
-            "2 matches, before the filters:\n  src/A.java:2:18  method  A.f\n  src/B.java:2:18  method  B.f\n"
+            "2 symbols of the name:\n  src/A.java:2:18  method  A.f\n  src/B.java:2:18  method  B.f\n"
         ),
         "{}",
         text.stdout

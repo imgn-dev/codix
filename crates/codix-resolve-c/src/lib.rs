@@ -76,6 +76,11 @@ struct Model {
     includes: HashMap<i64, Vec<(String, bool)>>,
     /// Directories searched for includes, root-relative.
     include_dirs: Vec<String>,
+    /// The same, to look up.
+    include_set: HashSet<String>,
+    /// Files by their last path component, to find an include's candidates
+    /// without trying every include directory.
+    by_basename: HashMap<String, Vec<i64>>,
     /// Symbols that a name may mean across files, by name.
     symbols: HashMap<String, Vec<Sym>>,
 }
@@ -163,6 +168,15 @@ impl Model {
             Some(dirs) => dirs,
             None => include_directories(model.paths.values()),
         };
+        model.include_set = model.include_dirs.iter().cloned().collect();
+        for (&id, path) in &model.paths {
+            let base = path.rsplit('/').next().unwrap_or(path);
+            model
+                .by_basename
+                .entry(base.to_owned())
+                .or_default()
+                .push(id);
+        }
         Ok(model)
     }
 
@@ -190,14 +204,25 @@ impl Model {
             .then(|| self.paths.get(&from))
             .flatten()
             .and_then(|path| Path::new(path).parent().map(Path::to_path_buf));
-        let dirs = beside
-            .into_iter()
-            .chain(self.include_dirs.iter().map(PathBuf::from));
-        for dir in dirs {
-            if let Some(path) = normalized(&dir.join(written))
-                && let Some(&id) = self.ids.get(&path)
-                && !found.contains(&id)
-            {
+        if let Some(dir) = beside
+            && let Some(path) = normalized(&dir.join(written))
+            && let Some(&id) = self.ids.get(&path)
+        {
+            found.push(id);
+        }
+        let Some(written) = normalized(Path::new(written)) else {
+            return found;
+        };
+        let base = written.rsplit('/').next().unwrap_or(&written);
+        for &id in self.by_basename.get(base).into_iter().flatten() {
+            let path = &self.paths[&id];
+            let dir = if *path == written {
+                Some("")
+            } else {
+                path.strip_suffix(written.as_str())
+                    .and_then(|p| p.strip_suffix('/'))
+            };
+            if dir.is_some_and(|d| self.include_set.contains(d)) && !found.contains(&id) {
                 found.push(id);
             }
         }
@@ -342,8 +367,9 @@ fn normalized(path: &Path) -> Option<String> {
     Some(parts.join("/"))
 }
 
-/// The C files to resolve again because they use a name the changed files
-/// define, but the changed files.
+/// The C files to resolve again because they use, unresolved, a name the
+/// changed files define, but the changed files: reindexing a file drops what
+/// was bound to its symbols, and what nothing bound may bind now.
 fn dependents(
     index: &Connection,
     model: &Model,
@@ -360,7 +386,9 @@ fn dependents(
         let marks = vec!["?"; chunk.len()].join(", ");
         let mut stmt = index.prepare(&format!(
             "SELECT DISTINCT r.file_id FROM v1_refs r JOIN v1_files f ON f.id = r.file_id
-             WHERE f.language = 'c' AND r.state != 'bound' AND r.name IN ({marks})"
+             LEFT JOIN v1_resolved x ON x.ref = r.id
+             WHERE f.language = 'c' AND r.state != 'bound' AND x.ref IS NULL
+               AND r.name IN ({marks})"
         ))?;
         for row in stmt.query_map(rusqlite::params_from_iter(chunk), |r| r.get::<_, i64>(0))? {
             let file = row?;

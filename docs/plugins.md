@@ -169,7 +169,8 @@ The views and the scratch schema are in
 [`schemas/plugins/resolver-1.txt`](../schemas/plugins/resolver-1.txt):
 
 - `v1_files`, `v1_symbols`, `v1_refs`, `v1_modules`, `v1_supertypes`,
-  `v1_imports`: the index as resolvers see it. Reference contexts and states
+  `v1_imports`, `v1_resolved`: the index as resolvers see it, with what
+  resolvers bound so far. Reference contexts and states
   are spelled out (`call`, `bound`, `free`, `uncertain`). Beyond names, a
   symbol has its signature and declared type, a type its supertypes as
   written, a reference its receiver as written (`registry`, `this.registry`,

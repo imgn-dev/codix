@@ -163,7 +163,7 @@ impl TextRender for RefsResponse {
                     || t.kind != first.kind
             })
         {
-            writeln!(w, "{} matches, before the filters:", self.targets.len())?;
+            writeln!(w, "{} symbols of the name:", self.targets.len())?;
             for target in &self.targets {
                 writeln!(w, "  {}", symbol_line(target, style))?;
             }
@@ -506,6 +506,9 @@ fn stale(w: &mut dyn Write, possibly_stale: bool) -> io::Result<()> {
     Ok(())
 }
 
+/// How many of the symbols that do not fit a call `def` shows as text.
+const UNFIT_SHOWN: usize = 5;
+
 impl TextRender for DefResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
         for (i, d) in self.definitions.iter().enumerate() {
@@ -516,6 +519,14 @@ impl TextRender for DefResponse {
                     w,
                     "{rest} other {noun} of the name, which do not fit the call:"
                 )?;
+            }
+            // Those that do not fit are a few, the rest counted.
+            if let Some(fitting) = self.fitting
+                && i == fitting + UNFIT_SHOWN
+            {
+                let more = self.definitions.len() - i;
+                writeln!(w, "  {more} more; --json lists every one")?;
+                break;
             }
             let mut line = format!(
                 "{}  {}  {}",

@@ -219,9 +219,9 @@ pub const COMMANDS: &[Description] = &[
     },
     Description {
         name: "rename",
-        summary: "Plan renaming a symbol or local variable within its file; returns a preview to apply.",
+        summary: "Plan renaming a symbol or local variable everywhere it is bound; returns a preview to apply.",
         when: "Instead of editing by hand or with sed: only the definition and the references bound to it change, and the plan is checked for collisions, shadowing and unresolved references first.",
-        returns: "A preview: its ID, the sites, any override used, the sites left unchanged, the diff, and the `apply` command to run. Nothing is written before `apply`.",
+        returns: "A preview: its ID, the sites, any override used, the sites left unchanged, the diff, and the `apply` command. Nothing is written before `apply`.",
         tier: Some(Tier::Scopes),
         example: "codix rename Invoice.total sum",
     },

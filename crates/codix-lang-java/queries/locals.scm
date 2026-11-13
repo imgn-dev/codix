@@ -81,7 +81,9 @@
 (resource
   type: (_) @local.type
   name: (identifier) @local.definition.variable)
-(instanceof_expression name: (identifier) @local.definition.variable)
+(instanceof_expression
+  right: (_) @local.type
+  name: (identifier) @local.definition.variable)
 (type_pattern (identifier) @local.definition.variable)
 (record_pattern_component (identifier) @local.definition.variable)
 

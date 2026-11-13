@@ -457,8 +457,15 @@ impl Operation for DefOp {
                 Ok(((hits, fitting), paths))
             })
         })?;
-        // What the call's file binds it to stays bound by scope.
-        let bound = call.map(|c| c.bound).unwrap_or_default();
+        // What the call's file binds it to stays bound by scope, unless an
+        // inherited method fits it as well.
+        let mut bound = call.map(|c| c.bound).unwrap_or_default();
+        if hits[..fitting.unwrap_or(0)]
+            .iter()
+            .any(|h| !bound.contains(&h.symbol.symbol_id))
+        {
+            bound.clear();
+        }
         Ok(DefResponse {
             definitions: hits
                 .into_iter()
