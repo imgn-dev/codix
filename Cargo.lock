@@ -258,6 +258,7 @@ dependencies = [
  "codix-mcp",
  "codix-plugin",
  "codix-provider",
+ "codix-resolve-java",
  "codix-testkit",
  "codix-vcs-git",
  "codix-vcs-hg",
@@ -529,6 +530,15 @@ dependencies = [
  "toml",
  "tree-sitter",
  "tree-sitter-language",
+]
+
+[[package]]
+name = "codix-resolve-java"
+version = "0.4.0"
+dependencies = [
+ "codix-resolver",
+ "rusqlite",
+ "tempfile",
 ]
 
 [[package]]
@@ -2157,6 +2167,7 @@ dependencies = [
  "cc",
  "codix-plugin",
  "codix-provider",
+ "codix-resolver",
  "codix-testkit",
  "serde_json",
 ]

@@ -21,7 +21,7 @@ use crate::query::{complete, indexed};
 use crate::refs::{Analyzed, Target, target};
 use crate::render::since_epoch;
 use crate::scope::{Binding, Defines, Receiver};
-use crate::store::{FileStatus, PreviewRow, RefState, Snapshot, Store, SymbolHit};
+use crate::store::{FileStatus, PreviewRow, RefState, Resolved, Snapshot, Store, SymbolHit};
 use crate::symbol_id::{DECLARATION, same_function};
 
 /// `rename`: plans renaming a symbol or a local within its file.
@@ -174,10 +174,20 @@ pub(crate) fn plan(
         &request.new_name,
     )?;
     let Sites {
-        edits,
+        mut edits,
+        bound,
         unresolved,
         mentions,
     } = sites(ctx, project, snapshot, request, &file, &mut definitions)?;
+    let mut others = others;
+    add_bound(
+        project,
+        &file,
+        bound,
+        &request.new_name,
+        &mut edits,
+        &mut others,
+    )?;
     let overrides = check_rename(
         ctx,
         project,
@@ -212,6 +222,8 @@ pub(crate) fn plan(
         )?;
         excluded.extend(elsewhere);
     }
+    let mut overrides = overrides;
+    overrides.extend(check_others(ctx, project, config, &others, request)?);
     let description = description(ctx, &file, definitions[0], &request.new_name);
     let target = crate::refs::symbol_result(ctx, &file, definitions[0], "scoped").symbol_id;
     assemble(
@@ -335,6 +347,9 @@ fn same_function_sites(
 struct Sites {
     /// The sites it edits.
     edits: Vec<Edit>,
+    /// The references a resolver bound to it, by path and bytes: in its file
+    /// and in others.
+    bound: Vec<(String, usize, usize)>,
     /// The references it cannot bind.
     unresolved: Vec<Site>,
     /// The mentions of the name it leaves alone.
@@ -365,6 +380,7 @@ fn sites(
     let edits;
     let mut unresolved = Vec::new();
     let mut mentions = Vec::new();
+    let mut bound = Vec::new();
     if scoped {
         if request.overrides.textual {
             return Err(Error::Usage {
@@ -384,7 +400,15 @@ fn sites(
             .any(|&d| matches!(file.model.definitions[d].defines, Defines::Symbol(_)))
         {
             let elsewhere = visible_elsewhere(file, definitions);
-            unresolved = unresolved_sites(ctx, project, snapshot, file, old_name, elsewhere)?;
+            unresolved = unresolved_sites(
+                ctx,
+                project,
+                snapshot,
+                file,
+                definitions,
+                elsewhere,
+                &mut bound,
+            )?;
         }
         mentions = mention_sites(ctx, file, old_name, &edits);
     } else {
@@ -402,6 +426,7 @@ fn sites(
     }
     Ok(Sites {
         edits,
+        bound,
         unresolved,
         mentions,
     })
@@ -527,13 +552,24 @@ fn unresolved_sites(
     project: &Project,
     snapshot: &Snapshot<'_>,
     file: &Analyzed,
-    name: &str,
+    definitions: &[usize],
     elsewhere: bool,
+    bound: &mut Vec<(String, usize, usize)>,
 ) -> Result<Vec<Site>, Error> {
     let mut lines = Lines {
         project,
         files: HashMap::new(),
     };
+    let name = file.model.definitions[definitions[0]].name.as_str();
+    let ids: HashSet<String> = definitions
+        .iter()
+        .filter_map(|&d| symbol_of(file, d).map(|s| s.symbol_id.clone()))
+        .collect();
+    let resolved: HashMap<u32, Resolved> = snapshot
+        .refs_in(file.id.as_str())?
+        .into_iter()
+        .filter_map(|r| Some((r.start.byte, r.resolved?)))
+        .collect();
     let mut sites = Vec::new();
     for r in &file.model.references {
         let unbound = matches!(r.binding, Binding::Free | Binding::Uncertain);
@@ -542,10 +578,20 @@ fn unresolved_sites(
             && (r.receiver != Receiver::None || r.binding == Binding::Uncertain)
         {
             let at = r.range.start;
-            sites.push(Site {
-                location: ctx.location(&file.id, at.line, at.column),
-                note: lines.line(file.id.as_str(), at.line),
-            });
+            match resolved.get(&at.byte) {
+                Some(Resolved::Symbol(id)) if ids.contains(id) => {
+                    bound.push((
+                        file.id.as_str().to_owned(),
+                        at.byte as usize,
+                        r.range.end.byte as usize,
+                    ));
+                }
+                Some(_) => {}
+                None => sites.push(Site {
+                    location: ctx.location(&file.id, at.line, at.column),
+                    note: lines.line(file.id.as_str(), at.line),
+                }),
+            }
         }
     }
     if !elsewhere {
@@ -554,6 +600,15 @@ fn unresolved_sites(
     for r in snapshot.refs_named(name)? {
         if r.path == file.id.as_str() || r.state == RefState::Bound {
             continue;
+        }
+        match &r.resolved {
+            // A resolver bound it to the symbol: a site like any other.
+            Some(Resolved::Symbol(id)) if ids.contains(id) => {
+                bound.push((r.path.clone(), r.start.byte as usize, r.end_byte as usize));
+                continue;
+            }
+            Some(_) => continue,
+            None => {}
         }
         sites.push(Site {
             location: ctx.location(
@@ -695,6 +750,71 @@ fn check_names(file: &Analyzed, old_name: &str, new_name: &str) -> Result<(), Er
             hint: "pass the new name".to_owned(),
         });
     }
+    Ok(())
+}
+
+/// The checks of the other files a rename edits.
+fn check_others(
+    ctx: &Context,
+    project: &Project,
+    config: &Config,
+    others: &[(FileId, String, Vec<Edit>)],
+    request: &RenameRequest,
+) -> Result<Vec<OverrideUse>, Error> {
+    let mut used = Vec::new();
+    for (id, _, list) in others {
+        if let Some(other) = crate::refs::analyze(project, config, id)? {
+            used.extend(crate::preflight::check_other_file(
+                ctx,
+                project,
+                config,
+                &other,
+                list,
+                &request.new_name,
+                &request.overrides,
+            )?);
+        }
+    }
+    Ok(used)
+}
+
+/// Adds the references a resolver bound to the symbol to the edits: of its
+/// file, or of the other file they are in.
+fn add_bound(
+    project: &Project,
+    file: &Analyzed,
+    bound: Vec<(String, usize, usize)>,
+    new_name: &str,
+    edits: &mut Vec<Edit>,
+    others: &mut Vec<(FileId, String, Vec<Edit>)>,
+) -> Result<(), Error> {
+    for (path, start, end) in bound {
+        let edit = Edit {
+            start,
+            end,
+            replacement: new_name.to_owned(),
+        };
+        if path == file.id.as_str() {
+            edits.push(edit);
+            continue;
+        }
+        if let Some((_, _, list)) = others.iter_mut().find(|(id, _, _)| id.as_str() == path) {
+            list.push(edit);
+            continue;
+        }
+        let id = FileId::from_canonical(path);
+        let full = project.path_of(&id);
+        let content =
+            fs::read_to_string(&full).map_err(|source| Error::Io { path: full, source })?;
+        others.push((id, content, vec![edit]));
+    }
+    edits.sort_by_key(|e| e.start);
+    edits.dedup_by_key(|e| e.start);
+    for (_, _, list) in others.iter_mut() {
+        list.sort_by_key(|e| e.start);
+        list.dedup_by_key(|e| e.start);
+    }
+    others.sort_by(|a, b| a.0.as_str().cmp(b.0.as_str()));
     Ok(())
 }
 

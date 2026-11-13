@@ -20,7 +20,8 @@ codix_provider::inventory::submit! {
     PluginSource { discover: plugins }
 }
 
-/// The Java plugin, with the test resolver; returns its `bin` directory.
+/// The Java plugin, with the test resolver in place of its own; returns its
+/// `bin` directory.
 fn install() -> PathBuf {
     let plugins = Path::new(PLUGINS);
     if plugins.exists() {
@@ -28,10 +29,13 @@ fn install() -> PathBuf {
     }
     let dir = codix_testkit::plugin::language_plugin("java", plugins);
     let bin = dir.join("bin");
-    fs::create_dir(&bin).expect("bin");
+    fs::create_dir_all(&bin).expect("bin");
     let name = format!("codix-test-resolver{}", std::env::consts::EXE_SUFFIX);
     fs::copy(env!("CARGO_BIN_EXE_codix-test-resolver"), bin.join(&name)).expect("copy");
     let manifest = fs::read_to_string(dir.join("plugin.toml")).expect("manifest");
+    let manifest = manifest
+        .split_once("\n[resolver]")
+        .map_or(manifest.as_str(), |(before, _)| before);
     fs::write(
         dir.join("plugin.toml"),
         format!("{manifest}\n[resolver]\nexecutable = \"bin/{name}\"\nprotocol = 1\nviews = 1\n"),

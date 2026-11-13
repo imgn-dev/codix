@@ -198,9 +198,9 @@ fn count_gives_the_totals_and_all_every_result() {
     let counted = codix(&root, &["refs", "Legacy.legacy", "--count"]);
     assert_eq!(counted.code, Some(0), "{}", counted.stderr);
     assert!(
-        counted
-            .stdout
-            .starts_with("7 results\n1 definition, 0 scoped, 6 textual\nby place:\n  2  A.java  "),
+        counted.stdout.starts_with(
+            "7 results\n1 definition, 0 scoped, 6 bound, 0 textual\nby place:\n  2  A.java  "
+        ),
         "{}",
         counted.stdout
     );

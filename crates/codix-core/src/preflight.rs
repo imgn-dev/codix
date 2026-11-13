@@ -157,6 +157,74 @@ pub fn check_rename(
     Ok(used)
 }
 
+/// The checks for another file a rename edits, at references a resolver
+/// bound to the symbol: the file must not be generated, and the new name
+/// must not bind to a definition of the file there (`shadowing`).
+pub fn check_other_file(
+    ctx: &Context,
+    project: &Project,
+    config: &Config,
+    file: &Analyzed,
+    edits: &[Edit],
+    new_name: &str,
+    overrides: &Overrides,
+) -> Result<Vec<OverrideUse>, Error> {
+    let mut used_overrides: Vec<OverrideUse> =
+        not_generated(ctx, project, config, file, overrides)?
+            .into_iter()
+            .collect();
+    let descriptor = descriptor(&file.language)?;
+    let Some(grammar) = registry().grammars.get(&descriptor.name) else {
+        return Ok(used_overrides);
+    };
+    if grammar.locals.is_none() {
+        return Ok(used_overrides);
+    }
+    let after = crate::scope::model(
+        descriptor,
+        grammar,
+        file.id.as_str(),
+        &apply(&file.content, edits),
+    )?;
+    let mut sites = Vec::new();
+    for e in edits {
+        let Some(r) = after.reference_at(shifted(edits, e.start)) else {
+            continue;
+        };
+        if let Binding::Bound(_) = after.references[r].binding {
+            let at = file
+                .model
+                .reference_at(e.start)
+                .map(|i| file.model.references[i].range.start);
+            if let Some(at) = at {
+                let mut site = site_at(ctx, file, at.line, at.column);
+                site.note = format!("would now mean a definition of its file: {}", site.note);
+                sites.push(site);
+            }
+        }
+    }
+    if sites.is_empty() {
+        return Ok(used_overrides);
+    }
+    if overrides.allows(Allow::Shadowing) {
+        used_overrides.push(used(
+            Allow::Shadowing,
+            "references whose meaning changes".to_owned(),
+            sites,
+        ));
+        return Ok(used_overrides);
+    }
+    Err(refused(
+        "shadowing",
+        format!(
+            "`{new_name}` would change what {} reference(s) mean",
+            sites.len()
+        ),
+        "choose another name, or pass --allow shadowing to accept it",
+        sites,
+    ))
+}
+
 fn descriptor(language: &str) -> Result<&'static LanguageDescriptor, Error> {
     registry()
         .languages

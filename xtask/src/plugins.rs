@@ -1,9 +1,10 @@
 //! The plugin directories of the providers that are not in the core: each
 //! language pack with its grammar compiled into a shared library, each build
 //! system with its executable, and the version control systems but git with
-//! their descriptors. A language with a resolver would also get its resolver
-//! executable; none has one yet.
+//! their descriptors. A language with a resolver also gets its resolver
+//! executable.
 
+use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -14,6 +15,13 @@ pub const HOST: &str = env!("XTASK_TARGET");
 
 /// The plugins' version: the workspace's.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The resolver protocol and views the resolvers built here speak: those of
+/// `codix-resolver`, which a test checks, without building SQLite for this
+/// tool.
+pub const RESOLVER_PROTOCOL: u32 = 1;
+/// See [`RESOLVER_PROTOCOL`].
+pub const RESOLVER_VIEWS: u32 = 1;
 
 /// How to build.
 #[derive(Debug, Clone)]
@@ -54,6 +62,9 @@ pub struct Pack {
     pub sources: &'static str,
     /// The function the grammar exports.
     pub symbol: &'static str,
+    /// Its resolver's crate, under `crates/`, whose executable has the
+    /// crate's name.
+    pub resolver: Option<&'static str>,
 }
 
 const fn pack(
@@ -73,6 +84,15 @@ const fn pack(
         grammar,
         sources,
         symbol,
+        resolver: None,
+    }
+}
+
+/// `pack` with its resolver.
+const fn with_resolver(pack: Pack, resolver: &'static str) -> Pack {
+    Pack {
+        resolver: Some(resolver),
+        ..pack
     }
 }
 
@@ -112,13 +132,16 @@ pub const PACKS: &[Pack] = &[
         "tree_sitter_go",
         LOCALS,
     ),
-    pack(
-        "java",
-        "codix-lang-java",
-        "tree-sitter-java",
-        "src",
-        "tree_sitter_java",
-        LOCALS,
+    with_resolver(
+        pack(
+            "java",
+            "codix-lang-java",
+            "tree-sitter-java",
+            "src",
+            "tree_sitter_java",
+            LOCALS,
+        ),
+        "codix-resolve-java",
     ),
     pack(
         "javascript",
@@ -468,12 +491,23 @@ fn language_plugin_in(
     let crate_dir = workspace.crates.join(pack.crate_dir);
     let dir = fresh(out, "language", pack.language)?;
     let library = format!("{}.{}", pack.language, dll_extension(&options.target));
-    manifest(
-        &dir,
-        "language",
-        pack.language,
-        &format!("library = \"{library}\"\nsymbol = \"{}\"\n", pack.symbol),
-    )?;
+    let mut extra = format!("library = \"{library}\"\nsymbol = \"{}\"\n", pack.symbol);
+    if let Some(resolver) = pack.resolver {
+        let file = format!("{resolver}{}", exe_suffix(&options.target));
+        let built = cargo_build(
+            workspace,
+            &["--package", resolver, "--bin", resolver],
+            &file,
+            options,
+        )?;
+        fs::create_dir(dir.join("bin")).map_err(|e| format!("{}: {e}", dir.display()))?;
+        copy(&built, &dir.join("bin").join(&file))?;
+        let _ = write!(
+            extra,
+            "\n[resolver]\nexecutable = \"bin/{file}\"\nprotocol = {RESOLVER_PROTOCOL}\nviews = {RESOLVER_VIEWS}\n"
+        );
+    }
+    manifest(&dir, "language", pack.language, &extra)?;
     copy(
         &crate_dir.join(pack.descriptor),
         &dir.join("descriptor.toml"),

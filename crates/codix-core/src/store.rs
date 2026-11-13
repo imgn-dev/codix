@@ -411,7 +411,8 @@ pub struct RefRow {
     /// How much to trust it.
     pub confidence: Confidence,
     /// What it is reached through, as written, when a name or a qualified
-    /// name: `dlbf`, `BeanFactoryUtils`, `this`, `a.b`.
+    /// name: `dlbf`, `BeanFactoryUtils`, `this`, `a.b`; `…` for any other
+    /// expression, such as a call.
     pub receiver: Option<String>,
     /// The declared type of the receiver, when its file declares it: a
     /// local, a parameter or a field of the file.
@@ -485,6 +486,17 @@ pub struct RefHit {
     pub state: RefState,
     /// How much to trust it.
     pub confidence: Confidence,
+    /// What a resolver bound it to, across files.
+    pub resolved: Option<Resolved>,
+}
+
+/// What a resolver bound a reference to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Resolved {
+    /// A symbol of the project, by ID.
+    Symbol(String),
+    /// Something outside the project.
+    External,
 }
 
 /// A symbol and the file it is defined in.
@@ -828,10 +840,12 @@ fn write_imports(
 }
 
 const REF_SELECT: &str = "SELECT f.path, r.name, r.context, r.line, r.column, r.start_byte,
-        r.end_byte, e.symbol_id, t.symbol_id, r.state, r.low
+        r.end_byte, e.symbol_id, t.symbol_id, r.state, r.low, x.state, xt.symbol_id
      FROM refs r JOIN files f ON f.id = r.file_id
      LEFT JOIN symbols e ON e.id = r.enclosing
-     LEFT JOIN symbols t ON t.id = r.target";
+     LEFT JOIN symbols t ON t.id = r.target
+     LEFT JOIN resolutions x ON x.ref = r.id
+     LEFT JOIN symbols xt ON xt.id = x.target";
 
 fn ref_hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefHit> {
     Ok(RefHit {
@@ -851,6 +865,14 @@ fn ref_hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<RefHit> {
             Confidence::Normal
         } else {
             Confidence::Low
+        },
+        resolved: match (
+            row.get::<_, Option<i64>>(11)?,
+            row.get::<_, Option<String>>(12)?,
+        ) {
+            (Some(0), Some(id)) => Some(Resolved::Symbol(id)),
+            (Some(_), _) => Some(Resolved::External),
+            (None, _) => None,
         },
     })
 }

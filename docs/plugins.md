@@ -143,7 +143,8 @@ files; never run the build. A crate implementing `BuildResolver` gets this
 
 A resolver binds the references of its language across files: tier 3. It is
 an executable that codix starts after a scan that changed files of its
-language, and keeps running in the daemon. It speaks JSON lines on stdin and
+language, and keeps running in the daemon. The Java plugin ships one,
+`bin/codix-resolve-java`, the same resolver the full binary has compiled in. It speaks JSON lines on stdin and
 stdout:
 
 | Request | Reply |
@@ -171,7 +172,7 @@ The views and the scratch schema are in
   are spelled out (`call`, `bound`, `free`, `uncertain`). Beyond names, a
   symbol has its signature and declared type, a type its supertypes as
   written, a reference its receiver as written (`registry`, `this.registry`,
-  `Objects`), that receiver's declared type when its file declares it, and a
+  `Objects`, `…` for another expression), that receiver's declared type when its file declares it, and a
   call its argument count; a file has its package, imports and includes. Once
   released, a change to a view's columns is a new version of the views,
   never an edit.

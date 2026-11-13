@@ -177,8 +177,8 @@ impl TextRender for RefsResponse {
             };
             writeln!(
                 w,
-                "{} {definitions}, {} scoped, {} textual",
-                self.definitions, self.scoped, self.textual
+                "{} {definitions}, {} scoped, {} bound, {} textual",
+                self.definitions, self.scoped, self.bound, self.textual
             )?;
         }
         if self.references.total == 0 {

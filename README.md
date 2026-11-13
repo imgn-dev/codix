@@ -9,7 +9,8 @@ contains, what refers to a name and inside which symbol.
 This is phase 3: scopes (tier 2) for Java, Go, TypeScript, Python, Kotlin,
 JavaScript, Rust, C, C++, C#, PHP and Ruby, so references are bound to the
 definition they mean within a file, plus keys and headings of JSON, YAML, TOML,
-XML, Markdown and SQL for search; renames within a file, always applied from a
+XML, Markdown and SQL for search; a resolver for Java that binds references
+across files; renames, across files where they are bound, always applied from a
 reviewed preview, with undo; a per-project daemon that answers in milliseconds
 and watches files; and `codix mcp`, the same commands as tools for agents.
 
@@ -121,9 +122,13 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   `java:src/billing/Invoice.java::Invoice.total#381c`; every command accepts an
   ID, its path part without the hash, `file:line:col`, or a name.
 - `refs` lists what refers to a symbol or a local variable, definition first:
-  `scoped` when its file's scopes bind it there, `textual` when it matches by
-  name only, in another file or through another object; `--confidence scoped`
-  or `--confidence textual` keeps one of them. `def file:line:col` follows the
+  `scoped` when its file's scopes bind it there, `bound` when a resolver binds
+  it across files, `textual` when it matches by name only, in another file or
+  through another object; `--confidence scoped|bound|textual` keeps one of
+  them. Java has a resolver: imports, the package, supertypes and the declared
+  types of locals, parameters and fields bind names and calls across files;
+  what needs type inference (`var`, lambda parameters, chained calls) stays
+  textual. `def file:line:col` follows the
   name at that place to its definition. In C, a function pointer member is a
   field, and a designated initializer such as `.read = ext4_read` writes it:
   `refs file_operations.read --context write` lists the tables filling it.
@@ -202,8 +207,8 @@ applied 3f9a2c41: rename variable base at src/Invoice.java:12:14 to net
 undo with: codix undo
 ```
 
-- A rename changes the definition and the references its file's scopes bind to
-  it, and lists the other mentions of the name unchanged: in its file's
+- A rename changes the definition, the references its file's scopes bind to
+  it and those a resolver binds to it in other files, and lists the other mentions of the name unchanged: in its file's
   comments and strings, and in other files, their comments and strings
   (Javadoc's `{@link Type#name}`) and text files (XML, properties).
   A C or C++ function's prototypes, `declaration` symbols, are renamed with it,
@@ -212,7 +217,7 @@ undo with: codix undo
   valid name or collides with another, when it would change what a reference
   means (shadowing), when a site is in a syntax error, when the file is
   generated or vendored, and when other files or other objects may refer to
-  the symbol, which codix cannot bind within one file. One condition at a time
+  the symbol without codix binding them; every file edited is checked. One condition at a time
   can be allowed: `--allow shadowing`, `--allow overload`,
   `--allow visibility-change`, `--allow generated`, and `--exclude-unresolved`
   to edit only the sites codix binds. A public Java class is named after its

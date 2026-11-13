@@ -9,6 +9,11 @@
           "type": "string"
         },
         {
+          "const": "bound",
+          "description": "Bound to the symbol by a resolver, across files.",
+          "type": "string"
+        },
+        {
           "const": "textual",
           "description": "Matched by name only.",
           "type": "string"

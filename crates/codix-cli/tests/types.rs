@@ -59,7 +59,7 @@ fn row(name: &str, depth: usize, via: &str, confidence: &str) -> (String, usize,
 }
 
 #[test]
-fn subtypes_are_found_transitively_by_name_or_by_scope() {
+fn subtypes_are_found_transitively_by_scope_or_by_the_resolver() {
     let (_guard, root) = indexed(CODIX, FILES);
     let out = codix(&root, &["types", "BeanPostProcessor", "--json"]);
     assert_eq!(out.code, Some(0), "{}", out.stderr);
@@ -68,10 +68,11 @@ fn subtypes_are_found_transitively_by_name_or_by_scope() {
         rows(&json),
         [
             row("Async", 2, "AbstractAdvising", "scoped"),
-            row("AbstractAdvising", 1, "BeanPostProcessor", "textual"),
+            // The Java resolver binds the names across files.
+            row("AbstractAdvising", 1, "BeanPostProcessor", "bound"),
             // The nested interface of the name binds by scope in its file.
             row("Nested.Local", 1, "Nested.BeanPostProcessor", "scoped"),
-            row("Smart", 1, "BeanPostProcessor", "textual"),
+            row("Smart", 1, "BeanPostProcessor", "bound"),
         ]
     );
     assert_eq!(json["result"]["targets"].as_array().unwrap().len(), 2);
@@ -84,12 +85,12 @@ fn depth_limits_the_levels() {
     assert_eq!(out.code, Some(0), "{}", out.stderr);
     assert!(
         out.stdout
-            .starts_with("src/a/Async.java:2:14  class  Async  depth 1  via Smart  textual\n"),
+            .starts_with("src/a/Async.java:2:14  class  Async  depth 1  via Smart  bound\n"),
         "{}",
         out.stdout
     );
     assert!(
-        out.stdout.ends_with("1 result\n0 bound, 1 textual\n"),
+        out.stdout.ends_with("1 result\n1 bound, 0 textual\n"),
         "{}",
         out.stdout
     );
@@ -102,15 +103,7 @@ fn supertypes_go_up_and_name_those_outside_the_project() {
     assert_eq!(out.code, Some(0), "{}", out.stderr);
     let json: Value = serde_json::from_str(&out.stdout).unwrap();
     let names: Vec<String> = rows(&json).into_iter().map(|r| r.0).collect();
-    assert_eq!(
-        names,
-        [
-            "AbstractAdvising",
-            "Nested.BeanPostProcessor",
-            "BeanPostProcessor",
-            "Smart"
-        ]
-    );
+    assert_eq!(names, ["AbstractAdvising", "BeanPostProcessor", "Smart"]);
     assert_eq!(
         json["result"]["outside"],
         serde_json::json!(["Comparable", "java.io.Serializable"])

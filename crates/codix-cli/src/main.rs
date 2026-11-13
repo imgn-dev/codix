@@ -17,6 +17,7 @@ use codix_lang_csharp as _;
 use codix_lang_go as _;
 #[cfg(feature = "lang-java")]
 use codix_lang_java as _;
+// The Java resolver, compiled in with the Java pack.
 #[cfg(feature = "lang-javascript")]
 use codix_lang_javascript as _;
 #[cfg(feature = "lang-json")]
@@ -43,6 +44,8 @@ use codix_lang_typescript as _;
 use codix_lang_xml as _;
 #[cfg(feature = "lang-yaml")]
 use codix_lang_yaml as _;
+#[cfg(feature = "lang-java")]
+use codix_resolve_java as _;
 #[cfg(feature = "vcs-git")]
 use codix_vcs_git as _;
 #[cfg(feature = "vcs-hg")]
@@ -468,6 +471,7 @@ enum ContextArg {
 #[derive(Clone, Copy, clap::ValueEnum)]
 enum ConfidenceArg {
     Scoped,
+    Bound,
     Textual,
 }
 
@@ -475,6 +479,7 @@ impl From<ConfidenceArg> for Confidence {
     fn from(arg: ConfidenceArg) -> Self {
         match arg {
             ConfidenceArg::Scoped => Self::Scoped,
+            ConfidenceArg::Bound => Self::Bound,
             ConfidenceArg::Textual => Self::Textual,
         }
     }

@@ -1,9 +1,10 @@
 //! `refs`, and `def` by location: both read what a name binds to from its
 //! file's model, built from the file as it is on disk.
 //!
-//! References bound by scope are `scoped`. References that may mean the
-//! symbol but that codix cannot bind, in other files or through another
-//! object, are `textual`: they match by name only.
+//! References bound by scope are `scoped`, those a resolver binds across
+//! files `bound`. References that may mean the symbol but that codix cannot
+//! bind, in other files or through another object, are `textual`: they
+//! match by name only.
 
 use std::collections::HashSet;
 use std::fs;
@@ -18,7 +19,7 @@ use crate::page::{Location, Page, Paged, Ranked, sort_results};
 use crate::project::{FileId, Project, ScopeRequest};
 use crate::query::{Renamed, SymbolResult, complete, following, indexed};
 use crate::scope::{Binding, Defines, FileModel, Receiver, RefContext as ScopeContext};
-use crate::store::{FileStatus, RefState, Snapshot, Store, SymbolHit};
+use crate::store::{FileStatus, RefState, Resolved, Snapshot, Store, SymbolHit};
 use crate::symbol_id::{
     DECLARATION, SymbolRef, resolve_all_where, resolve_overloads_where, same_function,
 };
@@ -329,6 +330,8 @@ impl RefContext {
 pub enum Confidence {
     /// Bound to the symbol by scope.
     Scoped,
+    /// Bound to the symbol by a resolver, across files.
+    Bound,
     /// Matched by name only.
     Textual,
 }
@@ -342,8 +345,8 @@ pub struct RefResult {
     /// `def` for the definition; otherwise `call`, `type`, `import`, `read`
     /// or `write`.
     pub context: String,
-    /// `scoped`: bound to the symbol by scope; `textual`: matched by name
-    /// only.
+    /// `scoped`: bound to the symbol by scope; `bound`: by a resolver,
+    /// across files; `textual`: matched by name only.
     pub confidence: String,
     /// Qualified name of the innermost enclosing symbol.
     pub enclosing: Option<String>,
@@ -374,6 +377,8 @@ pub struct RefsResponse {
     pub definitions: usize,
     /// References bound by scope, before paging.
     pub scoped: usize,
+    /// References bound by a resolver, before paging.
+    pub bound: usize,
     /// References matched by name only, before paging.
     pub textual: usize,
     /// The next page, when results remain: the request with these fields
@@ -402,6 +407,7 @@ impl Outcome for RefsResponse {
 }
 
 const SCOPED: &str = "scoped";
+const BOUND: &str = "bound";
 const TEXTUAL: &str = "textual";
 
 impl Operation for RefsOp {
@@ -425,11 +431,12 @@ impl Operation for RefsOp {
         // uses elsewhere that only the name connects.
         let mut names: Vec<String> = Vec::new();
         let mut own: HashSet<&str> = HashSet::new();
+        let ids = target_ids(&targets);
         for target in &targets {
             let Target::Definitions { file, .. } = target;
             own.insert(file.id.as_str());
             let (found, visible) = references_of(ctx, target);
-            results.extend(found);
+            results.extend(resolved_in_file(&snapshot, file, found, &ids)?);
             if let Some(name) = visible
                 && !names.contains(&name)
             {
@@ -437,14 +444,17 @@ impl Operation for RefsOp {
             }
         }
         for name in &names {
-            results.extend(by_name(ctx, project, &snapshot, name, &own, &results)?);
+            results.extend(by_name(
+                ctx, project, &snapshot, name, &own, &ids, &results,
+            )?);
         }
         // A place found for several matches keeps its best reading: the
         // definition, then a binding, then a name match.
         let rank = |r: &RefResult| match (r.context.as_str(), r.confidence.as_str()) {
             ("def", _) => 0,
             (_, SCOPED) => 1,
-            _ => 2,
+            (_, BOUND) => 2,
+            _ => 3,
         };
         results.sort_by(|a, b| {
             (
@@ -471,7 +481,7 @@ impl Operation for RefsOp {
         let Target::Definitions { file: anchor, .. } = &targets[0];
         let anchor = anchor.id.as_str().to_owned();
         sort_results(&mut results, Some(&anchor));
-        let (definitions, scoped, textual) = counts(&results);
+        let (definitions, scoped, bound, textual) = counts(&results);
         let matched: Vec<SymbolResult> = targets
             .iter()
             .flat_map(|Target::Definitions { file, definitions }| {
@@ -499,6 +509,7 @@ impl Operation for RefsOp {
             references,
             definitions,
             scoped,
+            bound,
             textual,
             next: after.map(|after| RefsNext { after, symbol }),
             possibly_stale,
@@ -568,15 +579,67 @@ fn references_of(ctx: &Context, target: &Target) -> (Vec<RefResult>, Option<Stri
     (results, visible_elsewhere.then(|| first.name.clone()))
 }
 
-/// The uses of `name` outside the files in `own`, which their scopes cover,
-/// matched by name only; and in files without scopes, every whole word, but
-/// at the places `found` already holds.
+/// The IDs of the symbols the targets define.
+pub(crate) fn target_ids(targets: &[Target]) -> HashSet<String> {
+    targets
+        .iter()
+        .flat_map(|Target::Definitions { file, definitions }| {
+            definitions
+                .iter()
+                .filter_map(|&d| match file.model.definitions[d].defines {
+                    Defines::Symbol(i) => Some(file.model.symbols[i].symbol_id.clone()),
+                    Defines::Local { .. } => None,
+                })
+        })
+        .collect()
+}
+
+/// `found` in `file`, with what a resolver says of those its scopes leave
+/// unbound: `bound` to one of `ids`, or gone when bound to something else.
+fn resolved_in_file(
+    snapshot: &Snapshot<'_>,
+    file: &Analyzed,
+    found: Vec<RefResult>,
+    ids: &HashSet<String>,
+) -> Result<Vec<RefResult>, Error> {
+    if !found.iter().any(|r| r.confidence == TEXTUAL) {
+        return Ok(found);
+    }
+    let resolved: std::collections::HashMap<(u32, u32), Resolved> = snapshot
+        .refs_in(file.id.as_str())?
+        .into_iter()
+        .filter_map(|r| Some(((r.start.line, r.start.column), r.resolved?)))
+        .collect();
+    Ok(found
+        .into_iter()
+        .filter_map(|mut r| {
+            if r.confidence != TEXTUAL {
+                return Some(r);
+            }
+            match resolved.get(&(r.location.line, r.location.column)) {
+                Some(Resolved::Symbol(id)) if ids.contains(id) => {
+                    BOUND.clone_into(&mut r.confidence);
+                    r.target = Some(id.clone());
+                    Some(r)
+                }
+                Some(_) => None,
+                None => Some(r),
+            }
+        })
+        .collect())
+}
+
+/// The uses of `name` outside the files in `own`, which their scopes cover:
+/// `bound` when a resolver bound them to one of `ids`, left out when to
+/// something else, otherwise matched by name only; and in files without
+/// scopes, every whole word, but at the places `found` already holds.
 fn by_name(
     ctx: &Context,
     project: &Project,
     snapshot: &Snapshot<'_>,
     name: &str,
     own: &HashSet<&str>,
+    ids: &HashSet<String>,
     found: &[RefResult],
 ) -> Result<Vec<RefResult>, Error> {
     let mut results = Vec::new();
@@ -584,6 +647,11 @@ fn by_name(
         if own.contains(r.path.as_str()) || r.state == RefState::Bound {
             continue;
         }
+        let (confidence, target) = match &r.resolved {
+            Some(Resolved::Symbol(id)) if ids.contains(id) => (BOUND, Some(id.clone())),
+            Some(_) => continue,
+            None => (TEXTUAL, None),
+        };
         results.push(RefResult {
             location: ctx.location(
                 &FileId::from_canonical(r.path.as_str()),
@@ -591,9 +659,9 @@ fn by_name(
                 r.start.column,
             ),
             context: r.context.as_str().to_owned(),
-            confidence: TEXTUAL.to_owned(),
+            confidence: confidence.to_owned(),
             enclosing: r.enclosing.as_deref().map(qualified_part),
-            target: None,
+            target,
         });
     }
     let place = |l: &Location| (l.root_path.as_str().to_owned(), l.line, l.column);
@@ -616,20 +684,29 @@ fn kept(confidence: Option<Confidence>, result: &RefResult) -> bool {
     result.is_definition()
         || match confidence {
             Some(Confidence::Scoped) => result.confidence == SCOPED,
+            Some(Confidence::Bound) => result.confidence == BOUND,
             Some(Confidence::Textual) => result.confidence == TEXTUAL,
             None => true,
         }
 }
 
-/// The definitions, the references bound by scope, and those matched by name
-/// among `results`.
-fn counts(results: &[RefResult]) -> (usize, usize, usize) {
+/// The definitions, the references bound by scope, those bound by a
+/// resolver, and those matched by name among `results`.
+fn counts(results: &[RefResult]) -> (usize, usize, usize, usize) {
     let definitions = results.iter().filter(|r| r.is_definition()).count();
-    let scoped = results
-        .iter()
-        .filter(|r| !r.is_definition() && r.confidence == SCOPED)
-        .count();
-    (definitions, scoped, results.len() - definitions - scoped)
+    let count = |confidence: &str| {
+        results
+            .iter()
+            .filter(|r| !r.is_definition() && r.confidence == confidence)
+            .count()
+    };
+    let (scoped, bound) = (count(SCOPED), count(BOUND));
+    (
+        definitions,
+        scoped,
+        bound,
+        results.len() - definitions - scoped - bound,
+    )
 }
 
 /// The qualified name in a symbol ID, `prefix:path::Qualified.name#hash`.

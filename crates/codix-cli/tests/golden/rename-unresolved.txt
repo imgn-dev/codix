@@ -1,3 +1,3 @@
 error[unresolved_sites]: 1 reference(s) may mean it, but codix cannot bind them
-  src/Report.java:5:24  return invoice.withTax(1);
+  src/Report.java:5:36  return ((Invoice) invoice).withTax(1);
 hint: check them; pass --exclude-unresolved to rename the bound sites only and leave these unchanged

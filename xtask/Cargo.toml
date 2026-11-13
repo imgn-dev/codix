@@ -15,6 +15,7 @@ serde_json.workspace = true
 [dev-dependencies]
 codix-plugin.workspace = true
 codix-provider.workspace = true
+codix-resolver.workspace = true
 codix-testkit.workspace = true
 
 [lints]

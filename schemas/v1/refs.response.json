@@ -78,7 +78,7 @@
           "type": "integer"
         },
         "confidence": {
-          "description": "`scoped`: bound to the symbol by scope; `textual`: matched by name\nonly.",
+          "description": "`scoped`: bound to the symbol by scope; `bound`: by a resolver,\nacross files; `textual`: matched by name only.",
           "type": "string"
         },
         "context": {
@@ -233,6 +233,12 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "description": "What [`RefsOp`] answers.",
   "properties": {
+    "bound": {
+      "description": "References bound by a resolver, before paging.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
     "definitions": {
       "description": "Definitions among the results, before paging.",
       "format": "uint",
@@ -295,6 +301,7 @@
     "references",
     "definitions",
     "scoped",
+    "bound",
     "textual",
     "possibly_stale"
   ],

@@ -6,7 +6,7 @@ use codix_testkit::fixture::{codix_in, indexed};
 
 const CODIX: &str = env!("CARGO_BIN_EXE_codix");
 
-/// A method used in its file and through another object in another file.
+/// A method used in its file and, through a cast no resolver binds, in another file.
 const FILES: &[(&str, &str)] = &[
     (
         "src/Invoice.java",
@@ -14,7 +14,7 @@ const FILES: &[(&str, &str)] = &[
     ),
     (
         "src/Report.java",
-        "package billing;\n\nclass Report {\n    long render(Invoice invoice) {\n        return invoice.withTax(1);\n    }\n}\n",
+        "package billing;\n\nclass Report {\n    long render(Object invoice) {\n        return ((Invoice) invoice).withTax(1);\n    }\n}\n",
     ),
     (
         "src/Cart.java",
@@ -65,7 +65,7 @@ fn unresolved_references_refuse_unless_excluded() {
     assert_eq!(out.code, Some(0), "{}", out.stderr);
     // The site left is listed once, with its line.
     assert!(
-        out.stdout.contains("  override --exclude-unresolved: references codix cannot bind, left unchanged\n  not changed, 1 unresolved site:\n    src/Report.java:5:24  return invoice.withTax(1);\n"),
+        out.stdout.contains("  override --exclude-unresolved: references codix cannot bind, left unchanged\n  not changed, 1 unresolved site:\n    src/Report.java:5:36  return ((Invoice) invoice).withTax(1);\n"),
         "{}",
         out.stdout
     );
@@ -80,7 +80,7 @@ fn unresolved_references_refuse_unless_excluded() {
     let applied = codix(&root, &["apply", preview]);
     assert_eq!(applied.code, Some(0), "{}", applied.stderr);
     assert!(
-        applied.stdout.contains("warning: left unchanged, 1 reference that may mean it; the code may no longer build:\n    src/Report.java:5:24  return invoice.withTax(1);\n"),
+        applied.stdout.contains("warning: left unchanged, 1 reference that may mean it; the code may no longer build:\n    src/Report.java:5:36  return ((Invoice) invoice).withTax(1);\n"),
         "{}",
         applied.stdout
     );

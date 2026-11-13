@@ -209,7 +209,8 @@ pub struct Reference {
     pub scope: usize,
     /// What it is reached through.
     pub receiver: Receiver,
-    /// The receiver as written, when a name or a qualified name.
+    /// The receiver as written when a name or a qualified name, `…` when
+    /// another expression.
     pub receiver_text: Option<String>,
     /// The receiver's first and last byte.
     pub receiver_range: Option<(usize, usize)>,
@@ -509,7 +510,11 @@ impl<'a> Builder<'a> {
                 settings,
                 via: Via {
                     receiver,
-                    text: receiver_node.and_then(|n| written_name(node_text(self.content, n))),
+                    // Any other expression is written `…`: a receiver all
+                    // the same.
+                    text: receiver_node.map(|n| {
+                        written_name(node_text(self.content, n)).unwrap_or_else(|| "…".to_owned())
+                    }),
                     range: receiver_node.map(|n| (n.start_byte(), n.end_byte())),
                     arity: find("local.arguments").map(arguments),
                 },

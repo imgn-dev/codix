@@ -232,7 +232,7 @@ fn refs_of_an_ambiguous_name_covers_every_match() {
     );
     assert!(
         text.stdout
-            .contains("5 results\n2 definitions, 3 scoped, 0 textual\n"),
+            .contains("5 results\n2 definitions, 3 scoped, 0 bound, 0 textual\n"),
         "{}",
         text.stdout
     );
@@ -464,14 +464,17 @@ fn refs_keeps_one_certainty_and_the_definitions() {
         )
         .stdout
     };
-    let textual = refs("textual");
-    assert!(textual.starts_with("src/Invoice.java:6:17"), "{textual}");
-    assert!(textual.contains("src/Report.java:5:24"), "{textual}");
-    assert!(!textual.contains("Invoice.withTax"), "{textual}");
+    // The Java resolver binds the call through a parameter.
+    let bound = refs("bound");
+    assert!(bound.starts_with("src/Invoice.java:6:17"), "{bound}");
+    assert!(bound.contains("src/Report.java:5:24"), "{bound}");
+    assert!(!bound.contains("Invoice.withTax"), "{bound}");
     assert!(
-        textual.ends_with("2 results\n1 definition, 0 scoped, 1 textual\n"),
-        "{textual}"
+        bound.ends_with("2 results\n1 definition, 0 scoped, 1 bound, 0 textual\n"),
+        "{bound}"
     );
+    let textual = refs("textual");
+    assert!(!textual.contains("Report.java"), "{textual}");
     let scoped = refs("scoped");
     assert!(scoped.contains("Invoice.withTax"), "{scoped}");
     assert!(!scoped.contains("Report.java"), "{scoped}");
@@ -485,14 +488,14 @@ fn refs_of_a_private_field_or_a_local_stay_in_their_file() {
         field.stdout,
         "src/Invoice.java:4:18  def   -              scoped\n\
          src/Invoice.java:7:16  read  Invoice.total  scoped\n\
-         2 results\n1 definition, 1 scoped, 0 textual\n"
+         2 results\n1 definition, 1 scoped, 0 bound, 0 textual\n"
     );
     let local = codix(&root, &root.join("src"), &["refs", "Invoice.java:11:14"]);
     assert_eq!(
         local.stdout,
         "Invoice.java:11:14  def   -                scoped\n\
          Invoice.java:12:16  read  Invoice.withTax  scoped\n\
-         2 results\n1 definition, 1 scoped, 0 textual\n"
+         2 results\n1 definition, 1 scoped, 0 bound, 0 textual\n"
     );
 }
 
