@@ -508,7 +508,15 @@ fn stale(w: &mut dyn Write, possibly_stale: bool) -> io::Result<()> {
 
 impl TextRender for DefResponse {
     fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
-        for d in &self.definitions {
+        for (i, d) in self.definitions.iter().enumerate() {
+            if self.fitting == Some(i) {
+                let rest = self.definitions.len() - i;
+                let noun = if rest == 1 { "symbol" } else { "symbols" };
+                writeln!(
+                    w,
+                    "{rest} other {noun} of the name, which do not fit the call:"
+                )?;
+            }
             let mut line = format!(
                 "{}  {}  {}",
                 style.paint("36", &location(&d.location)),

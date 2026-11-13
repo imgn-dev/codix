@@ -254,31 +254,72 @@ pub(crate) fn same_function(
 /// How many parameters a C signature declares: the commas between the
 /// parentheses after the name, `(void)` and `()` taking none.
 fn parameters(name: &str, signature: Option<&str>) -> Option<usize> {
-    let signature = signature?;
+    parameter_list(name, signature?).map(|list| list.len())
+}
+
+/// The parameters a signature declares, as written: the parts between the
+/// parentheses after the name, split at commas outside brackets and type
+/// arguments; `(void)` and `()` declare none.
+pub(crate) fn parameter_list(name: &str, signature: &str) -> Option<Vec<String>> {
     let after = signature.find(&format!("{name}("))? + name.len() + 1;
     let mut depth = 1;
-    let mut commas = 0;
-    let mut inside = String::new();
+    let mut parts = vec![String::new()];
     for c in signature[after..].chars() {
         match c {
-            '(' | '[' | '{' => depth += 1,
-            ')' | ']' | '}' => {
+            '(' | '[' | '{' | '<' => depth += 1,
+            ')' | ']' | '}' | '>' => {
                 depth -= 1;
                 if depth == 0 {
                     break;
                 }
             }
-            ',' if depth == 1 => commas += 1,
+            ',' if depth == 1 => {
+                parts.push(String::new());
+                continue;
+            }
             _ => {}
         }
-        inside.push(c);
+        if let Some(last) = parts.last_mut() {
+            last.push(c);
+        }
     }
-    let inside = inside.trim();
-    Some(if inside.is_empty() || inside == "void" {
-        0
-    } else {
-        commas + 1
-    })
+    let parts: Vec<String> = parts.iter().map(|p| p.trim().to_owned()).collect();
+    if parts.len() == 1 && (parts[0].is_empty() || parts[0] == "void") {
+        return Some(Vec::new());
+    }
+    Some(parts)
+}
+
+/// Whether a call with `arity` arguments fits the parameters `signature`
+/// declares for `name`: as many, fewer down to those without a default
+/// value, or more with a variable-length one (`...`, `*args`, `vararg`,
+/// `params`). A method's own `self` or `this` takes no argument. `None` when
+/// the signature does not say.
+pub(crate) fn fits_arity(name: &str, signature: Option<&str>, arity: u32) -> Option<bool> {
+    let list = parameter_list(name, signature?)?;
+    let own = |p: &str| {
+        let p = p.trim_start_matches(['&', ' ']).trim_start_matches("mut ");
+        p == "self" || p == "cls" || p.starts_with("self:") || p == "this"
+    };
+    let list: Vec<&String> = list
+        .iter()
+        .enumerate()
+        .filter(|(i, p)| !(*i == 0 && own(p)))
+        .map(|(_, p)| p)
+        .collect();
+    let variable = |p: &str| {
+        p.contains("...")
+            || p.starts_with('*')
+            || p.starts_with("vararg ")
+            || p.starts_with("params ")
+    };
+    let varargs = list.iter().any(|p| variable(p));
+    let required = list
+        .iter()
+        .filter(|p| !variable(p) && !p.contains('='))
+        .count();
+    let arity = arity as usize;
+    Some(arity >= required && (varargs || arity <= list.len()))
 }
 
 /// Whether a C signature declares a function `static`, visible in its file
@@ -560,6 +601,30 @@ mod tests {
             SymbolRef::parse("c:a::f#0000~2").unwrap(),
             id("c", "a", "f", Some("0000~2"))
         );
+    }
+
+    #[test]
+    fn calls_fit_parameters_with_defaults_and_varargs() {
+        let fits = |s, n| fits_arity("f", Some(s), n);
+        assert_eq!(
+            fits("Object f(String a, Class<T> b, Object... c)", 2),
+            Some(true)
+        );
+        assert_eq!(
+            fits("Object f(String a, Class<T> b, Object... c)", 5),
+            Some(true)
+        );
+        assert_eq!(
+            fits("Object f(String a, Class<T> b, Object... c)", 1),
+            Some(false)
+        );
+        assert_eq!(fits("Object f(Map<String, Integer> m)", 1), Some(true));
+        assert_eq!(fits("Object f(Map<String, Integer> m)", 2), Some(false));
+        assert_eq!(fits("def f(self, a, b=1)", 1), Some(true));
+        assert_eq!(fits("def f(self, a, b=1)", 3), Some(false));
+        assert_eq!(fits("def f(*args, **kwargs)", 4), Some(true));
+        assert_eq!(fits("int f(void)", 0), Some(true));
+        assert_eq!(fits_arity("f", None, 1), None);
     }
 
     #[test]

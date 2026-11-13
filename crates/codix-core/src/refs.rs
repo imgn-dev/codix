@@ -17,7 +17,7 @@ use crate::op::{Context, Operation, Outcome};
 use crate::page::{Location, Page, Paged, Ranked, sort_results};
 use crate::project::{FileId, Project, ScopeRequest};
 use crate::query::{Renamed, SymbolResult, complete, following, indexed};
-use crate::scope::{Binding, Defines, FileModel, Receiver};
+use crate::scope::{Binding, Defines, FileModel, Receiver, RefContext as ScopeContext};
 use crate::store::{FileStatus, RefState, Snapshot, Store, SymbolHit};
 use crate::symbol_id::{
     DECLARATION, SymbolRef, resolve_all_where, resolve_overloads_where, same_function,
@@ -705,7 +705,42 @@ pub(crate) fn def_at(
     let Some(byte) = byte_at(&analyzed.content, line, column) else {
         return Ok(None);
     };
+    let call_at = |model: &FileModel| {
+        model
+            .reference_at(byte)
+            .map(|r| &model.references[r])
+            .filter(|r| r.context == ScopeContext::Call)
+            .map(|r| Call {
+                receiver: match r.receiver {
+                    Receiver::None => CallReceiver::None,
+                    Receiver::Own => CallReceiver::Own,
+                    Receiver::Other => CallReceiver::Other {
+                        text: r.receiver_text.clone(),
+                        declared_type: r.receiver_type.clone(),
+                    },
+                },
+                arity: r.arity,
+                enclosing: enclosing_types(model, byte),
+                bound: Vec::new(),
+            })
+    };
     Ok(match at(&analyzed.model, byte) {
+        AtLocation::Definition(d) if model_overloads_by_inheritance(&analyzed, d, byte) => {
+            let model = &analyzed.model;
+            let name = model.definitions[d].name.clone();
+            let call = call_at(model).map(|call| Call {
+                bound: model
+                    .overloads(d)
+                    .into_iter()
+                    .filter_map(|o| match model.definitions[o].defines {
+                        Defines::Symbol(i) => Some(model.symbols[i].symbol_id.clone()),
+                        Defines::Local { .. } => None,
+                    })
+                    .collect(),
+                ..call
+            });
+            Some(DefAt::ByName(name, call))
+        }
         AtLocation::Definition(d) => {
             let model = &analyzed.model;
             let mut order: Vec<usize> =
@@ -726,17 +761,82 @@ pub(crate) fn def_at(
                 .collect();
             Some(DefAt::Found(results))
         }
-        AtLocation::Unbound(name) => Some(DefAt::ByName(name)),
+        AtLocation::Unbound(name) => Some(DefAt::ByName(name, call_at(&analyzed.model))),
         AtLocation::Nothing => None,
     })
+}
+
+/// Whether the call at `byte`, bound to the method `definition` of its file,
+/// may mean an inherited overload instead: in a language with overloading,
+/// a call chooses among the type's methods of the name and those it
+/// inherits, by their parameters.
+fn model_overloads_by_inheritance(file: &Analyzed, definition: usize, byte: usize) -> bool {
+    let model = &file.model;
+    let is_call = model
+        .reference_at(byte)
+        .is_some_and(|r| model.references[r].context == ScopeContext::Call);
+    let is_method = match model.definitions[definition].defines {
+        Defines::Symbol(i) => model.symbols[i].kind == "method",
+        Defines::Local { .. } => false,
+    };
+    let overloading = codix_provider::registry()
+        .languages
+        .iter()
+        .find(|d| d.name == file.language)
+        .is_some_and(|d| d.names.overloading);
+    is_call && is_method && overloading && model.definition_at(byte).is_none()
+}
+
+/// The IDs of the types around `byte`, innermost first.
+fn enclosing_types(model: &FileModel, byte: usize) -> Vec<String> {
+    let mut types = Vec::new();
+    let mut current = model.enclosing_symbol(byte);
+    while let Some(i) = current {
+        let symbol = &model.symbols[i];
+        if crate::types::TYPE_KINDS.contains(&symbol.kind.as_str()) {
+            types.push(symbol.symbol_id.clone());
+        }
+        current = symbol
+            .parent
+            .as_ref()
+            .and_then(|p| model.symbols.iter().position(|s| s.symbol_id == *p));
+    }
+    types
 }
 
 /// What a location says for `def`.
 pub(crate) enum DefAt {
     /// The definition there, then its overloads.
     Found(Vec<SymbolResult>),
-    /// A name its file does not bind: look it up by name.
-    ByName(String),
+    /// A name its file does not bind: look it up by name, and, for a call,
+    /// rank what fits it first.
+    ByName(String, Option<Call>),
+}
+
+/// A call its file does not bind.
+pub(crate) struct Call {
+    /// What it is made on.
+    pub receiver: CallReceiver,
+    /// Its argument count, when known.
+    pub arity: Option<u32>,
+    /// The types around it, innermost first, by ID.
+    pub enclosing: Vec<String>,
+    /// The overloads its file's scopes bind it to, by ID.
+    pub bound: Vec<String>,
+}
+
+/// What a call is made on.
+pub(crate) enum CallReceiver {
+    /// Nothing written: the enclosing type, or one it inherits from.
+    None,
+    /// A self receiver such as `this`.
+    Own,
+    /// Another object or a type: as written, and its declared type when
+    /// the file declares it.
+    Other {
+        text: Option<String>,
+        declared_type: Option<String>,
+    },
 }
 
 #[cfg(test)]

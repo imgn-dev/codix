@@ -13,7 +13,7 @@ use crate::op::{Context, Operation, Outcome};
 use crate::page::{Location, Page, Paged, Ranked, sort_results};
 use crate::project::{FileId, ScopeRequest};
 use crate::query::{Renamed, SymbolResult, complete, following, indexed};
-use crate::refs::DefAt;
+use crate::refs::{Call, CallReceiver, DefAt};
 use crate::store::{
     MatchMode, NameQuery, Snapshot, Store, Supertype, SupertypeBinding, SymbolHit, simple_name,
 };
@@ -21,6 +21,9 @@ use crate::symbol_id::{SymbolRef, resolve_all_where};
 
 /// The kinds that can have subtypes and supertypes.
 pub const TYPE_KINDS: &[&str] = &["class", "struct", "interface", "trait", "enum"];
+
+/// The kinds a call can mean.
+const CALLABLE_KINDS: &[&str] = &["method", "function", "constructor", "declaration"];
 
 /// `types`: the subtypes of a type, or its supertypes.
 pub struct TypesOp;
@@ -144,7 +147,7 @@ impl Operation for TypesOp {
                 SymbolRef::Location { file, line, column } => {
                     match crate::refs::def_at(ctx, project, &config, &file, line, column)? {
                         Some(DefAt::Found(found)) => found[0].symbol_id.clone(),
-                        Some(DefAt::ByName(name)) => name,
+                        Some(DefAt::ByName(name, _)) => name,
                         None => input.to_owned(),
                     }
                 }
@@ -200,6 +203,101 @@ impl Operation for TypesOp {
             renamed,
         })
     }
+}
+
+/// Orders the symbols a call's name matches: first those that fit the call,
+/// methods of the types it may be made on, closest first, that take as many
+/// arguments; then the others, as they came. Returns how many fit. The types
+/// it may be made on are those around it, or the receiver's when codix knows
+/// them, and their supertypes; when neither is known, any type is.
+pub(crate) fn rank_for_call(
+    snapshot: &Snapshot<'_>,
+    hits: Vec<SymbolHit>,
+    call: &Call,
+) -> Result<(Vec<SymbolHit>, usize), Error> {
+    let owners = owners(snapshot, call)?;
+    let rank = |hit: &SymbolHit| -> Option<usize> {
+        if !CALLABLE_KINDS.contains(&hit.symbol.kind.as_str()) {
+            return None;
+        }
+        let owner = match &owners {
+            Some(owners) => owners
+                .iter()
+                .position(|o| hit.symbol.parent.as_deref() == Some(o.as_str()))?,
+            None => 0,
+        };
+        let fits = call.arity.is_none_or(|arity| {
+            crate::symbol_id::fits_arity(&hit.symbol.name, hit.symbol.signature.as_deref(), arity)
+                != Some(false)
+        });
+        fits.then_some(owner)
+    };
+    let mut ranked: Vec<(usize, SymbolHit)> = hits
+        .into_iter()
+        .map(|hit| (rank(&hit).unwrap_or(usize::MAX), hit))
+        .collect();
+    // Stable: the fitting ones by type, closest first; the others as they came.
+    ranked.sort_by_key(|(rank, _)| *rank);
+    let fitting: Vec<(usize, SymbolHit)> = ranked
+        .iter()
+        .take_while(|(rank, _)| *rank != usize::MAX)
+        .cloned()
+        .collect();
+    let others: Vec<(usize, SymbolHit)> = ranked.into_iter().skip(fitting.len()).collect();
+    let count = fitting.len();
+    Ok((
+        fitting
+            .into_iter()
+            .chain(others)
+            .map(|(_, hit)| hit)
+            .collect(),
+        count,
+    ))
+}
+
+/// The IDs of the types a call may be made on, closest first: the types
+/// it starts from and their supertypes; `None` when codix cannot tell.
+fn owners(snapshot: &Snapshot<'_>, call: &Call) -> Result<Option<Vec<String>>, Error> {
+    let walk = Walk {
+        snapshot,
+        depth: usize::MAX,
+    };
+    let by_id = |ids: &[String]| -> Result<Vec<SymbolHit>, Error> {
+        let mut found = Vec::new();
+        for id in ids {
+            found.extend(walk.by_id(id)?);
+        }
+        Ok(found)
+    };
+    let starts = match &call.receiver {
+        CallReceiver::None | CallReceiver::Own => by_id(&call.enclosing)?,
+        CallReceiver::Other {
+            text: Some(text), ..
+        } if text == "super" => {
+            let own = by_id(&call.enclosing[..call.enclosing.len().min(1)])?;
+            walk.up(&own)?.0.into_iter().map(|f| f.0).collect()
+        }
+        CallReceiver::Other {
+            declared_type: Some(declared),
+            ..
+        } => walk.by_name(simple_name(declared))?,
+        // A receiver that names a type: a static call.
+        CallReceiver::Other {
+            text: Some(text), ..
+        } => walk.by_name(simple_name(text))?,
+        CallReceiver::Other { .. } => Vec::new(),
+    };
+    if starts.is_empty() {
+        return Ok(None);
+    }
+    let supertypes = walk.up(&starts)?.0;
+    Ok(Some(
+        starts
+            .into_iter()
+            .chain(supertypes.into_iter().map(|f| f.0))
+            .map(|hit| hit.symbol.symbol_id)
+            .collect(),
+    ))
 }
 
 /// A type found: the type, its depth, the type it is reached from, and how.

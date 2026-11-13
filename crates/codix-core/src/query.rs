@@ -391,7 +391,13 @@ pub struct DefRequest {
 pub struct DefResponse {
     /// Every symbol the input names, by path and position: one, the
     /// overloads of a name in its file, or every match of an ambiguous name.
+    /// For a call its file does not bind, those that fit it come first.
     pub definitions: Vec<SymbolResult>,
+    /// For a call its file does not bind: how many definitions, first, fit
+    /// it: methods of the type it is made on or of a supertype, taking as
+    /// many arguments.
+    #[serde(default)]
+    pub fitting: Option<usize>,
     /// See [`FindResponse::possibly_stale`].
     pub possibly_stale: bool,
     /// When the ID given was the symbol's before codix renamed it.
@@ -416,34 +422,56 @@ impl Operation for DefOp {
         // At a location, the name there decides, bound by its file's scopes;
         // a name the file does not bind is looked up by name.
         let mut name = request.symbol.clone();
+        let mut call = None;
         if let SymbolRef::Location { file, line, column } = SymbolRef::parse(&request.symbol)? {
             match crate::refs::def_at(ctx, project, &config, &file, line, column)? {
                 Some(DefAt::Found(definitions)) => {
                     return Ok(DefResponse {
                         definitions,
+                        fitting: None,
                         possibly_stale: false,
                         renamed: None,
                     });
                 }
-                Some(DefAt::ByName(unbound)) => name = unbound,
+                Some(DefAt::ByName(unbound, at)) => {
+                    name = unbound;
+                    call = at;
+                }
                 None => {}
             }
         }
-        let ((hits, possibly_stale), renamed) = following(&name, |name| {
+        let (((hits, fitting), possibly_stale), renamed) = following(&name, |name| {
             lookup(ctx, project, &config, |snapshot| {
                 let hits = resolve_all_where(snapshot, project, ctx.cwd(), name, &|hit| {
                     (request.kinds.is_empty() || request.kinds.contains(&hit.symbol.kind))
                         && scope.contains(&FileId::from_canonical(hit.path.as_str()))
                 })?;
+                let (hits, fitting) = match &call {
+                    Some(call) => {
+                        let (hits, fitting) = crate::types::rank_for_call(snapshot, hits, call)?;
+                        (hits, Some(fitting))
+                    }
+                    None => (hits, None),
+                };
                 let paths = distinct(hits.iter().map(|h| h.path.clone()));
-                Ok((hits, paths))
+                Ok(((hits, fitting), paths))
             })
         })?;
+        // What the call's file binds it to stays bound by scope.
+        let bound = call.map(|c| c.bound).unwrap_or_default();
         Ok(DefResponse {
             definitions: hits
                 .into_iter()
-                .map(|hit| SymbolResult::new(ctx, hit))
+                .map(|hit| {
+                    let scoped = bound.contains(&hit.symbol.symbol_id);
+                    let mut result = SymbolResult::new(ctx, hit);
+                    if scoped {
+                        "scoped".clone_into(&mut result.confidence);
+                    }
+                    result
+                })
                 .collect(),
+            fitting,
             possibly_stale,
             renamed,
         })

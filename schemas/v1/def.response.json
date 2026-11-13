@@ -96,11 +96,21 @@
   "description": "What [`DefOp`] answers.",
   "properties": {
     "definitions": {
-      "description": "Every symbol the input names, by path and position: one, the\noverloads of a name in its file, or every match of an ambiguous name.",
+      "description": "Every symbol the input names, by path and position: one, the\noverloads of a name in its file, or every match of an ambiguous name.\nFor a call its file does not bind, those that fit it come first.",
       "items": {
         "$ref": "#/$defs/SymbolResult"
       },
       "type": "array"
+    },
+    "fitting": {
+      "default": null,
+      "description": "For a call its file does not bind: how many definitions, first, fit\nit: methods of the type it is made on or of a supertype, taking as\nmany arguments.",
+      "format": "uint",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
     },
     "possibly_stale": {
       "description": "See [`FindResponse::possibly_stale`].",
