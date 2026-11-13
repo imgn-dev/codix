@@ -40,6 +40,7 @@ codix-lang-yaml = { path = "crates/codix-lang-yaml" }
 codix-plugin = { path = "crates/codix-plugin" }
 codix-provider = { path = "crates/codix-provider" }
 codix-resolver = { path = "crates/codix-resolver" }
+codix-resolve-c = { path = "crates/codix-resolve-c" }
 codix-resolve-java = { path = "crates/codix-resolve-java" }
 codix-testkit = { path = "crates/codix-testkit" }
 codix-vcs-git = { path = "crates/codix-vcs-git" }

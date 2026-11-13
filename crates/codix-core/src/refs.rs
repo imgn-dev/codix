@@ -431,7 +431,7 @@ impl Operation for RefsOp {
         // uses elsewhere that only the name connects.
         let mut names: Vec<String> = Vec::new();
         let mut own: HashSet<&str> = HashSet::new();
-        let ids = target_ids(&targets);
+        let ids = with_definitions(&snapshot, &target_ids(&targets))?;
         for target in &targets {
             let Target::Definitions { file, .. } = target;
             own.insert(file.id.as_str());
@@ -592,6 +592,27 @@ pub(crate) fn target_ids(targets: &[Target]) -> HashSet<String> {
                 })
         })
         .collect()
+}
+
+/// `ids`, and for each C or C++ prototype among them, the definitions it
+/// declares: a resolver binds a use to the definition.
+pub(crate) fn with_definitions(
+    snapshot: &Snapshot<'_>,
+    ids: &HashSet<String>,
+) -> Result<HashSet<String>, Error> {
+    let mut all = ids.clone();
+    for id in ids {
+        for hit in snapshot.symbols_with_id_prefix(id)? {
+            if hit.symbol.symbol_id == *id && hit.symbol.kind == DECLARATION {
+                all.extend(
+                    same_function(snapshot, &hit)?
+                        .into_iter()
+                        .map(|h| h.symbol.symbol_id),
+                );
+            }
+        }
+    }
+    Ok(all)
 }
 
 /// `found` in `file`, with what a resolver says of those its scopes leave

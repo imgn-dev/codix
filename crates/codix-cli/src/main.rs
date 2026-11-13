@@ -9,6 +9,7 @@ use codix_build_gradle as _;
 use codix_build_maven as _;
 #[cfg(feature = "lang-c")]
 use codix_lang_c as _;
+// The C resolver, compiled in with the C pack.
 #[cfg(feature = "lang-cpp")]
 use codix_lang_cpp as _;
 #[cfg(feature = "lang-csharp")]
@@ -17,6 +18,8 @@ use codix_lang_csharp as _;
 use codix_lang_go as _;
 #[cfg(feature = "lang-java")]
 use codix_lang_java as _;
+#[cfg(feature = "lang-c")]
+use codix_resolve_c as _;
 // The Java resolver, compiled in with the Java pack.
 #[cfg(feature = "lang-javascript")]
 use codix_lang_javascript as _;

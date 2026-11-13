@@ -143,8 +143,9 @@ files; never run the build. A crate implementing `BuildResolver` gets this
 
 A resolver binds the references of its language across files: tier 3. It is
 an executable that codix starts after a scan that changed files of its
-language, and keeps running in the daemon. The Java plugin ships one,
-`bin/codix-resolve-java`, the same resolver the full binary has compiled in. It speaks JSON lines on stdin and
+language, and keeps running in the daemon. The Java and C plugins ship one,
+`bin/codix-resolve-java` and `bin/codix-resolve-c`, the same resolvers the
+full binary has compiled in. It speaks JSON lines on stdin and
 stdout:
 
 | Request | Reply |

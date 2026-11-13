@@ -100,13 +100,16 @@ const LOCALS: &[&str] = &["queries/locals.scm"];
 
 /// Every language pack.
 pub const PACKS: &[Pack] = &[
-    pack(
-        "c",
-        "codix-lang-c",
-        "tree-sitter-c",
-        "src",
-        "tree_sitter_c",
-        LOCALS,
+    with_resolver(
+        pack(
+            "c",
+            "codix-lang-c",
+            "tree-sitter-c",
+            "src",
+            "tree_sitter_c",
+            LOCALS,
+        ),
+        "codix-resolve-c",
     ),
     pack(
         "cpp",

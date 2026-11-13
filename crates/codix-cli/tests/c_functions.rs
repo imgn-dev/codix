@@ -73,18 +73,13 @@ fn refs_of_a_function_count_its_declaration() {
 }
 
 #[test]
-fn a_rename_edits_the_prototype_too() {
+fn a_rename_edits_the_prototype_and_the_calls_bound_through_it() {
     let (_guard, root) = project();
-    // The call in twice.c is not bound: it is listed, and left.
-    let refused = codix(&root, &["rename", "c:add.c::add", "sum"]);
-    assert_eq!(refused.code, Some(4), "{}", refused.stdout);
-    let planned = codix(
-        &root,
-        &["rename", "c:add.c::add", "sum", "--exclude-unresolved"],
-    );
+    // The C resolver binds the call in twice.c through the header.
+    let planned = codix(&root, &["rename", "c:add.c::add", "sum"]);
     assert_eq!(planned.code, Some(0), "{}", planned.stderr);
     assert!(
-        planned.stdout.contains("2 files, 2 sites"),
+        planned.stdout.contains("3 files, 3 sites"),
         "{}",
         planned.stdout
     );
@@ -103,7 +98,7 @@ fn a_rename_edits_the_prototype_too() {
         "{}",
         read("add.c")
     );
-    assert_eq!(read("twice.c"), CALLER);
+    assert_eq!(read("twice.c"), CALLER.replace("add(a, a)", "sum(a, a)"));
 }
 
 #[test]

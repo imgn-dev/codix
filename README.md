@@ -9,8 +9,8 @@ contains, what refers to a name and inside which symbol.
 This is phase 3: scopes (tier 2) for Java, Go, TypeScript, Python, Kotlin,
 JavaScript, Rust, C, C++, C#, PHP and Ruby, so references are bound to the
 definition they mean within a file, plus keys and headings of JSON, YAML, TOML,
-XML, Markdown and SQL for search; a resolver for Java that binds references
-across files; renames, across files where they are bound, always applied from a
+XML, Markdown and SQL for search; resolvers for Java and C that bind
+references across files; renames, across files where they are bound, always applied from a
 reviewed preview, with undo; a per-project daemon that answers in milliseconds
 and watches files; and `codix mcp`, the same commands as tools for agents.
 
@@ -128,7 +128,11 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   them. Java has a resolver: imports, the package, supertypes and the declared
   types of locals, parameters and fields bind names and calls across files;
   what needs type inference (`var`, lambda parameters, chained calls) stays
-  textual. `def file:line:col` follows the
+  textual. C has one too: a call binds to the function its file's
+  `#include`s reach, with the include paths of `compile_commands.json` when
+  the project has one, else the file's directory and every `include/`
+  directory; variants in several headers, and calls through function
+  pointers, stay textual. `def file:line:col` follows the
   name at that place to its definition. In C, a function pointer member is a
   field, and a designated initializer such as `.read = ext4_read` writes it:
   `refs file_operations.read --context write` lists the tables filling it.

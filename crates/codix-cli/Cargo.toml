@@ -26,7 +26,7 @@ lang-python = ["dep:codix-lang-python"]
 lang-kotlin = ["dep:codix-lang-kotlin"]
 lang-javascript = ["dep:codix-lang-javascript"]
 lang-rust = ["dep:codix-lang-rust"]
-lang-c = ["dep:codix-lang-c"]
+lang-c = ["dep:codix-lang-c", "dep:codix-resolve-c"]
 lang-cpp = ["dep:codix-lang-cpp"]
 lang-csharp = ["dep:codix-lang-csharp"]
 lang-php = ["dep:codix-lang-php"]
@@ -56,6 +56,7 @@ codix-mcp.workspace = true
 codix-plugin = { workspace = true, optional = true }
 codix-lang-java = { workspace = true, optional = true }
 codix-resolve-java = { workspace = true, optional = true }
+codix-resolve-c = { workspace = true, optional = true }
 codix-lang-go = { workspace = true, optional = true }
 codix-lang-typescript = { workspace = true, optional = true }
 codix-lang-python = { workspace = true, optional = true }

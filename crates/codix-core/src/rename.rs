@@ -561,10 +561,13 @@ fn unresolved_sites(
         files: HashMap::new(),
     };
     let name = file.model.definitions[definitions[0]].name.as_str();
-    let ids: HashSet<String> = definitions
-        .iter()
-        .filter_map(|&d| symbol_of(file, d).map(|s| s.symbol_id.clone()))
-        .collect();
+    let ids = crate::refs::with_definitions(
+        snapshot,
+        &definitions
+            .iter()
+            .filter_map(|&d| symbol_of(file, d).map(|s| s.symbol_id.clone()))
+            .collect(),
+    )?;
     let resolved: HashMap<u32, Resolved> = snapshot
         .refs_in(file.id.as_str())?
         .into_iter()
