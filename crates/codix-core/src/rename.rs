@@ -392,8 +392,12 @@ fn sites(
             add_constructors(file, definitions);
         }
         edits = scoped_edits(file, definitions, &request.new_name);
-        if visible_elsewhere(file, definitions) {
-            unresolved = unresolved_sites(ctx, project, snapshot, file, old_name)?;
+        if definitions
+            .iter()
+            .any(|&d| matches!(file.model.definitions[d].defines, Defines::Symbol(_)))
+        {
+            let elsewhere = visible_elsewhere(file, definitions);
+            unresolved = unresolved_sites(ctx, project, snapshot, file, old_name, elsewhere)?;
         }
         mentions = mention_sites(ctx, file, old_name, &edits);
     } else {
@@ -529,13 +533,15 @@ impl Lines<'_> {
 }
 
 /// References that may mean the definitions but that codix cannot bind:
-/// through another object in their file, and by name in other files.
+/// through another object or from a class that may inherit the name in their
+/// file, and, when `elsewhere`, by name in other files.
 fn unresolved_sites(
     ctx: &Context,
     project: &Project,
     snapshot: &Snapshot<'_>,
     file: &Analyzed,
     name: &str,
+    elsewhere: bool,
 ) -> Result<Vec<Site>, Error> {
     let mut lines = Lines {
         project,
@@ -554,6 +560,9 @@ fn unresolved_sites(
                 note: lines.line(file.id.as_str(), at.line),
             });
         }
+    }
+    if !elsewhere {
+        return Ok(sites);
     }
     for r in snapshot.refs_named(name)? {
         if r.path == file.id.as_str() || r.state == RefState::Bound {

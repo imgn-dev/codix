@@ -536,15 +536,19 @@ fn references_of(ctx: &Context, target: &Target) -> (Vec<RefResult>, Option<Stri
             target: Some(id_of(d)),
         });
     }
+    let symbol = matches!(first.defines, Defines::Symbol(_));
     let visible_elsewhere = match &first.defines {
         Defines::Symbol(i) => model.symbols[*i].visibility.as_deref() != Some("private"),
         Defines::Local { .. } => false,
     };
+    // In its own file, even a private member may be what an unbound use
+    // means: through another instance, or from a class that may inherit a
+    // member of that name.
     for r in &model.references {
         let (confidence, target) = match r.binding {
             Binding::Bound(d) if definitions.contains(&d) => (SCOPED, Some(id_of(d))),
             Binding::Free | Binding::Uncertain
-                if visible_elsewhere
+                if symbol
                     && r.name == first.name
                     && (r.receiver != Receiver::None || r.binding == Binding::Uncertain) =>
             {
