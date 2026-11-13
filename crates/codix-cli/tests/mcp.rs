@@ -235,10 +235,17 @@ fn calls_in_flight_are_answered_independently() {
     let at = at["result"]["content"][0]["text"]
         .as_str()
         .unwrap_or_default();
+    // Every build answers each place; with Java, with its method.
     assert!(
-        at.contains("Invoice.total") && at.contains("Cart.total"),
+        at.contains("src/Invoice.java:2") && at.contains("src/Cart.java:2"),
         "{at}"
     );
+    if cfg!(with_lang_java) {
+        assert!(
+            at.contains("Invoice.total") && at.contains("Cart.total"),
+            "{at}"
+        );
+    }
 }
 
 #[test]

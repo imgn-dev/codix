@@ -75,9 +75,15 @@ fn a_build_plugin_gives_modules_and_a_failing_one_is_reported() {
 
     let init = codix(&working, &working_plugins, &["init"]).stdout;
     assert!(!init.contains("maven: "), "{init}");
-    let status: Value =
-        serde_json::from_str(&codix(&working, &working_plugins, &["status", "--json"]).stdout)
-            .expect("JSON");
+    let status: Value = serde_json::from_str(
+        &codix(
+            &working,
+            &working_plugins,
+            &["status", "--modules", "--json"],
+        )
+        .stdout,
+    )
+    .expect("JSON");
     let modules = &status["result"]["modules"];
     assert_eq!(modules[0]["name"], "acme", "{status}");
     assert_eq!(modules[0]["build"], "maven", "{status}");

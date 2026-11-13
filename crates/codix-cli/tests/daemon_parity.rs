@@ -94,6 +94,8 @@ const CASES: &[(&str, &[&str])] = &[
     ),
     (".", &["refs", "Invoice.total", "--kind", "field", "--json"]),
     (".", &["refs", "nowhere"]),
+    // A lookup answers every match of a name; a rename asks which one.
+    (".", &["rename", "total", "sum"]),
     (".", &["outline", "src"]),
     (".", &["outline", "src/billing/Invoice.java", "--json"]),
     (".", &["outline", "missing.java"]),
