@@ -61,5 +61,11 @@
     argument: (_) @local.receiver
     field: (field_identifier) @local.reference.write))
 
+; A designated initializer writes the member of the object it initializes,
+; as `.read = ext4_read` fills an ops table's slot.
+(initializer_list
+  (initializer_pair
+    designator: (field_designator (field_identifier) @local.reference.write))) @local.receiver
+
 ; Names that are no references.
 (preproc_params (identifier) @local.skip)

@@ -124,7 +124,9 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   `scoped` when its file's scopes bind it there, `textual` when it matches by
   name only, in another file or through another object; `--confidence scoped`
   or `--confidence textual` keeps one of them. `def file:line:col` follows the
-  name at that place to its definition.
+  name at that place to its definition. In C, a function pointer member is a
+  field, and a designated initializer such as `.read = ext4_read` writes it:
+  `refs file_operations.read --context write` lists the tables filling it.
 - `types BeanPostProcessor` lists what extends or implements a type,
   transitively, and `--super` its supertypes up to the roots, naming those
   outside the project; `--depth N` stops after N levels. Each relation says

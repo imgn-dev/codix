@@ -50,6 +50,21 @@
       declarator: (field_identifier) @name)
   ]) @definition.field
 
+; Added for codix: a function pointer member, as an ops table's slot, which
+; may return a pointer.
+(field_declaration
+  declarator: [
+    (function_declarator
+      declarator: (parenthesized_declarator
+        (pointer_declarator
+          declarator: (field_identifier) @name)))
+    (pointer_declarator
+      declarator: (function_declarator
+        declarator: (parenthesized_declarator
+          (pointer_declarator
+            declarator: (field_identifier) @name))))
+  ]) @definition.field
+
 (type_definition
   declarator: [
     (type_identifier) @name
