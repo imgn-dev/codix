@@ -21,6 +21,15 @@ const FILES: &[(&str, &str)] = &[
     ("arch/x86/include/asm/cpu.h", "void cpu_relax(void);\n"),
     ("arch/arm/include/asm/cpu.h", "void cpu_relax(void);\n"),
     ("tools/copy.c", "void mutex_lock(int *m) { }\n"),
+    // A userspace copy of the header, which kernel files do not mean.
+    (
+        "tools/include/linux/lock.h",
+        "#define mutex_lock(m) ((void)(m))\n",
+    ),
+    (
+        "tools/user.c",
+        "#include <linux/lock.h>\nint go(int *m) { mutex_lock(m); return 0; }\n",
+    ),
 ];
 
 fn codix(root: &Path, args: &[&str]) -> codix_testkit::Run {
@@ -41,6 +50,15 @@ fn a_call_binds_to_the_definition_its_includes_reach() {
     // The copy in tools/ is reached by no include.
     let copy = codix(&root, &["refs", "tools/copy.c:1:6"]);
     assert!(!copy.stdout.contains("kernel/user.c"), "{}", copy.stdout);
+    // A file of tools/ means the header of tools/include.
+    let macro_ = codix(&root, &["refs", "tools/include/linux/lock.h:1:9"]);
+    assert!(
+        macro_.stdout.contains("tools/user.c:2:18")
+            && macro_.stdout.contains("bound")
+            && !macro_.stdout.contains("kernel/user.c"),
+        "{}",
+        macro_.stdout
+    );
     // The prototype stands for its definition.
     let prototype = codix(&root, &["refs", "include/linux/lock.h:1:6"]);
     assert!(

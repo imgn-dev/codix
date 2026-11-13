@@ -37,19 +37,32 @@ impl Resolver for CResolver {
         scratch: &mut Scratch,
         files: &[String],
     ) -> Result<Vec<String>, String> {
-        let model = Model::load(index).map_err(|e| e.to_string())?;
+        let sql = |e: rusqlite::Error| e.to_string();
+        let mut model = Model::load(index).map_err(sql)?;
         let changed: HashSet<i64> = files
             .iter()
             .filter_map(|path| model.ids.get(path).copied())
             .filter(|id| model.c_files.contains(id))
             .collect();
-        let dependents = dependents(index, &model, &changed).map_err(|e| e.to_string())?;
+        let dependents = dependents(index, &changed).map_err(sql)?;
         let targets: Vec<i64> = changed.iter().chain(&dependents).copied().collect();
-        let refs = unbound_refs(index, &targets).map_err(|e| e.to_string())?;
+        let refs = unbound_refs(index, &targets).map_err(sql)?;
+        // Only the names used matter; all of them for a whole project.
+        let names: HashSet<&str> = refs.iter().map(|(_, _, name)| name.as_str()).collect();
+        let few = (names.len() < SELECTIVE).then_some(&names);
+        model.load_symbols(index, few).map_err(sql)?;
         let mut reach = Reach::default();
         scratch.batch(|scratch| {
+            let mut current: Option<(i64, HashSet<i64>)> = None;
             for (id, file, name) in &refs {
-                if let Some(target) = model.resolve(&mut reach, *file, name) {
+                // References come file by file: one file's reach at a time.
+                if current.as_ref().is_none_or(|(f, _)| f != file) {
+                    current = Some((*file, model.reachable(*file)));
+                }
+                let Some((_, reached)) = &current else {
+                    continue;
+                };
+                if let Some(target) = model.resolve(&mut reach, *file, reached, name) {
                     scratch.bind(*id, target)?;
                 }
             }
@@ -63,7 +76,13 @@ impl Resolver for CResolver {
 }
 
 /// The kinds a plain name may mean across files.
-const KINDS: &[&str] = &["function", "declaration", "variable"];
+const KINDS: &[&str] = &["function", "declaration", "variable", "macro"];
+
+/// Below this many names used, only their symbols are read.
+const SELECTIVE: usize = 20_000;
+
+/// The definition files' reaches kept at most, to map prototypes.
+const REACHES_KEPT: usize = 4_096;
 
 #[derive(Debug, Default)]
 struct Model {
@@ -81,9 +100,16 @@ struct Model {
     /// Files by their last path component, to find an include's candidates
     /// without trying every include directory.
     by_basename: HashMap<String, Vec<i64>>,
+    /// The files each include names, by the including file's directory, the
+    /// path written and whether `<…>`.
+    headers: std::cell::RefCell<HashMap<HeaderKey, Vec<i64>>>,
     /// Symbols that a name may mean across files, by name.
     symbols: HashMap<String, Vec<Sym>>,
 }
+
+/// An include as one directory sees it: that directory, the path written
+/// and whether `<…>`.
+type HeaderKey = (Option<String>, String, bool);
 
 /// A symbol a name may mean across files.
 #[derive(Debug, Clone, Copy)]
@@ -96,13 +122,22 @@ struct Sym {
     is_static: bool,
 }
 
-/// The files each file reaches, computed once each.
+/// The files definition files reach, kept within [`REACHES_KEPT`], and what
+/// each prototype stands for, once found.
 #[derive(Debug, Default)]
-struct Reach(HashMap<i64, HashSet<i64>>);
+struct Reach {
+    files: HashMap<i64, HashSet<i64>>,
+    prototypes: HashMap<i64, i64>,
+}
 
 impl Reach {
     fn of(&mut self, model: &Model, file: i64) -> &HashSet<i64> {
-        self.0.entry(file).or_insert_with(|| model.reachable(file))
+        if self.files.len() >= REACHES_KEPT && !self.files.contains_key(&file) {
+            self.files.clear();
+        }
+        self.files
+            .entry(file)
+            .or_insert_with(|| model.reachable(file))
     }
 }
 
@@ -136,11 +171,54 @@ impl Model {
             let (file, name, system) = row?;
             model.includes.entry(file).or_default().push((name, system));
         }
-        let mut stmt = index.prepare(
+        model.include_dirs = match project_root(index).and_then(|root| compile_commands(&root)) {
+            Some(dirs) => dirs,
+            None => include_directories(model.paths.values()),
+        };
+        model.include_set = model.include_dirs.iter().cloned().collect();
+        for (&id, path) in &model.paths {
+            let base = path.rsplit('/').next().unwrap_or(path);
+            model
+                .by_basename
+                .entry(base.to_owned())
+                .or_default()
+                .push(id);
+        }
+        Ok(model)
+    }
+
+    /// The symbols a name may mean across files: those named `names`, or
+    /// every one.
+    fn load_symbols(
+        &mut self,
+        index: &Connection,
+        names: Option<&HashSet<&str>>,
+    ) -> rusqlite::Result<()> {
+        let select =
             "SELECT s.id, s.file_id, s.name, s.kind, s.parent, s.signature FROM v1_symbols s
-             JOIN v1_files f ON f.id = s.file_id WHERE f.language IN ('c', 'cpp')",
-        )?;
-        for row in stmt.query_map([], |r| {
+             JOIN v1_files f ON f.id = s.file_id WHERE f.language IN ('c', 'cpp')";
+        match names {
+            None => self.symbols_where(index, select, &[]),
+            Some(names) => {
+                let names: Vec<&str> = names.iter().copied().collect();
+                for chunk in names.chunks(500) {
+                    let marks = vec!["?"; chunk.len()].join(", ");
+                    self.symbols_where(index, &format!("{select} AND s.name IN ({marks})"), chunk)?;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    fn symbols_where(
+        &mut self,
+        index: &Connection,
+        sql: &str,
+        args: &[&str],
+    ) -> rusqlite::Result<()> {
+        let model = self;
+        let mut stmt = index.prepare(sql)?;
+        for row in stmt.query_map(rusqlite::params_from_iter(args), |r| {
             Ok((
                 r.get::<_, i64>(0)?,
                 r.get::<_, i64>(1)?,
@@ -164,20 +242,7 @@ impl Model {
                 });
             }
         }
-        model.include_dirs = match project_root(index).and_then(|root| compile_commands(&root)) {
-            Some(dirs) => dirs,
-            None => include_directories(model.paths.values()),
-        };
-        model.include_set = model.include_dirs.iter().cloned().collect();
-        for (&id, path) in &model.paths {
-            let base = path.rsplit('/').next().unwrap_or(path);
-            model
-                .by_basename
-                .entry(base.to_owned())
-                .or_default()
-                .push(id);
-        }
-        Ok(model)
+        Ok(())
     }
 
     /// The files `file` includes, directly or through other headers.
@@ -186,7 +251,7 @@ impl Model {
         let mut queue = VecDeque::from([file]);
         while let Some(current) = queue.pop_front() {
             for (written, system) in self.includes.get(&current).into_iter().flatten() {
-                for header in self.header(current, written, *system) {
+                for header in self.header_cached(current, written, *system) {
                     if seen.insert(header) {
                         queue.push_back(header);
                     }
@@ -194,6 +259,21 @@ impl Model {
             }
         }
         seen
+    }
+
+    /// [`Self::header`], computed once per directory and path written.
+    fn header_cached(&self, from: i64, written: &str, system: bool) -> Vec<i64> {
+        let dir = self
+            .paths
+            .get(&from)
+            .map(|p| p.rsplit_once('/').map_or("", |(d, _)| d).to_owned());
+        let key = (dir, written.to_owned(), system);
+        if let Some(found) = self.headers.borrow().get(&key) {
+            return found.clone();
+        }
+        let found = self.header(from, written, system);
+        self.headers.borrow_mut().insert(key, found.clone());
+        found
     }
 
     /// The files an include may name: beside the including file for `"…"`,
@@ -204,15 +284,25 @@ impl Model {
             .then(|| self.paths.get(&from))
             .flatten()
             .and_then(|path| Path::new(path).parent().map(Path::to_path_buf));
+        // Beside the including file, a `"…"` include is searched first.
         if let Some(dir) = beside
             && let Some(path) = normalized(&dir.join(written))
             && let Some(&id) = self.ids.get(&path)
         {
-            found.push(id);
+            return vec![id];
         }
         let Some(written) = normalized(Path::new(written)) else {
             return found;
         };
+        let from_dir = self
+            .paths
+            .get(&from)
+            .and_then(|p| p.rsplit_once('/'))
+            .map_or("", |(d, _)| d);
+        // Of the include directories holding it, those nearest the including
+        // file, then the shallowest: `tools/include` for a file of `tools/`,
+        // `include` rather than `tools/include` for the others.
+        let mut best: Option<(usize, isize)> = None;
         let base = written.rsplit('/').next().unwrap_or(&written);
         for &id in self.by_basename.get(base).into_iter().flatten() {
             let path = &self.paths[&id];
@@ -222,8 +312,17 @@ impl Model {
                 path.strip_suffix(written.as_str())
                     .and_then(|p| p.strip_suffix('/'))
             };
-            if dir.is_some_and(|d| self.include_set.contains(d)) && !found.contains(&id) {
-                found.push(id);
+            let Some(dir) = dir.filter(|d| self.include_set.contains(*d)) else {
+                continue;
+            };
+            let score = (shared_components(dir, from_dir), -depth(dir));
+            match best {
+                Some(b) if score < b => {}
+                Some(b) if score == b => found.push(id),
+                _ => {
+                    best = Some(score);
+                    found = vec![id];
+                }
             }
         }
         found
@@ -232,9 +331,14 @@ impl Model {
     /// What `name` used in `file` binds to: the one symbol of the name the
     /// file reaches, or several in one file, its own first; a prototype
     /// stands for the one definition whose file reaches it, when there is one.
-    fn resolve(&self, reach: &mut Reach, file: i64, name: &str) -> Option<i64> {
+    fn resolve(
+        &self,
+        reach: &mut Reach,
+        file: i64,
+        reached: &HashSet<i64>,
+        name: &str,
+    ) -> Option<i64> {
         let all = self.symbols.get(name)?;
-        let reached = reach.of(self, file);
         let candidates: Vec<Sym> = all
             .iter()
             .copied()
@@ -253,6 +357,9 @@ impl Model {
         if !chosen.declaration {
             return Some(chosen.id);
         }
+        if let Some(&mapped) = reach.prototypes.get(&chosen.id) {
+            return Some(mapped);
+        }
         let header = chosen.file;
         let definitions: Vec<i64> = all
             .iter()
@@ -260,11 +367,26 @@ impl Model {
             .filter(|s| reach.of(self, s.file).contains(&header))
             .map(|s| s.id)
             .collect();
-        Some(match definitions.as_slice() {
+        let mapped = match definitions.as_slice() {
             [one] => *one,
             _ => chosen.id,
-        })
+        };
+        reach.prototypes.insert(chosen.id, mapped);
+        Some(mapped)
     }
+}
+
+/// How many leading path components two directories share.
+fn shared_components(a: &str, b: &str) -> usize {
+    a.split('/')
+        .zip(b.split('/'))
+        .take_while(|(x, y)| x == y && !x.is_empty())
+        .count()
+}
+
+/// How many components a directory has.
+fn depth(dir: &str) -> isize {
+    isize::try_from(dir.split('/').filter(|p| !p.is_empty()).count()).unwrap_or(isize::MAX)
 }
 
 /// The project's root: the directory holding `.codix/`, where the index is.
@@ -368,26 +490,43 @@ fn normalized(path: &Path) -> Option<String> {
 }
 
 /// The C files to resolve again because they use, unresolved, a name the
-/// changed files define, but the changed files: reindexing a file drops what
-/// was bound to its symbols, and what nothing bound may bind now.
-fn dependents(
-    index: &Connection,
-    model: &Model,
-    changed: &HashSet<i64>,
-) -> rusqlite::Result<Vec<i64>> {
-    let names: Vec<&str> = model
-        .symbols
-        .iter()
-        .filter(|(_, found)| found.iter().any(|s| changed.contains(&s.file)))
-        .map(|(name, _)| name.as_str())
-        .collect();
+/// changed files define and other files can see, but the changed files:
+/// reindexing a file drops what was bound to its symbols, and what nothing
+/// bound may bind now.
+fn dependents(index: &Connection, changed: &HashSet<i64>) -> rusqlite::Result<Vec<i64>> {
+    let ids: Vec<i64> = changed.iter().copied().collect();
+    let mut names: BTreeSet<String> = BTreeSet::new();
+    for chunk in ids.chunks(500) {
+        let marks = vec!["?"; chunk.len()].join(", ");
+        let mut stmt = index.prepare(&format!(
+            "SELECT name, kind, signature FROM v1_symbols
+             WHERE parent IS NULL AND file_id IN ({marks})"
+        ))?;
+        for row in stmt.query_map(rusqlite::params_from_iter(chunk), |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Option<String>>(2)?,
+            ))
+        })? {
+            let (name, kind, signature) = row?;
+            let is_static = signature
+                .as_deref()
+                .is_some_and(|s| s.split(['(', ' ', '\t', '\n']).any(|w| w == "static"));
+            if KINDS.contains(&kind.as_str()) && !is_static {
+                names.insert(name);
+            }
+        }
+    }
     let mut found = HashSet::new();
+    let names: Vec<String> = names.into_iter().collect();
     for chunk in names.chunks(500) {
         let marks = vec!["?"; chunk.len()].join(", ");
         let mut stmt = index.prepare(&format!(
             "SELECT DISTINCT r.file_id FROM v1_refs r JOIN v1_files f ON f.id = r.file_id
              LEFT JOIN v1_resolved x ON x.ref = r.id
              WHERE f.language = 'c' AND r.state != 'bound' AND x.ref IS NULL
+               AND r.receiver IS NULL AND r.context IN ('call', 'read')
                AND r.name IN ({marks})"
         ))?;
         for row in stmt.query_map(rusqlite::params_from_iter(chunk), |r| r.get::<_, i64>(0))? {
@@ -430,6 +569,14 @@ mod tests {
             Some("include/linux/sched.h".to_owned())
         );
         assert_eq!(normalized(Path::new("../x.h")), None);
+    }
+
+    #[test]
+    fn nearer_and_shallower_include_directories_come_first() {
+        assert_eq!(shared_components("tools/include", "tools/perf/util"), 1);
+        assert_eq!(shared_components("include", "kernel/sched"), 0);
+        assert_eq!(shared_components("", "kernel"), 0);
+        assert!(depth("include") < depth("tools/include"));
     }
 
     #[test]

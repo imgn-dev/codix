@@ -166,3 +166,69 @@ indexed files.
 9. The agents again, same scenarios.
 
 Steps 1, 5 and 6 stand alone; 3 and 4 need 2; 7 and 8 need 2 and 4.
+
+## Results (step 9)
+
+The same two scenarios as the second round, run again by fresh agents with
+codix as their only tool, on copies of Spring Framework v6.2.0 and Linux
+v6.12.
+
+| Run | Spring: calls, time | Linux: calls, time |
+| --- | --- | --- |
+| 1 | 68, 21 s | 56, 115 s |
+| 2 | 55, 10 s | 51, 133 s |
+| 3 | 56, 38 s | 87, 155 s |
+
+Time in run 3 is mostly `apply`: 17 s of Spring's and 49 s of Linux's. Both
+went down after the run (below). Linux's calls went up with the scenario's
+depth: the agent followed `copy_from_user` to x86's `rep movs` and every
+`sched_class` slot.
+
+What the fixes changed for the agents:
+
+- `types BeanPostProcessor` answered task 2 in one call, where run 2 took
+  about ten `refs` and globs; 59 of its 60 relations are bound.
+- `rename BeanFactoryUtils.transformedBeanName` edited 11 sites in 7 files,
+  left `AbstractBeanFactory.transformedBeanName` alone, and needed no
+  `--exclude-unresolved`.
+- `refs` listed the calls to the private `resolveBean` from anonymous
+  classes, bound.
+- No ambiguity errors in either run.
+
+Resolution, on a cold index:
+
+| | Spring | Linux |
+| --- | --- | --- |
+| References its scopes leave unbound | 1.30 M | 7.98 M |
+| Bound by the resolver | 0.41 M | 1.46 M, 4.58 M after the fixes below |
+| Outside the project | 0.57 M | (C has none) |
+| Cold index, resolver included | 27 s | 38 min, of which 14 resolving |
+
+Fixed after the run:
+
+- The C resolver bound kernel calls to a userspace stub in
+  `tools/include`: macros now count, and of the include directories holding
+  a header, the nearest to the including file wins.
+- Java overrides compare parameter types, not names, so a call through an
+  interface binds to the closest override.
+- `instanceof` pattern variables have their type.
+- After a change, a resolver resolves again only the uses nothing binds:
+  Spring's `apply` went from 8.5 s to 4.7 s. The C resolver reads only the
+  symbols of the names used: a change to one Linux file resolves in 1.5 s,
+  against about 30 s.
+- `def` on a call marks a binding `scoped` only when no inherited method fits
+  as well, and lists at most five symbols that do not fit.
+
+Still open:
+
+- The C resolver's first pass over Linux is slow: about 30 minutes since it
+  binds macros too, each file's include closure computed apart. The cold
+  index before it takes 24 minutes.
+- Java binds by argument count, not types: `getBean(beanName, null, args)`
+  fits two overloads, and `def` lists both first.
+- Objects defined through macros (`DEFINE_SCHED_CLASS(fair)`), assembly, and
+  calls through function pointers stay out of reach.
+- No call hierarchy: following a call chain is a `def` and a `show` per hop.
+- `show` and `at` cannot print lines outside a symbol.
+- `rename` on C still groups every same-named non-static function as one,
+  `tools/` copies included.
