@@ -13,6 +13,7 @@ codix-provider.workspace = true
 tree-sitter-c.workspace = true
 
 [dev-dependencies]
+codix-core.workspace = true
 codix-testkit.workspace = true
 
 [build-dependencies]

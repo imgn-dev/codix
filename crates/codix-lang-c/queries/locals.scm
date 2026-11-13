@@ -42,7 +42,9 @@
 (identifier) @local.reference.read
 (type_identifier) @local.reference.type
 
-(call_expression function: (identifier) @local.reference.call)
+(call_expression
+  function: (identifier) @local.reference.call
+  arguments: (argument_list) @local.arguments)
 (assignment_expression left: (identifier) @local.reference.write)
 (update_expression argument: (identifier) @local.reference.write)
 
@@ -52,7 +54,8 @@
 (call_expression
   function: (field_expression
     argument: (_) @local.receiver
-    field: (field_identifier) @local.reference.call))
+    field: (field_identifier) @local.reference.call)
+  arguments: (argument_list) @local.arguments)
 (assignment_expression
   left: (field_expression
     argument: (_) @local.receiver

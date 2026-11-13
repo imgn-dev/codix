@@ -15,7 +15,7 @@ use crate::lock::WriteGate;
 use crate::op::Warning;
 use crate::project::{FileId, Project};
 use crate::providers::{MissingProvider, missing};
-use crate::store::{FileRow, FileStatus, FileUpdate, RefRow, Store, SymbolRow};
+use crate::store::{FileRow, FileStatus, FileUpdate, ImportRow, RefRow, Store, SymbolRow};
 use crate::vcs::Vcs;
 use crate::walk::{ContentClass, Skip, WalkedFile, classify, walk, walk_where};
 
@@ -54,6 +54,8 @@ pub struct Indexed {
     pub symbols: Vec<SymbolRow>,
     /// Its references that can leave its local scopes (tier 2).
     pub refs: Vec<RefRow>,
+    /// Its package, imports and includes.
+    pub imports: Vec<ImportRow>,
 }
 
 /// Indexes every file as plain text, for search only.
@@ -75,6 +77,7 @@ impl Indexer for TextIndexer {
             },
             symbols: Vec::new(),
             refs: Vec::new(),
+            imports: Vec::new(),
         }
     }
 }
@@ -550,6 +553,7 @@ fn process(
             },
             symbols: None,
             refs: Vec::new(),
+            imports: Vec::new(),
         });
     }
     let result = indexer.index(&file.id, &content);
@@ -566,6 +570,7 @@ fn process(
         },
         symbols: Some(result.symbols),
         refs: result.refs,
+        imports: result.imports,
     })
 }
 
@@ -593,6 +598,7 @@ fn recheck(project: &Project, indexer: &dyn Indexer, outcomes: &mut [Outcome], s
                     file,
                     symbols: None,
                     refs: Vec::new(),
+                    imports: Vec::new(),
                 });
                 break;
             }

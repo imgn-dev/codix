@@ -509,6 +509,8 @@ mod tests {
             signature: Some(signature.to_owned()),
             visibility: None,
             confidence: Confidence::Normal,
+            declared_type: None,
+            supertypes: Vec::new(),
         }
     }
 

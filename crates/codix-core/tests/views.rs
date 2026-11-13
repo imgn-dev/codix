@@ -1,5 +1,5 @@
 //! The views resolvers read are a contract: their columns are those
-//! `codix-resolver` declares, and the snapshot of them never changes. A
+//! `codix-resolver` declares, and match their snapshot. Once released, a
 //! change is a new version of the views, beside the old one.
 
 use std::fmt::Write as _;

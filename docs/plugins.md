@@ -166,10 +166,15 @@ failure, at most three times in a row.
 The views and the scratch schema are in
 [`schemas/plugins/resolver-1.txt`](../schemas/plugins/resolver-1.txt):
 
-- `v1_files`, `v1_symbols`, `v1_refs`, `v1_modules`: the index as resolvers
-  see it. Reference contexts and states are spelled out (`call`, `bound`,
-  `free`, `uncertain`). A change to a view's columns is a new version of the
-  views, never an edit.
+- `v1_files`, `v1_symbols`, `v1_refs`, `v1_modules`, `v1_supertypes`,
+  `v1_imports`: the index as resolvers see it. Reference contexts and states
+  are spelled out (`call`, `bound`, `free`, `uncertain`). Beyond names, a
+  symbol has its signature and declared type, a type its supertypes as
+  written, a reference its receiver as written (`registry`, `this.registry`,
+  `Objects`), that receiver's declared type when its file declares it, and a
+  call its argument count; a file has its package, imports and includes. Once
+  released, a change to a view's columns is a new version of the views,
+  never an edit.
 - `resolved(ref, target, state)`: one row per reference bound, `bound` to the
   `v1_symbols.id` in `target`, or `external` (outside the project) with no
   target.

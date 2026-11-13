@@ -325,6 +325,7 @@ dependencies = [
 name = "codix-lang-c"
 version = "0.4.0"
 dependencies = [
+ "codix-core",
  "codix-provider",
  "codix-testkit",
  "tree-sitter-c",

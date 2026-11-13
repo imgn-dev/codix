@@ -45,9 +45,45 @@
   name: (identifier) @name) @definition.constructor
 
 (field_declaration
+  type: (_) @type
   declarator: (variable_declarator
     name: (identifier) @name)) @definition.field
 
 (constant_declaration
+  type: (_) @type
   declarator: (variable_declarator
     name: (identifier) @name)) @definition.constant
+
+; Supertypes, as written.
+
+(class_declaration
+  name: (identifier) @name
+  superclass: (superclass (_) @supertype)) @definition.class
+
+(class_declaration
+  name: (identifier) @name
+  interfaces: (super_interfaces (type_list (_) @supertype))) @definition.class
+
+(interface_declaration
+  name: (identifier) @name
+  (extends_interfaces (type_list (_) @supertype))) @definition.interface
+
+(enum_declaration
+  name: (identifier) @name
+  interfaces: (super_interfaces (type_list (_) @supertype))) @definition.enum
+
+(record_declaration
+  name: (identifier) @name
+  interfaces: (super_interfaces (type_list (_) @supertype))) @definition.record
+
+; The package and the imports.
+
+(package_declaration [(identifier) (scoped_identifier)] @package)
+
+(import_declaration [(identifier) (scoped_identifier)] @import)
+
+((import_declaration "static" [(identifier) (scoped_identifier)] @import)
+  (#set! import.static))
+
+((import_declaration [(identifier) (scoped_identifier)] @import (asterisk))
+  (#set! import.wildcard))

@@ -68,6 +68,8 @@ impl Indexer for LineIndexer {
                     signature: None,
                     visibility: None,
                     confidence: Confidence::Normal,
+                    declared_type: None,
+                    supertypes: Vec::new(),
                 }
             })
             .collect();
@@ -76,6 +78,7 @@ impl Indexer for LineIndexer {
             status: FileStatus::Indexed,
             symbols,
             refs: Vec::new(),
+            imports: Vec::new(),
         }
     }
 }

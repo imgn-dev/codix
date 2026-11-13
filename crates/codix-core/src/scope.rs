@@ -25,8 +25,10 @@
 //!   the file's or an enclosing function's, as Python's `global` and
 //!   `nonlocal` do: assignments to it there are writes to that one.
 //! - `@local.reference.<context>` marks a reference, `@local.receiver` the
-//!   object of a member access in the same match, and `@local.skip` a name
-//!   that is no reference.
+//!   object of a member access in the same match, `@local.arguments` the
+//!   arguments of a call in the same match, and `@local.skip` a name that is
+//!   no reference.
+//! - `@local.type`, in a local definition's match, marks its declared type.
 //!
 //! When several patterns capture the same node as a reference, the one
 //! written last wins; a definition always wins over a reference.
@@ -44,7 +46,7 @@ use tree_sitter::{Node, QueryCursor, Tree};
 
 use crate::Error;
 use crate::parse::{self, span};
-use crate::store::{Confidence, RefRow, RefState, Span, SymbolRow};
+use crate::store::{Confidence, ImportRow, RefRow, RefState, Span, SymbolRow};
 
 /// The kind of the scope covering a whole file.
 pub const FILE_SCOPE: &str = "file";
@@ -166,6 +168,8 @@ pub struct Definition {
     pub visible_from: usize,
     /// In or around a parse error.
     pub low: bool,
+    /// The declared type, as written without type arguments, when captured.
+    pub declared_type: Option<String>,
 }
 
 /// What a member access goes through.
@@ -205,6 +209,14 @@ pub struct Reference {
     pub scope: usize,
     /// What it is reached through.
     pub receiver: Receiver,
+    /// The receiver as written, when a name or a qualified name.
+    pub receiver_text: Option<String>,
+    /// The receiver's first and last byte.
+    pub receiver_range: Option<(usize, usize)>,
+    /// The receiver's declared type, when the file declares it.
+    pub receiver_type: Option<String>,
+    /// A call's argument count.
+    pub arity: Option<u32>,
     /// What it binds to.
     pub binding: Binding,
     /// In or around a parse error.
@@ -222,6 +234,8 @@ pub struct FileModel {
     pub definitions: Vec<Definition>,
     /// References, in file order.
     pub references: Vec<Reference>,
+    /// The package, imports and includes of the `tags` query.
+    pub imports: Vec<ImportRow>,
 }
 
 impl FileModel {
@@ -277,6 +291,9 @@ impl FileModel {
                     } else {
                         Confidence::Normal
                     },
+                    receiver: r.receiver_text.clone(),
+                    receiver_type: r.receiver_type.clone(),
+                    arity: r.arity,
                 })
             })
             .collect()
@@ -304,19 +321,22 @@ pub fn model(
     content: &str,
 ) -> Result<FileModel, Error> {
     let tree = parse::parse(descriptor, grammar, path, content)?;
-    let symbols = parse::symbols_of(descriptor, grammar, path, content, &tree)?;
-    if let Some(query) = grammar
+    let (symbols, imports) = parse::symbols_of(descriptor, grammar, path, content, &tree)?;
+    let mut model = if let Some(query) = grammar
         .locals_query()
         .map_err(parse::unusable(&descriptor.name))?
     {
-        return Ok(Builder::new(descriptor, content, symbols).build(query, &tree));
-    }
-    // Tier 1: the symbols are definitions of the file scope, and no
-    // reference is known.
-    let mut builder = Builder::new(descriptor, content, symbols);
-    builder.scopes(Vec::new());
-    builder.definitions(Vec::new(), &mut HashMap::new(), &tree);
-    Ok(builder.model)
+        Builder::new(descriptor, content, symbols).build(query, &tree)
+    } else {
+        // Tier 1: the symbols are definitions of the file scope, and no
+        // reference is known.
+        let mut builder = Builder::new(descriptor, content, symbols);
+        builder.scopes(Vec::new());
+        builder.definitions(Vec::new(), &mut HashMap::new(), &tree);
+        builder.model
+    };
+    model.imports = imports;
+    Ok(model)
 }
 
 /// A local definition captured by the query.
@@ -330,6 +350,7 @@ struct LocalCapture<'tree> {
     after: Option<usize>,
     /// The kind of enclosing scope to define it in, if not the innermost.
     place_in: Option<String>,
+    declared_type: Option<String>,
 }
 
 /// Which earlier definition a definition may write instead.
@@ -348,16 +369,37 @@ struct RefCapture<'tree> {
     end: usize,
     span: Span,
     context: Option<RefContext>,
-    receiver: Receiver,
+    via: Via,
     pattern: usize,
+}
+
+/// What a match says a reference goes through, and its arguments.
+#[derive(Debug, Clone)]
+struct Via {
+    receiver: Receiver,
+    /// The receiver as written, when a name or a qualified name.
+    text: Option<String>,
+    /// The receiver's first and last byte.
+    range: Option<(usize, usize)>,
+    arity: Option<u32>,
+}
+
+impl Via {
+    const NONE: Self = Self {
+        receiver: Receiver::None,
+        text: None,
+        range: None,
+        arity: None,
+    };
 }
 
 /// What one match tells about its captures.
 struct Pattern<'q> {
     index: usize,
     settings: &'q [tree_sitter::QueryProperty],
-    receiver: Receiver,
+    via: Via,
     after: Option<usize>,
+    declared_type: Option<String>,
 }
 
 impl Pattern<'_> {
@@ -387,7 +429,7 @@ impl<'tree> RefCapture<'tree> {
         text: &str,
         node: Node<'tree>,
         context: Option<RefContext>,
-        receiver: Receiver,
+        via: Via,
         pattern: usize,
     ) -> Self {
         Self {
@@ -396,7 +438,7 @@ impl<'tree> RefCapture<'tree> {
             end: node.end_byte(),
             span: span(text, node),
             context,
-            receiver,
+            via,
             pattern,
         }
     }
@@ -447,7 +489,8 @@ impl<'a> Builder<'a> {
                     .find(|c| names[c.index as usize] == name)
                     .map(|c| c.node)
             };
-            let receiver = find("local.receiver").map(|node| {
+            let receiver_node = find("local.receiver");
+            let receiver = receiver_node.map_or(Receiver::None, |node| {
                 let text = node_text(self.content, node);
                 if self
                     .descriptor
@@ -464,8 +507,17 @@ impl<'a> Builder<'a> {
             let pattern = Pattern {
                 index: m.pattern_index,
                 settings,
-                receiver: receiver.unwrap_or(Receiver::None),
+                via: Via {
+                    receiver,
+                    text: receiver_node.and_then(|n| written_name(node_text(self.content, n))),
+                    range: receiver_node.map(|n| (n.start_byte(), n.end_byte())),
+                    arity: find("local.arguments").map(arguments),
+                },
                 after: find("local.after").map(|node| node.end_byte()),
+                declared_type: find("local.type")
+                    .map(|node| parse::written_type(node_text(self.content, node)))
+                    // A type keyword, such as Java's `var`, leaves it to inference.
+                    .filter(|t| !self.descriptor.names.type_keywords.contains(t)),
             };
             for capture in m.captures() {
                 self.collect(
@@ -523,13 +575,14 @@ impl<'a> Builder<'a> {
                 },
                 after: pattern.after,
                 place_in: pattern.value("local.scope").map(str::to_owned),
+                declared_type: pattern.declared_type.clone(),
             });
         } else if let Some(context) = name.strip_prefix("local.reference.") {
             let capture = RefCapture::new(
                 self.content,
                 node,
                 RefContext::parse(context),
-                pattern.receiver,
+                pattern.via.clone(),
                 pattern.index,
             );
             keep_last(&mut captures.refs, capture);
@@ -544,12 +597,12 @@ impl<'a> Builder<'a> {
                 self.content,
                 node,
                 Some(RefContext::Write),
-                Receiver::None,
+                Via::NONE,
                 usize::MAX,
             );
             keep_last(&mut captures.refs, capture);
         } else if name == "local.skip" {
-            let capture = RefCapture::new(self.content, node, None, Receiver::None, pattern.index);
+            let capture = RefCapture::new(self.content, node, None, Via::NONE, pattern.index);
             keep_last(&mut captures.refs, capture);
         }
     }
@@ -671,6 +724,7 @@ impl<'a> Builder<'a> {
                 name_range: symbol.name_range,
                 visible_from: if scopes.symbols_hoisted { 0 } else { name.0 },
                 low: symbol.confidence == Confidence::Low,
+                declared_type: symbol.declared_type.clone(),
             });
         }
     }
@@ -718,7 +772,7 @@ impl<'a> Builder<'a> {
                         end: local.end,
                         span: local.span,
                         context: Some(RefContext::Write),
-                        receiver: Receiver::None,
+                        via: Via::NONE,
                         pattern: usize::MAX,
                     },
                 );
@@ -734,6 +788,7 @@ impl<'a> Builder<'a> {
                 name_range: local.span,
                 visible_from: local.after.unwrap_or(local.start),
                 low: self.near_error(local.node),
+                declared_type: local.declared_type,
             });
         }
     }
@@ -766,7 +821,11 @@ impl<'a> Builder<'a> {
                     context,
                     range: r.span,
                     scope: self.scope_of(r.start, r.end, false),
-                    receiver: r.receiver,
+                    receiver: r.via.receiver,
+                    receiver_text: r.via.text,
+                    receiver_range: r.via.range,
+                    receiver_type: None,
+                    arity: r.via.arity,
                     binding: Binding::Free,
                     low: self.near_error(r.node),
                 })
@@ -785,6 +844,38 @@ impl<'a> Builder<'a> {
             .collect();
         for (reference, binding) in self.model.references.iter_mut().zip(bindings) {
             reference.binding = binding;
+        }
+        self.receiver_types();
+    }
+
+    /// The declared type of each receiver the file declares: the definition
+    /// the receiver's last name binds to, a local, a parameter or a field.
+    fn receiver_types(&mut self) {
+        let ends: HashMap<usize, usize> = self
+            .model
+            .references
+            .iter()
+            .enumerate()
+            .map(|(i, r)| (r.range.end.byte as usize, i))
+            .collect();
+        let types: Vec<Option<String>> = self
+            .model
+            .references
+            .iter()
+            .map(|r| {
+                let (start, end) = r.receiver_range?;
+                let last = &self.model.references[*ends.get(&end)?];
+                if (last.range.start.byte as usize) < start {
+                    return None;
+                }
+                match last.binding {
+                    Binding::Bound(d) => self.model.definitions[d].declared_type.clone(),
+                    Binding::Free | Binding::Uncertain => None,
+                }
+            })
+            .collect();
+        for (reference, found) in self.model.references.iter_mut().zip(types) {
+            reference.receiver_type = found;
         }
     }
 
@@ -1000,6 +1091,40 @@ fn keep_last<'tree>(
         _ => {
             refs.insert(key, capture);
         }
+    }
+}
+
+/// The number of arguments in an argument list: its named children but
+/// comments.
+fn arguments(list: Node<'_>) -> u32 {
+    let mut cursor = list.walk();
+    let count = list
+        .named_children(&mut cursor)
+        .filter(|c| !c.kind().contains("comment"))
+        .count();
+    u32::try_from(count).unwrap_or(u32::MAX)
+}
+
+/// A receiver as written, when a name or names joined by `.`, `::` or `->`;
+/// whitespace dropped.
+fn written_name(text: &str) -> Option<String> {
+    let name: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    let mut rest = name.as_str();
+    loop {
+        let end = rest
+            .char_indices()
+            .find(|&(_, c)| !(c.is_alphanumeric() || c == '_' || c == '$'))
+            .map_or(rest.len(), |(i, _)| i);
+        if end == 0 || rest.starts_with(|c: char| c.is_ascii_digit()) {
+            return None;
+        }
+        rest = &rest[end..];
+        if rest.is_empty() {
+            return Some(name);
+        }
+        rest = ["::", "->", "."]
+            .iter()
+            .find_map(|sep| rest.strip_prefix(sep))?;
     }
 }
 

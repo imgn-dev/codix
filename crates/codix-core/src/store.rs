@@ -38,8 +38,10 @@ const MIGRATIONS: &[&str] = &[
     previews::MIGRATION,
     journal::MIGRATION,
     aliases::MIGRATION,
-    codix_resolver::VIEWS_SQL,
+    VIEWS_1,
     resolutions::MIGRATION,
+    MIGRATION_11,
+    codix_resolver::VIEWS_SQL,
 ];
 
 const MIGRATION_1: &str = "
@@ -160,6 +162,61 @@ CREATE INDEX refs_by_name ON refs(name);
 CREATE INDEX refs_by_file ON refs(file_id);
 ";
 
+/// The resolver views as first created; [`MIGRATION_11`] drops them for
+/// [`codix_resolver::VIEWS_SQL`].
+const VIEWS_1: &str = "
+CREATE VIEW v1_files AS
+SELECT id, path, language, status FROM files;
+
+CREATE VIEW v1_symbols AS
+SELECT id, symbol_id, file_id, name, kind, qualified_name, parent,
+       start_byte, end_byte, name_start_byte, name_end_byte, visibility
+FROM symbols;
+
+CREATE VIEW v1_refs AS
+SELECT id, file_id, name,
+       CASE context WHEN 0 THEN 'call' WHEN 1 THEN 'type' WHEN 2 THEN 'import'
+                    WHEN 4 THEN 'write' ELSE 'read' END AS context,
+       start_byte, end_byte, enclosing, target,
+       CASE state WHEN 0 THEN 'bound' WHEN 2 THEN 'uncertain' ELSE 'free' END AS state
+FROM refs;
+
+CREATE VIEW v1_modules AS
+SELECT name, build, root, source_roots, test_roots, parent FROM modules;
+";
+
+/// What resolvers and the type hierarchy need beyond names: a symbol's
+/// declared type and supertypes as written, a reference's receiver as
+/// written, its declared type and its argument count, and each file's
+/// package, imports and includes. The views are made again over them.
+const MIGRATION_11: &str = "
+ALTER TABLE symbols ADD COLUMN declared_type TEXT;
+ALTER TABLE refs ADD COLUMN receiver TEXT;
+ALTER TABLE refs ADD COLUMN receiver_type TEXT;
+ALTER TABLE refs ADD COLUMN arity INTEGER;
+CREATE TABLE supertypes (
+    symbol INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
+    name TEXT NOT NULL
+);
+CREATE INDEX supertypes_by_symbol ON supertypes(symbol);
+CREATE INDEX supertypes_by_name ON supertypes(name);
+CREATE TABLE imports (
+    file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    alias TEXT,
+    is_static INTEGER NOT NULL,
+    wildcard INTEGER NOT NULL,
+    system INTEGER NOT NULL,
+    line INTEGER NOT NULL
+);
+CREATE INDEX imports_by_file ON imports(file_id);
+DROP VIEW v1_files;
+DROP VIEW v1_symbols;
+DROP VIEW v1_refs;
+DROP VIEW v1_modules;
+";
+
 /// How a file is held in the index.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, schemars::JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -274,6 +331,12 @@ pub struct SymbolRow {
     pub visibility: Option<String>,
     /// How much to trust the symbol.
     pub confidence: Confidence,
+    /// The declared type of a field or constant, as written without type
+    /// arguments, when the pack captures it.
+    pub declared_type: Option<String>,
+    /// The types a type extends or implements, as written without type
+    /// arguments.
+    pub supertypes: Vec<String>,
 }
 
 /// What a stored reference binds to.
@@ -344,6 +407,58 @@ pub struct RefRow {
     pub state: RefState,
     /// How much to trust it.
     pub confidence: Confidence,
+    /// What it is reached through, as written, when a name or a qualified
+    /// name: `dlbf`, `BeanFactoryUtils`, `this`, `a.b`.
+    pub receiver: Option<String>,
+    /// The declared type of the receiver, when its file declares it: a
+    /// local, a parameter or a field of the file.
+    pub receiver_type: Option<String>,
+    /// The number of arguments of a call.
+    pub arity: Option<u32>,
+}
+
+/// What a file's import, package or include names.
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, schemars::JsonSchema,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum ImportKind {
+    /// The package or namespace the file belongs to.
+    Package,
+    /// An import of a type, a member or a package.
+    Import,
+    /// A preprocessor include.
+    Include,
+}
+
+impl ImportKind {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::Package => "package",
+            Self::Import => "import",
+            Self::Include => "include",
+        }
+    }
+}
+
+/// A file's package, one of its imports or one of its includes, as written.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportRow {
+    /// What it is.
+    pub kind: ImportKind,
+    /// The name or path, as written: `java.util.List`, `java.util` for
+    /// `java.util.*`, `linux/sched.h`.
+    pub name: String,
+    /// The name it is imported under, when renamed.
+    pub alias: Option<String>,
+    /// A static import, of members.
+    pub is_static: bool,
+    /// An import of everything a package or type holds.
+    pub wildcard: bool,
+    /// An include of a system header, `<…>`.
+    pub system: bool,
+    /// Its line.
+    pub line: u32,
 }
 
 /// A stored reference, with the symbols it names by ID.
@@ -392,6 +507,9 @@ pub struct FileUpdate {
     /// The references to store, replacing those stored, when `symbols` is
     /// given.
     pub refs: Vec<RefRow>,
+    /// The package, imports and includes to store, replacing those stored,
+    /// when `symbols` is given.
+    pub imports: Vec<ImportRow>,
 }
 
 /// A connection to a project's index.
@@ -612,14 +730,18 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
     };
     tx.execute("DELETE FROM refs WHERE file_id = ?1", [file_id])?;
     tx.execute("DELETE FROM symbols WHERE file_id = ?1", [file_id])?;
+    tx.execute("DELETE FROM imports WHERE file_id = ?1", [file_id])?;
     let mut rowids = Vec::with_capacity(symbols.len());
     let mut insert = tx.prepare_cached(
         "INSERT INTO symbols (symbol_id, file_id, name, kind, qualified_name, parent,
              start_line, start_column, start_byte, end_line, end_column, end_byte,
              name_line, name_column, name_start_byte, name_end_byte,
-             signature, visibility, confidence)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
+             signature, visibility, confidence, declared_type)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19,
+             ?20)",
     )?;
+    let mut supertype =
+        tx.prepare_cached("INSERT INTO supertypes (symbol, name) VALUES (?1, ?2)")?;
     for s in symbols {
         insert.execute(params![
             s.symbol_id,
@@ -644,13 +766,18 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
                 Confidence::Normal => "normal",
                 Confidence::Low => "low",
             },
+            s.declared_type,
         ])?;
-        rowids.push(tx.last_insert_rowid());
+        let rowid = tx.last_insert_rowid();
+        for name in &s.supertypes {
+            supertype.execute(params![rowid, name])?;
+        }
+        rowids.push(rowid);
     }
     let mut insert = tx.prepare_cached(
         "INSERT INTO refs (file_id, name, context, line, column, start_byte, end_byte,
-             enclosing, target, state, low)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+             enclosing, target, state, low, receiver, receiver_type, arity)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
     )?;
     for r in &update.refs {
         insert.execute(params![
@@ -665,6 +792,33 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
             r.target.and_then(|i| rowids.get(i)),
             r.state.code(),
             i64::from(r.confidence == Confidence::Low),
+            r.receiver,
+            r.receiver_type,
+            r.arity,
+        ])?;
+    }
+    write_imports(tx, file_id, &update.imports)
+}
+
+fn write_imports(
+    tx: &Transaction<'_>,
+    file_id: i64,
+    imports: &[ImportRow],
+) -> rusqlite::Result<()> {
+    let mut insert = tx.prepare_cached(
+        "INSERT INTO imports (file_id, kind, name, alias, is_static, wildcard, system, line)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+    )?;
+    for i in imports {
+        insert.execute(params![
+            file_id,
+            i.kind.as_str(),
+            i.name,
+            i.alias,
+            i.is_static,
+            i.wildcard,
+            i.system,
+            i.line,
         ])?;
     }
     Ok(())
@@ -747,7 +901,7 @@ pub struct Snapshot<'a> {
 const SYMBOL_COLUMNS: &str = "f.path, s.symbol_id, s.name, s.kind, s.qualified_name, s.parent,
     s.start_line, s.start_column, s.start_byte, s.end_line, s.end_column, s.end_byte,
     s.name_line, s.name_column, s.name_start_byte, s.name_end_byte,
-    s.signature, s.visibility, s.confidence, f.language";
+    s.signature, s.visibility, s.confidence, f.language, s.declared_type";
 
 fn symbol_hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<SymbolHit> {
     let name_line: u32 = row.get(12)?;
@@ -796,6 +950,8 @@ fn symbol_hit(row: &rusqlite::Row<'_>) -> rusqlite::Result<SymbolHit> {
             } else {
                 Confidence::Normal
             },
+            declared_type: row.get(20)?,
+            supertypes: Vec::new(),
         },
     })
 }

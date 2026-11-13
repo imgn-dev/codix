@@ -85,3 +85,10 @@
 
 (call_expression
   function: (identifier) @name) @reference.call
+
+; Added for codix: includes, as written.
+
+(preproc_include path: (string_literal) @include)
+
+((preproc_include path: (system_lib_string) @include)
+  (#set! include.system))

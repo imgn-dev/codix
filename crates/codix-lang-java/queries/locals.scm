@@ -64,16 +64,23 @@
 ; Definitions
 ;------------
 
-(formal_parameter name: (identifier) @local.definition.parameter)
+(formal_parameter
+  type: (_) @local.type
+  name: (identifier) @local.definition.parameter)
 (spread_parameter (variable_declarator name: (identifier) @local.definition.parameter))
 (catch_formal_parameter name: (identifier) @local.definition.parameter)
 (inferred_parameters (identifier) @local.definition.parameter)
 (lambda_expression parameters: (identifier) @local.definition.parameter)
 
 (local_variable_declaration
+  type: (_) @local.type
   declarator: (variable_declarator name: (identifier) @local.definition.variable))
-(enhanced_for_statement name: (identifier) @local.definition.variable)
-(resource name: (identifier) @local.definition.variable)
+(enhanced_for_statement
+  type: (_) @local.type
+  name: (identifier) @local.definition.variable)
+(resource
+  type: (_) @local.type
+  name: (identifier) @local.definition.variable)
 (instanceof_expression name: (identifier) @local.definition.variable)
 (type_pattern (identifier) @local.definition.variable)
 (record_pattern_component (identifier) @local.definition.variable)
@@ -95,10 +102,12 @@
 
 (method_invocation
   !object
-  name: (identifier) @local.reference.call)
+  name: (identifier) @local.reference.call
+  arguments: (argument_list) @local.arguments)
 (method_invocation
   object: (_) @local.receiver
-  name: (identifier) @local.reference.call)
+  name: (identifier) @local.reference.call
+  arguments: (argument_list) @local.arguments)
 (method_reference
   .
   (_) @local.receiver

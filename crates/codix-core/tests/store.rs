@@ -51,6 +51,8 @@ fn symbol(name: &str, qualified: &str, line: u32) -> SymbolRow {
         signature: Some(format!("void {name}()")),
         visibility: Some("public".to_owned()),
         confidence: Confidence::Normal,
+        declared_type: None,
+        supertypes: Vec::new(),
     }
 }
 
@@ -59,6 +61,7 @@ fn update(path: &str, symbols: Vec<SymbolRow>) -> FileUpdate {
         file: file(path),
         symbols: Some(symbols),
         refs: Vec::new(),
+        imports: Vec::new(),
     }
 }
 
@@ -69,8 +72,8 @@ fn open(dir: &Path) -> Store {
 #[test]
 fn migrates_an_empty_database_and_reopens() {
     let dir = tempfile::tempdir().unwrap();
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 10);
-    assert_eq!(open(dir.path()).schema_version().unwrap(), 10);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 12);
+    assert_eq!(open(dir.path()).schema_version().unwrap(), 12);
 }
 
 #[test]
@@ -117,6 +120,9 @@ fn references_round_trip_with_their_symbols_and_are_replaced_with_the_file() {
         target,
         state,
         confidence: Confidence::Normal,
+        receiver: None,
+        receiver_type: None,
+        arity: None,
     };
     let mut u = update(
         "src/A.java",

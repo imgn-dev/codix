@@ -1,5 +1,13 @@
 //! Tier 1 extraction: parse a file with its pack's grammar and turn the
 //! definitions its `tags` query captures into symbols.
+//!
+//! Besides `@definition.<kind>`, `@name` and `@parent`, a `tags` query may
+//! capture, in a definition's match, its declared type (`@type`) and the
+//! types it extends or implements (`@supertype`, in as many matches as
+//! needed); and, in matches of their own, the file's package (`@package`),
+//! its imports (`@import`, with `@import.alias` for the name it is imported
+//! under, `(#set! import.static)` and `(#set! import.wildcard)`) and its
+//! includes (`@include`, `(#set! include.system)` for `<…>`).
 
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -14,7 +22,7 @@ use crate::config::Config;
 use crate::detect::Detector;
 use crate::project::FileId;
 use crate::scan::{Indexed, Indexer};
-use crate::store::{Confidence, FileStatus, Point, Span, SymbolRow};
+use crate::store::{Confidence, FileStatus, ImportKind, ImportRow, Point, Span, SymbolRow};
 use crate::symbol_id;
 use crate::walk::{ContentClass, classify};
 
@@ -49,6 +57,8 @@ struct Definition<'tree> {
     /// `@parent` captures, outermost first, such as `geo` and `Shape` in
     /// `geo::Shape::area`.
     parents: Vec<Node<'tree>>,
+    /// `@type`.
+    declared_type: Option<Node<'tree>>,
     pattern: usize,
 }
 
@@ -60,7 +70,7 @@ pub fn extract(
     content: &str,
 ) -> Result<Vec<SymbolRow>, Error> {
     let tree = parse(descriptor, grammar, path, content)?;
-    symbols_of(descriptor, grammar, path, content, &tree)
+    Ok(symbols_of(descriptor, grammar, path, content, &tree)?.0)
 }
 
 /// Parses one file with its pack's grammar.
@@ -89,24 +99,41 @@ pub(crate) fn parse(
     })
 }
 
-/// The symbols of a parsed file.
+/// The symbols of a parsed file, and its package, imports and includes.
 pub(crate) fn symbols_of(
     descriptor: &LanguageDescriptor,
     grammar: &Grammar,
     path: &str,
     content: &str,
     tree: &Tree,
-) -> Result<Vec<SymbolRow>, Error> {
+) -> Result<(Vec<SymbolRow>, Vec<ImportRow>), Error> {
     let query = grammar.tags_query().map_err(unusable(&descriptor.name))?;
-    let definitions = definitions(descriptor, query, tree.root_node(), content);
+    let Found {
+        definitions,
+        supertypes,
+        imports,
+    } = definitions(descriptor, query, tree.root_node(), content);
     let (mut rows, parents) = symbols(descriptor, path, content, &definitions);
+    for (row, definition) in rows.iter_mut().zip(&definitions) {
+        if let Some(names) = supertypes.get(&definition.node.id()) {
+            row.supertypes.clone_from(names);
+        }
+    }
     symbol_id::disambiguate(&mut rows, &descriptor.id_prefix, path);
     // Parents by position, now that every ID is final.
     let ids: Vec<String> = rows.iter().map(|r| r.symbol_id.clone()).collect();
     for (row, parent) in rows.iter_mut().zip(parents) {
         row.parent = parent.map(|p| ids[p].clone());
     }
-    Ok(rows)
+    Ok((rows, imports))
+}
+
+/// What the `tags` query found in a file.
+struct Found<'tree> {
+    definitions: Vec<Definition<'tree>>,
+    /// Supertypes by definition node, in file order, from every match.
+    supertypes: HashMap<usize, Vec<String>>,
+    imports: Vec<ImportRow>,
 }
 
 fn definitions<'tree>(
@@ -114,40 +141,66 @@ fn definitions<'tree>(
     query: &Query,
     root: Node<'tree>,
     content: &str,
-) -> Vec<Definition<'tree>> {
+) -> Found<'tree> {
     let names = query.capture_names();
     let mut cursor = QueryCursor::new();
     let mut matches = cursor.matches(query, root, content.as_bytes());
     let mut found = Vec::new();
+    let mut supertypes: HashMap<usize, Vec<(usize, String)>> = HashMap::new();
+    let mut imports: Vec<(usize, ImportRow)> = Vec::new();
     while let Some(m) = matches.next() {
         // One match may name several symbols, as `const a, b = 1, 2` does.
         let mut declared = Vec::new();
         let mut definition = None;
         let mut parents = Vec::new();
+        let mut declared_type = None;
+        let mut supers = Vec::new();
+        let mut alias = None;
         for capture in m.captures() {
             let capture_name = names[capture.index as usize];
-            if capture_name == "name" {
-                declared.push(capture.node);
-            } else if capture_name == "parent" {
-                parents.push(capture.node);
-            } else if let Some(kind) = capture_name.strip_prefix("definition.") {
-                definition = Some((capture.node, kind));
+            match capture_name {
+                "name" => declared.push(capture.node),
+                "parent" => parents.push(capture.node),
+                "type" => declared_type = Some(capture.node),
+                "supertype" => supers.push(capture.node),
+                "import.alias" => alias = Some(text(content, capture.node).to_owned()),
+                _ => {
+                    if let Some(kind) = capture_name.strip_prefix("definition.") {
+                        definition = Some((capture.node, kind));
+                    }
+                }
             }
         }
+        imports.extend(imports_of(query, m, content, alias.as_ref()));
         if let Some((node, kind)) = definition
             && let Some(kind) = descriptor.symbol_kind(kind)
         {
+            let known = supertypes.entry(node.id()).or_default();
+            for s in supers {
+                let entry = (s.start_byte(), written_type(text(content, s)));
+                if !known.contains(&entry) {
+                    known.push(entry);
+                }
+            }
             for name in declared {
                 found.push(Definition {
                     node,
                     name,
                     kind: kind.to_owned(),
                     parents: parents.clone(),
+                    declared_type,
                     pattern: m.pattern_index,
                 });
             }
         }
     }
+    let supertypes = supertypes
+        .into_iter()
+        .map(|(node, mut names)| {
+            names.sort();
+            (node, names.into_iter().map(|(_, name)| name).collect())
+        })
+        .collect();
     // When several patterns capture the same definition, the one written last
     // in the query wins: packs follow upstream's general patterns with more
     // specific ones, such as a function inside a class being a method.
@@ -160,7 +213,91 @@ fn definitions<'tree>(
         )
     });
     found.dedup_by_key(|d| (d.node.id(), d.name.id()));
+    Found {
+        definitions: found,
+        supertypes,
+        imports: merged(imports),
+    }
+}
+
+/// The package, imports and includes one match captures, by first byte.
+fn imports_of(
+    query: &Query,
+    m: &tree_sitter::QueryMatch<'_, '_>,
+    content: &str,
+    alias: Option<&String>,
+) -> Vec<(usize, ImportRow)> {
+    let names = query.capture_names();
+    let settings = query.property_settings(m.pattern_index);
+    let set = |key: &str| settings.iter().any(|p| &*p.key == key);
+    let mut found = Vec::new();
+    for capture in m.captures() {
+        let kind = match names[capture.index as usize] {
+            "package" => ImportKind::Package,
+            "import" => ImportKind::Import,
+            "include" => ImportKind::Include,
+            _ => continue,
+        };
+        let node = capture.node;
+        let name = match kind {
+            ImportKind::Include => text(content, node)
+                .trim()
+                .trim_matches(['"', '<', '>'])
+                .to_owned(),
+            _ => written_type(text(content, node)),
+        };
+        found.push((
+            node.start_byte(),
+            ImportRow {
+                kind,
+                name,
+                alias: alias.cloned(),
+                is_static: set("import.static"),
+                wildcard: set("import.wildcard"),
+                system: set("include.system"),
+                line: u32::try_from(node.start_position().row + 1).unwrap_or(u32::MAX),
+            },
+        ));
+    }
     found
+}
+
+/// One row per import, in file order: several patterns may capture one, and
+/// the flags of all of them hold.
+fn merged(mut imports: Vec<(usize, ImportRow)>) -> Vec<ImportRow> {
+    imports.sort_by_key(|(start, i)| (*start, i.kind));
+    let mut merged: Vec<(usize, ImportRow)> = Vec::new();
+    for (start, import) in imports {
+        match merged.last_mut() {
+            Some((s, last)) if *s == start && last.kind == import.kind => {
+                last.is_static |= import.is_static;
+                last.wildcard |= import.wildcard;
+                last.system |= import.system;
+                if last.alias.is_none() {
+                    last.alias = import.alias;
+                }
+            }
+            _ => merged.push((start, import)),
+        }
+    }
+    merged.into_iter().map(|(_, i)| i).collect()
+}
+
+/// A type or a name as written, whitespace and type arguments removed:
+/// `Map<String, List<T>>` gives `Map`, `java.util . List` gives
+/// `java.util.List`.
+pub(crate) fn written_type(text: &str) -> String {
+    let mut out = String::new();
+    let mut depth = 0usize;
+    for c in text.chars() {
+        match c {
+            '<' => depth += 1,
+            '>' => depth = depth.saturating_sub(1),
+            c if depth == 0 && !c.is_whitespace() => out.push(c),
+            _ => {}
+        }
+    }
+    out
 }
 
 /// The symbols of the definitions, each with the index of its parent; parent
@@ -230,6 +367,10 @@ fn symbols(
             } else {
                 Confidence::Normal
             },
+            declared_type: definition
+                .declared_type
+                .map(|t| written_type(text(content, t))),
+            supertypes: Vec::new(),
         });
         parents.push(parent_index);
         open.push(i);
@@ -530,6 +671,7 @@ impl Indexer for PackIndexer {
             status,
             symbols: Vec::new(),
             refs: Vec::new(),
+            imports: Vec::new(),
         };
         match classify(content) {
             ContentClass::Binary => return search_only(FileStatus::Skipped),
@@ -559,6 +701,7 @@ impl Indexer for PackIndexer {
                 language: detection.language,
                 status: FileStatus::Indexed,
                 refs: model.stored_refs(),
+                imports: model.imports,
                 symbols: model.symbols,
             },
             Err(_) => search_only(FileStatus::Error),

@@ -34,7 +34,8 @@ SELECT id, path, language, status FROM files;
 
 CREATE VIEW v1_symbols AS
 SELECT id, symbol_id, file_id, name, kind, qualified_name, parent,
-       start_byte, end_byte, name_start_byte, name_end_byte, visibility
+       start_byte, end_byte, name_start_byte, name_end_byte, visibility,
+       signature, declared_type
 FROM symbols;
 
 CREATE VIEW v1_refs AS
@@ -42,15 +43,22 @@ SELECT id, file_id, name,
        CASE context WHEN 0 THEN 'call' WHEN 1 THEN 'type' WHEN 2 THEN 'import'
                     WHEN 4 THEN 'write' ELSE 'read' END AS context,
        start_byte, end_byte, enclosing, target,
-       CASE state WHEN 0 THEN 'bound' WHEN 2 THEN 'uncertain' ELSE 'free' END AS state
+       CASE state WHEN 0 THEN 'bound' WHEN 2 THEN 'uncertain' ELSE 'free' END AS state,
+       receiver, receiver_type, arity
 FROM refs;
 
 CREATE VIEW v1_modules AS
 SELECT name, build, root, source_roots, test_roots, parent FROM modules;
+
+CREATE VIEW v1_supertypes AS
+SELECT symbol, name FROM supertypes;
+
+CREATE VIEW v1_imports AS
+SELECT file_id, kind, name, alias, is_static, wildcard, system, line FROM imports;
 ";
 
-/// The columns of each view of [`VIEWS_SQL`]: the contract. Changing one is
-/// a new version of the views, never an edit.
+/// The columns of each view of [`VIEWS_SQL`]: the contract. Once released,
+/// changing one is a new version of the views, never an edit.
 pub const VIEW_COLUMNS: &[(&str, &[&str])] = &[
     ("v1_files", &["id", "path", "language", "status"]),
     (
@@ -68,6 +76,8 @@ pub const VIEW_COLUMNS: &[(&str, &[&str])] = &[
             "name_start_byte",
             "name_end_byte",
             "visibility",
+            "signature",
+            "declared_type",
         ],
     ),
     (
@@ -82,6 +92,9 @@ pub const VIEW_COLUMNS: &[(&str, &[&str])] = &[
             "enclosing",
             "target",
             "state",
+            "receiver",
+            "receiver_type",
+            "arity",
         ],
     ),
     (
@@ -93,6 +106,20 @@ pub const VIEW_COLUMNS: &[(&str, &[&str])] = &[
             "source_roots",
             "test_roots",
             "parent",
+        ],
+    ),
+    ("v1_supertypes", &["symbol", "name"]),
+    (
+        "v1_imports",
+        &[
+            "file_id",
+            "kind",
+            "name",
+            "alias",
+            "is_static",
+            "wildcard",
+            "system",
+            "line",
         ],
     ),
 ];
