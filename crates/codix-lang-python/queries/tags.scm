@@ -53,3 +53,8 @@
     (expression_statement
       (assignment
         left: (identifier) @name) @definition.field)))
+
+; Added for codix: supertypes, as written.
+
+(class_definition
+  superclasses: (argument_list [(identifier) (attribute)] @supertype)) @supertypes

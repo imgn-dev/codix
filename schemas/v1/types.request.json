@@ -1,0 +1,134 @@
+{
+  "$defs": {
+    "Sort": {
+      "description": "Another order than the results' own.",
+      "oneOf": [
+        {
+          "const": "count",
+          "description": "With `files`, the files with the most results first.",
+          "type": "string"
+        }
+      ]
+    },
+    "Sources": {
+      "description": "Which sources a build system declares.",
+      "oneOf": [
+        {
+          "const": "main",
+          "description": "The main sources.",
+          "type": "string"
+        },
+        {
+          "const": "test",
+          "description": "The test sources.",
+          "type": "string"
+        }
+      ]
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Request for [`TypesOp`].",
+  "properties": {
+    "after": {
+      "default": null,
+      "description": "Return the results after this place, as a page's `next` gives it.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "count": {
+      "default": false,
+      "description": "Return how many results there are, not the results.",
+      "type": "boolean"
+    },
+    "depth": {
+      "default": null,
+      "description": "Levels followed, 1 for the direct ones only.",
+      "format": "uint",
+      "minimum": 0,
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "exclude_path": {
+      "default": [],
+      "description": "Leave out this subtree; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "files": {
+      "default": false,
+      "description": "Return one row per file, with its number of results, paged by file.",
+      "type": "boolean"
+    },
+    "here": {
+      "default": false,
+      "description": "Limit results to the current directory's subtree.",
+      "type": "boolean"
+    },
+    "kind": {
+      "default": [],
+      "description": "Consider types of this kind only; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "limit": {
+      "default": 50,
+      "description": "Maximum number of results.",
+      "format": "uint",
+      "minimum": 1,
+      "type": "integer"
+    },
+    "path": {
+      "default": [],
+      "description": "Limit results to this subtree; repeatable.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "sort": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sort"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "With files, `count` puts the files with the most results first, on one page."
+    },
+    "sources": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Sources"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Keep main or test sources only, as the build systems declare them."
+    },
+    "super": {
+      "description": "List its supertypes, up to the roots, instead of what extends or implements it.",
+      "type": "boolean"
+    },
+    "symbol": {
+      "description": "Type ID, its path part, `file:line:col`, or a name.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol"
+  ],
+  "title": "TypesRequest",
+  "type": "object"
+}

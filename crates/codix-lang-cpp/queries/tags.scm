@@ -177,3 +177,11 @@
 
 ((preproc_include path: (system_lib_string) @include)
   (#set! include.system))
+
+; Added for codix: supertypes, as written.
+
+(class_specifier
+  (base_class_clause [(type_identifier) (qualified_identifier) (template_type)] @supertype)) @supertypes
+
+(struct_specifier
+  (base_class_clause [(type_identifier) (qualified_identifier) (template_type)] @supertype)) @supertypes

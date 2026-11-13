@@ -61,3 +61,17 @@
   (variable_declaration
     (variable_declarator
       name: (identifier) @name))) @definition.field
+
+; Added for codix: supertypes, as written.
+
+(class_declaration
+  (base_list [(identifier) (generic_name) (qualified_name)] @supertype)) @supertypes
+
+(interface_declaration
+  (base_list [(identifier) (generic_name) (qualified_name)] @supertype)) @supertypes
+
+(struct_declaration
+  (base_list [(identifier) (generic_name) (qualified_name)] @supertype)) @supertypes
+
+(record_declaration
+  (base_list [(identifier) (generic_name) (qualified_name)] @supertype)) @supertypes

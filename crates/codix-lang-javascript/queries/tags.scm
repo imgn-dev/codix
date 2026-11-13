@@ -81,3 +81,11 @@
           name: (identifier) @name
           value: [(number) (string) (template_string) (object) (array) (true) (false) (null) (identifier) (member_expression) (call_expression) (new_expression) (binary_expression)]) @definition.constant))
   ])
+
+; Added for codix: supertypes, as written.
+
+(class_declaration
+  (class_heritage (_) @supertype)) @supertypes
+
+(class
+  (class_heritage (_) @supertype)) @supertypes

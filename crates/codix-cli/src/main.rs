@@ -85,6 +85,7 @@ use codix_core::refs::{Confidence, RefContext, RefsOp, RefsRequest};
 use codix_core::rename::{RenameOp, RenameRequest};
 use codix_core::render::{self, Style, TextRender};
 use codix_core::store::MatchMode;
+use codix_core::types::{TypesOp, TypesRequest};
 use codix_core::undo::{UndoOp, UndoRequest};
 use codix_daemon::client::{self, Route};
 use codix_daemon::{control, server};
@@ -155,6 +156,7 @@ enum Command {
         narrow: NarrowArgs,
     },
     Refs(RefsArgs),
+    Types(TypesArgs),
     Outline {
         /// File or directory.
         path: String,
@@ -355,6 +357,38 @@ struct RefsArgs {
     scope: ScopeArgs,
     #[command(flatten)]
     page: PageArgs,
+}
+
+#[derive(Args)]
+struct TypesArgs {
+    /// Type ID, its path part, `file:line:col`, or a name.
+    symbol: String,
+    /// List its supertypes, up to the roots, instead of what extends or implements it.
+    #[arg(long = "super")]
+    supertypes: bool,
+    /// Levels followed, 1 for the direct ones only.
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u64).range(1..))]
+    depth: Option<u64>,
+    /// Consider types of this kind only; repeatable.
+    #[arg(long = "kind", value_name = "KIND")]
+    kinds: Vec<String>,
+    #[command(flatten)]
+    scope: ScopeArgs,
+    #[command(flatten)]
+    page: PageArgs,
+}
+
+impl TypesArgs {
+    fn request(self) -> Result<TypesRequest, Error> {
+        Ok(TypesRequest {
+            page: self.page.page()?,
+            symbol: self.symbol,
+            supertypes: self.supertypes,
+            depth: self.depth.and_then(|d| usize::try_from(d).ok()),
+            kinds: self.kinds,
+            scope: self.scope.request(),
+        })
+    }
 }
 
 #[derive(Args)]
@@ -905,6 +939,7 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
             run(output, &DefOp, ctx, Ok(request))
         }
         Command::Refs(args) => run(output, &RefsOp, ctx, args.request()),
+        Command::Types(args) => run(output, &TypesOp, ctx, args.request()),
         Command::Outline { path, depth, kinds } => {
             let request = OutlineRequest {
                 path,

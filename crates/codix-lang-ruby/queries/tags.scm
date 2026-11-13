@@ -63,3 +63,8 @@
 
 (assignment
   left: (constant) @name) @definition.constant
+
+; Added for codix: supertypes, as written.
+
+(class
+  superclass: (superclass [(constant) (scope_resolution)] @supertype)) @supertypes

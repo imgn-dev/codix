@@ -1,0 +1,312 @@
+{
+  "$defs": {
+    "FileId": {
+      "description": "A file or directory identity: its root-relative path with `/` separators,\nthe case found on disk, and symlinks resolved. The root itself is `\"\"`.",
+      "type": "string"
+    },
+    "Paged": {
+      "description": "One page of results and the total they were taken from.",
+      "properties": {
+        "breakdown": {
+          "description": "Where the results are, when a first page does not hold them all or\nthey are counted: the places below the directory they share, most\nresults first, at most 8; by file, counting files.",
+          "items": {
+            "$ref": "#/$defs/Place"
+          },
+          "type": "array"
+        },
+        "files": {
+          "description": "By file, this page's files with their number of results, in the\nresults' order; `items` is then empty.",
+          "items": {
+            "$ref": "#/$defs/Place"
+          },
+          "type": "array"
+        },
+        "items": {
+          "description": "The results in this page.",
+          "items": {
+            "$ref": "#/$defs/TypeResult"
+          },
+          "type": "array"
+        },
+        "total": {
+          "description": "Number of results before paging; by file, of files.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "items",
+        "total",
+        "breakdown",
+        "files"
+      ],
+      "type": "object"
+    },
+    "Place": {
+      "description": "A directory or a file holding some of the results.",
+      "properties": {
+        "count": {
+          "description": "Results there.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Path relative to the cwd, as `--path` takes it.",
+          "type": "string"
+        },
+        "root_path": {
+          "description": "Root-relative path.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "count"
+      ],
+      "type": "object"
+    },
+    "Renamed": {
+      "description": "A symbol ID that codix renamed, followed to the symbol's ID now.",
+      "properties": {
+        "from": {
+          "description": "The ID as given.",
+          "type": "string"
+        },
+        "to": {
+          "description": "The ID the symbol has now.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "from",
+        "to"
+      ],
+      "type": "object"
+    },
+    "SymbolResult": {
+      "description": "A symbol in query results.",
+      "properties": {
+        "column": {
+          "description": "1-based column, in Unicode scalar values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "confidence": {
+          "description": "How it was found: `scoped` when the name at a location binds to it\nwithin its file, `textual` when found by name, `low` in or around a\nparse error.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Kind from the shared vocabulary.",
+          "type": "string"
+        },
+        "language": {
+          "description": "Language of the file.",
+          "type": "string"
+        },
+        "line": {
+          "description": "1-based line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "name": {
+          "description": "Simple name.",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path relative to the cwd, with `/` separators.",
+          "type": "string"
+        },
+        "qualified_name": {
+          "description": "Qualified name within the file.",
+          "type": "string"
+        },
+        "root_path": {
+          "$ref": "#/$defs/FileId",
+          "description": "Root-relative path."
+        },
+        "signature": {
+          "description": "Declaration without the body, when captured.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "symbol_id": {
+          "description": "Symbol ID, accepted by every command naming a symbol.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "line",
+        "column",
+        "symbol_id",
+        "kind",
+        "name",
+        "qualified_name",
+        "language",
+        "confidence"
+      ],
+      "type": "object"
+    },
+    "TypeResult": {
+      "description": "A type in the hierarchy.",
+      "properties": {
+        "column": {
+          "description": "1-based column, in Unicode scalar values.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "confidence": {
+          "description": "How that relation was found: `scoped` when the name written binds to\nit in its file, `bound` when a resolver bound it, `textual` when only\nthe name matched.",
+          "type": "string"
+        },
+        "depth": {
+          "description": "Levels from the type asked about: 1 for a direct subtype or supertype.",
+          "format": "uint",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "kind": {
+          "description": "Kind from the shared vocabulary.",
+          "type": "string"
+        },
+        "line": {
+          "description": "1-based line.",
+          "format": "uint32",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "path": {
+          "description": "Path relative to the cwd, with `/` separators.",
+          "type": "string"
+        },
+        "qualified_name": {
+          "description": "Qualified name within the file.",
+          "type": "string"
+        },
+        "root_path": {
+          "$ref": "#/$defs/FileId",
+          "description": "Root-relative path."
+        },
+        "symbol_id": {
+          "description": "Symbol ID.",
+          "type": "string"
+        },
+        "via": {
+          "description": "The type it is reached from, one level closer: the one it extends or\nimplements, as written when only the name matched; for supertypes,\nthe one extending it.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "root_path",
+        "line",
+        "column",
+        "symbol_id",
+        "kind",
+        "qualified_name",
+        "depth",
+        "via",
+        "confidence"
+      ],
+      "type": "object"
+    },
+    "TypesNext": {
+      "description": "What changes in a [`TypesRequest`] for its next page.",
+      "properties": {
+        "after": {
+          "description": "Where the next page starts.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "after"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "What [`TypesOp`] answers.",
+  "properties": {
+    "bound": {
+      "description": "Relations bound by scope or by a resolver, before paging.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "next": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TypesNext"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The next page, when results remain: the request with these fields\nchanged."
+    },
+    "outside": {
+      "description": "Supertypes named but not in the project, such as a library's.",
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "possibly_stale": {
+      "description": "See [`crate::query::FindResponse::possibly_stale`].",
+      "type": "boolean"
+    },
+    "renamed": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Renamed"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "When the ID given was the type's before codix renamed it."
+    },
+    "super": {
+      "description": "Whether these are supertypes rather than subtypes.",
+      "type": "boolean"
+    },
+    "targets": {
+      "description": "Every type the input names.",
+      "items": {
+        "$ref": "#/$defs/SymbolResult"
+      },
+      "type": "array"
+    },
+    "textual": {
+      "description": "Relations matched by name only, before paging.",
+      "format": "uint",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "types": {
+      "$ref": "#/$defs/Paged",
+      "description": "The types found, by path and position."
+    }
+  },
+  "required": [
+    "targets",
+    "super",
+    "types",
+    "bound",
+    "textual",
+    "outside",
+    "possibly_stale"
+  ],
+  "title": "TypesResponse",
+  "type": "object"
+}

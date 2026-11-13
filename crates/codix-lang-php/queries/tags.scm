@@ -54,3 +54,17 @@
 (const_declaration
   (const_element
     (name) @name)) @definition.constant
+
+; Added for codix: supertypes, as written.
+
+(class_declaration
+  (base_clause [(name) (qualified_name)] @supertype)) @supertypes
+
+(interface_declaration
+  (base_clause [(name) (qualified_name)] @supertype)) @supertypes
+
+(class_declaration
+  (class_interface_clause [(name) (qualified_name)] @supertype)) @supertypes
+
+(enum_declaration
+  (class_interface_clause [(name) (qualified_name)] @supertype)) @supertypes

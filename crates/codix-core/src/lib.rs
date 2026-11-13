@@ -30,6 +30,7 @@ pub mod scan;
 pub mod scope;
 pub mod store;
 pub mod symbol_id;
+pub mod types;
 pub mod undo;
 pub mod vcs;
 pub mod walk;

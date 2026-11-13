@@ -81,7 +81,7 @@ pub fn agent_guide() -> String {
          This project has a codix index. To find and read code, prefer these commands to grep \
          and to reading whole files:\n\n"
     );
-    for d in ["find", "def", "refs", "outline", "show", "at"]
+    for d in ["find", "def", "refs", "types", "outline", "show", "at"]
         .iter()
         .filter_map(|name| describe(name))
     {
@@ -184,6 +184,14 @@ pub const COMMANDS: &[Description] = &[
         returns: "Each site with its context (call, type, read, write), enclosing symbol and target; `scoped` when bound by scope, `textual` when matched by name only. A name with several symbols covers them all.",
         tier: Some(Tier::Symbols),
         example: "codix refs Invoice.total",
+    },
+    Description {
+        name: "types",
+        summary: "List what extends or implements a type, transitively; with --super, its supertypes.",
+        when: "To find every implementation of an interface or subclass of a class.",
+        returns: "Each type with its kind, depth and the type it is reached from; `scoped` or `bound` when the name written binds to it, `textual` when only the name matches.",
+        tier: Some(Tier::Symbols),
+        example: "codix types BeanPostProcessor",
     },
     Description {
         name: "outline",

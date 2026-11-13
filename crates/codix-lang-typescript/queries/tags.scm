@@ -126,3 +126,26 @@
           name: (identifier) @name
           value: [(number) (string) (template_string) (object) (array) (true) (false) (null) (identifier) (member_expression) (call_expression) (new_expression) (binary_expression) (as_expression)]) @definition.constant))
   ])
+
+; Added for codix: supertypes, as written.
+
+(class_declaration
+  (class_heritage (extends_clause value: (_) @supertype))) @supertypes
+
+(abstract_class_declaration
+  (class_heritage (extends_clause value: (_) @supertype))) @supertypes
+
+(class
+  (class_heritage (extends_clause value: (_) @supertype))) @supertypes
+
+(class_declaration
+  (class_heritage (implements_clause (_) @supertype))) @supertypes
+
+(abstract_class_declaration
+  (class_heritage (implements_clause (_) @supertype))) @supertypes
+
+(class
+  (class_heritage (implements_clause (_) @supertype))) @supertypes
+
+(interface_declaration
+  (extends_type_clause (_) @supertype)) @supertypes

@@ -14,6 +14,7 @@ use crate::previews::{DiscardOp, PreviewsOp};
 use crate::query::{DefOp, FindOp, OutlineOp, ShowOp};
 use crate::refs::RefsOp;
 use crate::rename::RenameOp;
+use crate::types::TypesOp;
 use crate::undo::UndoOp;
 
 macro_rules! operations {
@@ -55,6 +56,7 @@ operations!(
     FindOp,
     DefOp,
     RefsOp,
+    TypesOp,
     OutlineOp,
     ShowOp,
     AtOp,

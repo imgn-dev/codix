@@ -125,6 +125,11 @@ src/billing/Invoice.java:6:17  method  Invoice.total
   name only, in another file or through another object; `--confidence scoped`
   or `--confidence textual` keeps one of them. `def file:line:col` follows the
   name at that place to its definition.
+- `types BeanPostProcessor` lists what extends or implements a type,
+  transitively, and `--super` its supertypes up to the roots, naming those
+  outside the project; `--depth N` stops after N levels. Each relation says
+  how it was found: `scoped` or `bound` when the name written binds to the
+  type, `textual` when only the name matches.
 - `at <path:line>…` names the symbol around each place, as other tools print
   them: `rg -n 'mutex_lock\(' fs/ext4 | codix at -` annotates each match with
   the function holding it. codix does not search text; your own grep does it

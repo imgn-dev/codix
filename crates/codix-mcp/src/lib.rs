@@ -24,6 +24,7 @@ use codix_core::query::{DefOp, FindOp, OutlineOp, ShowOp};
 use codix_core::refs::RefsOp;
 use codix_core::rename::RenameOp;
 use codix_core::render::{Style, TextRender};
+use codix_core::types::TypesOp;
 use codix_core::undo::UndoOp;
 use codix_daemon::client::{self, Route};
 use codix_daemon::control;
@@ -154,6 +155,7 @@ operations!(
     FindOp,
     DefOp,
     RefsOp,
+    TypesOp,
     OutlineOp,
     ShowOp,
     AtOp,

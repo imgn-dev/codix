@@ -112,3 +112,8 @@
       (type_item
         name: (type_identifier) @name) @definition.type_alias
     ]))
+
+; Added for codix: supertraits, as written.
+
+(trait_item
+  bounds: (trait_bounds [(type_identifier) (scoped_type_identifier) (generic_type)] @supertype)) @supertypes

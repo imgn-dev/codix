@@ -104,6 +104,18 @@ List every reference to a symbol or local variable, definition first.
 codix refs Invoice.total
 ```
 
+## `codix types`
+
+List what extends or implements a type, transitively; with --super, its supertypes.
+
+- **When:** To find every implementation of an interface or subclass of a class.
+- **Returns:** Each type with its kind, depth and the type it is reached from; `scoped` or `bound` when the name written binds to it, `textual` when only the name matches.
+- **Needs:** tier 1 (symbols)
+
+```
+codix types BeanPostProcessor
+```
+
 ## `codix outline`
 
 Show the symbols of a file or directory as a tree, signatures only.

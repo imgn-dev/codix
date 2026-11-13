@@ -61,3 +61,21 @@
 
 (call_expression
   (identifier) @name) @reference.call
+
+; Added for codix: supertypes, as written.
+
+(class_declaration
+  (delegation_specifiers
+    (delegation_specifier (user_type) @supertype))) @supertypes
+
+(class_declaration
+  (delegation_specifiers
+    (delegation_specifier (constructor_invocation (user_type) @supertype)))) @supertypes
+
+(object_declaration
+  (delegation_specifiers
+    (delegation_specifier (user_type) @supertype))) @supertypes
+
+(object_declaration
+  (delegation_specifiers
+    (delegation_specifier (constructor_invocation (user_type) @supertype)))) @supertypes

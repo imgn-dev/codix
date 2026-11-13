@@ -57,24 +57,19 @@
 ; Supertypes, as written.
 
 (class_declaration
-  name: (identifier) @name
-  superclass: (superclass (_) @supertype)) @definition.class
+  superclass: (superclass (_) @supertype)) @supertypes
 
 (class_declaration
-  name: (identifier) @name
-  interfaces: (super_interfaces (type_list (_) @supertype))) @definition.class
-
-(interface_declaration
-  name: (identifier) @name
-  (extends_interfaces (type_list (_) @supertype))) @definition.interface
+  interfaces: (super_interfaces (type_list (_) @supertype))) @supertypes
 
 (enum_declaration
-  name: (identifier) @name
-  interfaces: (super_interfaces (type_list (_) @supertype))) @definition.enum
+  interfaces: (super_interfaces (type_list (_) @supertype))) @supertypes
 
 (record_declaration
-  name: (identifier) @name
-  interfaces: (super_interfaces (type_list (_) @supertype))) @definition.record
+  interfaces: (super_interfaces (type_list (_) @supertype))) @supertypes
+
+(interface_declaration
+  (extends_interfaces (type_list (_) @supertype))) @supertypes
 
 ; The package and the imports.
 

@@ -3,6 +3,7 @@
 //! so a file's rows are replaced in one transaction.
 
 mod aliases;
+mod hierarchy;
 mod journal;
 mod previews;
 mod resolutions;
@@ -15,6 +16,7 @@ use std::time::Duration;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::{Deserialize, Serialize};
 
+pub use hierarchy::{Supertype, SupertypeBinding, simple_name};
 pub use journal::{EntryState, JournalEntry, JournalFile};
 pub use previews::PreviewRow;
 pub use resolutions::Resolution;
@@ -196,10 +198,11 @@ ALTER TABLE refs ADD COLUMN receiver_type TEXT;
 ALTER TABLE refs ADD COLUMN arity INTEGER;
 CREATE TABLE supertypes (
     symbol INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,
-    name TEXT NOT NULL
+    name TEXT NOT NULL,
+    simple TEXT NOT NULL
 );
 CREATE INDEX supertypes_by_symbol ON supertypes(symbol);
-CREATE INDEX supertypes_by_name ON supertypes(name);
+CREATE INDEX supertypes_by_simple ON supertypes(simple);
 CREATE TABLE imports (
     file_id INTEGER NOT NULL REFERENCES files(id) ON DELETE CASCADE,
     kind TEXT NOT NULL,
@@ -741,7 +744,7 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
              ?20)",
     )?;
     let mut supertype =
-        tx.prepare_cached("INSERT INTO supertypes (symbol, name) VALUES (?1, ?2)")?;
+        tx.prepare_cached("INSERT INTO supertypes (symbol, name, simple) VALUES (?1, ?2, ?3)")?;
     for s in symbols {
         insert.execute(params![
             s.symbol_id,
@@ -770,7 +773,7 @@ fn write_file(tx: &Transaction<'_>, update: &FileUpdate) -> rusqlite::Result<()>
         ])?;
         let rowid = tx.last_insert_rowid();
         for name in &s.supertypes {
-            supertype.execute(params![rowid, name])?;
+            supertype.execute(params![rowid, name, simple_name(name)])?;
         }
         rowids.push(rowid);
     }

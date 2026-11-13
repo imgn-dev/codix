@@ -26,6 +26,7 @@ use crate::query::{
 use crate::refs::{RefResult, RefsResponse};
 use crate::scan::ScanReport;
 use crate::store::MatchMode;
+use crate::types::{TypeResult, TypesResponse};
 
 /// Version of the JSON output format; incremented on breaking changes only.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -193,6 +194,54 @@ impl TextRender for RefsResponse {
             .next
             .as_ref()
             .map(|n| vec![("symbol", n.symbol.clone()), ("after", n.after.clone())]);
+        next(w, style, fields)
+    }
+}
+
+impl Row for TypeResult {
+    fn location(&self) -> &Location {
+        &self.location
+    }
+
+    fn columns(&self) -> Vec<String> {
+        vec![
+            self.kind.clone(),
+            self.qualified_name.clone(),
+            format!("depth {}", self.depth),
+            format!("via {}", self.via),
+            self.confidence.clone(),
+        ]
+    }
+}
+
+impl TextRender for TypesResponse {
+    fn render_text(&self, w: &mut dyn Write, style: Style) -> io::Result<()> {
+        if self.targets.len() > 1 {
+            writeln!(w, "{} types of the name:", self.targets.len())?;
+            for target in &self.targets {
+                writeln!(w, "  {}", symbol_line(target, style))?;
+            }
+        }
+        let relation = if self.supertypes {
+            "supertypes"
+        } else {
+            "subtypes"
+        };
+        if self.types.total == 0 && self.outside.is_empty() {
+            writeln!(w, "no {relation} in the project")?;
+        } else {
+            self.types.render_text(w, style)?;
+            if self.types.total > 0 {
+                writeln!(w, "{} bound, {} textual", self.bound, self.textual)?;
+            }
+        }
+        if !self.outside.is_empty() {
+            writeln!(w, "outside the project: {}", self.outside.join(", "))?;
+        }
+        breakdown(w, style, &self.types)?;
+        renamed(w, self.renamed.as_ref())?;
+        stale(w, self.possibly_stale)?;
+        let fields = self.next.as_ref().map(|n| vec![("after", n.after.clone())]);
         next(w, style, fields)
     }
 }

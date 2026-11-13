@@ -2,9 +2,10 @@
 //! definitions its `tags` query captures into symbols.
 //!
 //! Besides `@definition.<kind>`, `@name` and `@parent`, a `tags` query may
-//! capture, in a definition's match, its declared type (`@type`) and the
-//! types it extends or implements (`@supertype`, in as many matches as
-//! needed); and, in matches of their own, the file's package (`@package`),
+//! capture, in a definition's match, its declared type (`@type`); the types
+//! a definition extends or implements (`@supertype`), in its match or in
+//! matches of their own capturing the definition's node as `@supertypes`;
+//! and, in matches of their own, the file's package (`@package`),
 //! its imports (`@import`, with `@import.alias` for the name it is imported
 //! under, `(#set! import.static)` and `(#set! import.wildcard)`) and its
 //! includes (`@include`, `(#set! include.system)` for `<…>`).
@@ -155,6 +156,7 @@ fn definitions<'tree>(
         let mut parents = Vec::new();
         let mut declared_type = None;
         let mut supers = Vec::new();
+        let mut holder = None;
         let mut alias = None;
         for capture in m.captures() {
             let capture_name = names[capture.index as usize];
@@ -163,6 +165,7 @@ fn definitions<'tree>(
                 "parent" => parents.push(capture.node),
                 "type" => declared_type = Some(capture.node),
                 "supertype" => supers.push(capture.node),
+                "supertypes" => holder = Some(capture.node),
                 "import.alias" => alias = Some(text(content, capture.node).to_owned()),
                 _ => {
                     if let Some(kind) = capture_name.strip_prefix("definition.") {
@@ -172,9 +175,7 @@ fn definitions<'tree>(
             }
         }
         imports.extend(imports_of(query, m, content, alias.as_ref()));
-        if let Some((node, kind)) = definition
-            && let Some(kind) = descriptor.symbol_kind(kind)
-        {
+        if let Some(node) = holder.or(definition.map(|(node, _)| node)) {
             let known = supertypes.entry(node.id()).or_default();
             for s in supers {
                 let entry = (s.start_byte(), written_type(text(content, s)));
@@ -182,6 +183,10 @@ fn definitions<'tree>(
                     known.push(entry);
                 }
             }
+        }
+        if let Some((node, kind)) = definition
+            && let Some(kind) = descriptor.symbol_kind(kind)
+        {
             for name in declared {
                 found.push(Definition {
                     node,
