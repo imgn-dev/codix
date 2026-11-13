@@ -54,8 +54,16 @@ fn sixty_results_are_capped_at_the_default_limit() {
 #[test]
 fn after_returns_the_next_page() {
     let (_guard, root) = indexed(&[("Box.java", &methods(60))]);
-    let first = codix(&root, &root, &["find", "m", "--prefix"]);
-    let next = first.stdout.lines().last().expect("a next page");
+    // No `codix` on PATH: the command names the binary as it was run.
+    let empty = tempfile::tempdir().expect("an empty PATH");
+    let first = std::process::Command::new(CODIX)
+        .args(["find", "m", "--prefix"])
+        .current_dir(&root)
+        .env("PATH", empty.path())
+        .output()
+        .expect("run codix");
+    let stdout = String::from_utf8_lossy(&first.stdout);
+    let next = stdout.lines().last().expect("a next page");
     assert_eq!(
         next,
         format!("{CODIX} find m --prefix --after Box.java:51:10")
