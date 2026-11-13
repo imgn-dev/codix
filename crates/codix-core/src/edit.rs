@@ -396,6 +396,9 @@ pub enum Exclusion {
     Unresolved,
     /// The name in a comment, a string or a macro body.
     Mention,
+    /// The name in another file: in a comment or a string of code, or
+    /// anywhere in a text file.
+    MentionElsewhere,
 }
 
 /// A site the plan leaves unchanged.

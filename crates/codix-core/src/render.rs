@@ -588,6 +588,11 @@ impl TextRender for PreviewResponse {
         for (reason, one, many) in [
             (Exclusion::Unresolved, "unresolved site", "unresolved sites"),
             (Exclusion::Mention, "mention", "mentions"),
+            (
+                Exclusion::MentionElsewhere,
+                "mention elsewhere",
+                "mentions elsewhere",
+            ),
         ] {
             let sites: Vec<_> = self
                 .excluded

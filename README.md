@@ -203,7 +203,9 @@ undo with: codix undo
 ```
 
 - A rename changes the definition and the references its file's scopes bind to
-  it, and lists the other mentions of the name (comments, strings) unchanged.
+  it, and lists the other mentions of the name unchanged: in its file's
+  comments and strings, and in other files, their comments and strings
+  (Javadoc's `{@link Type#name}`) and text files (XML, properties).
   A C or C++ function's prototypes, `declaration` symbols, are renamed with it,
   in its file and in headers.
 - It is refused, with a typed error and the sites, when the new name is not a

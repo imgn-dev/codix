@@ -3,7 +3,7 @@
 //! cannot bind, in other files or through other objects, refuse the plan
 //! unless `--exclude-unresolved` leaves them unchanged.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 
 use serde::{Deserialize, Serialize};
@@ -151,28 +151,7 @@ pub(crate) fn plan(
         to_type(&file, &mut definitions);
     }
     let old_name = file.model.definitions[definitions[0]].name.clone();
-    let keyword = codix_provider::registry()
-        .languages
-        .iter()
-        .find(|d| d.name == file.language)
-        .is_some_and(|pack| pack.names.keywords.contains(&old_name));
-    if keyword {
-        // Such as a Kotlin secondary constructor, declared by its keyword.
-        return Err(refused(
-            "invalid_name",
-            format!(
-                "`{old_name}` is a {} keyword, not a name to rename",
-                file.language
-            ),
-            "rename what it belongs to instead",
-        ));
-    }
-    if request.new_name == old_name {
-        return Err(Error::Usage {
-            cause: format!("`{old_name}` already has that name"),
-            hint: "pass the new name".to_owned(),
-        });
-    }
+    check_names(&file, &old_name, &request.new_name)?;
     // A C prototype is the function it declares, not an overload of it.
     let overloads = definitions
         .iter()
@@ -214,17 +193,25 @@ pub(crate) fn plan(
     )?;
     let mut excluded: Vec<ExcludedSite> = unresolved
         .into_iter()
-        .map(|s| ExcludedSite {
-            location: s.location,
-            reason: Exclusion::Unresolved,
-            text: s.note,
-        })
+        .map(|s| excluded_site(s, Exclusion::Unresolved))
+        .chain(
+            mentions
+                .into_iter()
+                .map(|s| excluded_site(s, Exclusion::Mention)),
+        )
         .collect();
-    excluded.extend(mentions.into_iter().map(|s| ExcludedSite {
-        location: s.location,
-        reason: Exclusion::Mention,
-        text: s.note,
-    }));
+    if symbol_of(&file, definitions[0]).is_some() {
+        let elsewhere = elsewhere_sites(
+            ctx,
+            project,
+            snapshot,
+            &file,
+            definitions[0],
+            &others,
+            &excluded,
+        )?;
+        excluded.extend(elsewhere);
+    }
     let description = description(ctx, &file, definitions[0], &request.new_name);
     let target = crate::refs::symbol_result(ctx, &file, definitions[0], "scoped").symbol_id;
     assemble(
@@ -656,6 +643,161 @@ fn mention_sites(ctx: &Context, file: &Analyzed, name: &str, edits: &[Edit]) -> 
         offset += line.len();
     }
     sites
+}
+
+/// The mentions of the definition's name in other files, but those already
+/// `excluded` and the edits `others` make.
+fn elsewhere_sites(
+    ctx: &Context,
+    project: &Project,
+    snapshot: &Snapshot<'_>,
+    file: &Analyzed,
+    definition: usize,
+    others: &[(FileId, String, Vec<Edit>)],
+    excluded: &[ExcludedSite],
+) -> Result<Vec<ExcludedSite>, Error> {
+    let listed: HashSet<(String, u32, u32)> = excluded.iter().map(|e| place(&e.location)).collect();
+    let edited: HashMap<&str, Vec<usize>> = others
+        .iter()
+        .map(|(id, _, edits)| (id.as_str(), edits.iter().map(|e| e.start).collect()))
+        .collect();
+    let name = &file.model.definitions[definition].name;
+    Ok(
+        mentions_elsewhere(ctx, project, snapshot, file, name, &edited)?
+            .into_iter()
+            .filter(|s| !listed.contains(&place(&s.location)))
+            .map(|s| excluded_site(s, Exclusion::MentionElsewhere))
+            .collect(),
+    )
+}
+
+/// Refuses to rename a keyword, or to the name it already has.
+fn check_names(file: &Analyzed, old_name: &str, new_name: &str) -> Result<(), Error> {
+    let keyword = codix_provider::registry()
+        .languages
+        .iter()
+        .find(|d| d.name == file.language)
+        .is_some_and(|pack| pack.names.keywords.iter().any(|k| k == old_name));
+    if keyword {
+        // Such as a Kotlin secondary constructor, declared by its keyword.
+        return Err(refused(
+            "invalid_name",
+            format!(
+                "`{old_name}` is a {} keyword, not a name to rename",
+                file.language
+            ),
+            "rename what it belongs to instead",
+        ));
+    }
+    if new_name == old_name {
+        return Err(Error::Usage {
+            cause: format!("`{old_name}` already has that name"),
+            hint: "pass the new name".to_owned(),
+        });
+    }
+    Ok(())
+}
+
+fn excluded_site(site: Site, reason: Exclusion) -> ExcludedSite {
+    ExcludedSite {
+        location: site.location,
+        reason,
+        text: site.note,
+    }
+}
+
+fn place(location: &crate::page::Location) -> (String, u32, u32) {
+    (
+        location.root_path.as_str().to_owned(),
+        location.line,
+        location.column,
+    )
+}
+
+/// Whole-word mentions of the name in the other indexed files: in comments
+/// and strings of code with scopes, anywhere in other files, but at the
+/// edits other files get (`edited`, by path and first byte). Files are read
+/// in parallel.
+fn mentions_elsewhere(
+    ctx: &Context,
+    project: &Project,
+    snapshot: &Snapshot<'_>,
+    file: &Analyzed,
+    name: &str,
+    edited: &HashMap<&str, Vec<usize>>,
+) -> Result<Vec<Site>, Error> {
+    use rayon::prelude::*;
+    let rows: Vec<_> = snapshot
+        .files()?
+        .into_iter()
+        .filter(|row| {
+            matches!(row.status, FileStatus::Indexed | FileStatus::SearchOnly)
+                && row.path != file.id.as_str()
+        })
+        .collect();
+    let registry = codix_provider::registry();
+    let mut sites: Vec<Site> = rows
+        .par_iter()
+        .flat_map_iter(|row| {
+            let id = FileId::from_canonical(row.path.as_str());
+            let Ok(text) = fs::read_to_string(project.path_of(&id)) else {
+                return Vec::new();
+            };
+            let mut starts = words(&text, name);
+            if let Some(skip) = edited.get(row.path.as_str()) {
+                starts.retain(|s| !skip.contains(s));
+            }
+            if starts.is_empty() {
+                return Vec::new();
+            }
+            // In code with scopes, only comments and strings mention it:
+            // its other uses are references.
+            let scoped = registry
+                .languages
+                .iter()
+                .find(|d| d.name == row.language)
+                .zip(registry.grammars.get(&row.language))
+                .filter(|(_, g)| g.locals.is_some());
+            if let Some((descriptor, grammar)) = scoped {
+                let Ok(tree) = crate::parse::parse(descriptor, grammar, &row.path, &text) else {
+                    return Vec::new();
+                };
+                starts.retain(|&s| in_comment_or_string(&tree, s, s + name.len()));
+            }
+            starts
+                .into_iter()
+                .map(|start| {
+                    let line_start = text[..start].rfind('\n').map_or(0, |i| i + 1);
+                    let line_end = text[start..].find('\n').map_or(text.len(), |i| start + i);
+                    let number = text[..start].matches('\n').count() + 1;
+                    let column = text[line_start..start].chars().count() + 1;
+                    Site {
+                        location: ctx.location(
+                            &id,
+                            u32::try_from(number).unwrap_or(u32::MAX),
+                            u32::try_from(column).unwrap_or(u32::MAX),
+                        ),
+                        note: text[line_start..line_end].trim().to_owned(),
+                    }
+                })
+                .collect()
+        })
+        .collect();
+    sites.sort_by_key(|s| place(&s.location));
+    Ok(sites)
+}
+
+/// Whether the bytes `start..end` lie in a comment or a string.
+fn in_comment_or_string(tree: &tree_sitter::Tree, start: usize, end: usize) -> bool {
+    let mut node = tree.root_node().descendant_for_byte_range(start, end);
+    while let Some(n) = node {
+        let kind = n.kind();
+        if kind.contains("comment") || kind.contains("string") {
+            return true;
+        }
+        node = n.parent();
+    }
+    false
 }
 
 /// Every whole-word match of the old name, for `--textual` at tier 1.

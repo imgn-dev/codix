@@ -35,6 +35,11 @@
           "const": "mention",
           "description": "The name in a comment, a string or a macro body.",
           "type": "string"
+        },
+        {
+          "const": "mention_elsewhere",
+          "description": "The name in another file: in a comment or a string of code, or\nanywhere in a text file.",
+          "type": "string"
         }
       ]
     },
