@@ -271,6 +271,7 @@ enum ModeArg {
     Prefix,
     Fuzzy,
     Glob,
+    Regex,
 }
 
 impl From<ModeArg> for MatchMode {
@@ -280,6 +281,7 @@ impl From<ModeArg> for MatchMode {
             ModeArg::Prefix => Self::Prefix,
             ModeArg::Fuzzy => Self::Fuzzy,
             ModeArg::Glob => Self::Glob,
+            ModeArg::Regex => Self::Regex,
         }
     }
 }
@@ -290,15 +292,18 @@ struct ModeArgs {
     /// The name equals the query.
     #[arg(long, num_args = 0, default_missing_value = "exact")]
     exact: Option<ModeArg>,
-    /// The name starts with the query, ignoring case.
+    /// The name starts with the query.
     #[arg(long, num_args = 0, default_missing_value = "prefix")]
     prefix: Option<ModeArg>,
-    /// The name is within a few edits of the query, ignoring case.
+    /// The name is within a few edits of the query.
     #[arg(long, num_args = 0, default_missing_value = "fuzzy")]
     fuzzy: Option<ModeArg>,
     /// The qualified name matches a glob, such as 'Invoice.*', quoted for the shell.
     #[arg(long, num_args = 0, default_missing_value = "glob")]
     glob: Option<ModeArg>,
+    /// The qualified name holds a match of a regular expression, such as '^Invoice\.get', quoted for the shell.
+    #[arg(short = 'E', long, num_args = 0, default_missing_value = "regex")]
+    regex: Option<ModeArg>,
 }
 
 impl ModeArgs {
@@ -307,6 +312,7 @@ impl ModeArgs {
             .or(self.prefix)
             .or(self.fuzzy)
             .or(self.glob)
+            .or(self.regex)
             .map(MatchMode::from)
     }
 }
@@ -317,6 +323,9 @@ struct FindArgs {
     query: String,
     #[command(flatten)]
     mode: ModeArgs,
+    /// Match case, which every mode ignores by default.
+    #[arg(short = 's', long)]
+    case_sensitive: bool,
     /// Keep symbols of this kind, such as method; repeatable.
     #[arg(long = "kind", value_name = "KIND")]
     kinds: Vec<String>,
@@ -879,6 +888,7 @@ fn command(output: &Output, ctx: &Context, command: Command) -> u8 {
             let request = args.page.page().map(|page| FindRequest {
                 query: args.query,
                 mode: args.mode.mode(),
+                case_sensitive: args.case_sensitive,
                 kinds: args.kinds,
                 languages: args.languages,
                 scope: args.scope.request(),
@@ -997,9 +1007,9 @@ mod tests {
             if inputs.contains_key("after") {
                 assert!(flags.remove("all").is_some(), "{name} --all");
             }
-            // One `mode` property stands for the four mode flags.
+            // One `mode` property stands for the five mode flags.
             if name == "find" {
-                for mode in ["exact", "prefix", "fuzzy", "glob"] {
+                for mode in ["exact", "prefix", "fuzzy", "glob", "regex"] {
                     assert!(flags.remove(mode).is_some(), "find --{mode}");
                 }
                 assert!(inputs.remove("mode").is_some(), "find mode");

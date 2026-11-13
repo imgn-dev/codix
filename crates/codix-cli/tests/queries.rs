@@ -65,6 +65,40 @@ fn find_by_glob() {
 }
 
 #[test]
+fn find_ignores_case_unless_asked() {
+    let (_guard, root) = indexed(BILLING);
+    let any = codix(&root, &root, &["find", "INVOICE"]);
+    assert!(any.stdout.ends_with("1 result\n"), "{}", any.stdout);
+    let exact = codix(&root, &root, &["find", "INVOICE", "--exact", "-s"]);
+    assert_eq!(exact.code, Some(1), "{}", exact.stdout);
+}
+
+#[test]
+fn find_by_regex() {
+    let (_guard, root) = indexed(BILLING);
+    let out = codix(&root, &root, &["find", "-E", r"\.TOTAL$"]);
+    assert!(
+        out.stdout.ends_with("4 results\nmatched by regex\n"),
+        "{}",
+        out.stdout
+    );
+    let none = codix(&root, &root, &["find", "-sE", r"\.TOTAL$"]);
+    assert!(
+        none.stdout
+            .ends_with("no qualified name matches the regex \"\\.TOTAL$\"\n"),
+        "{}",
+        none.stdout
+    );
+    let invalid = codix(&root, &root, &["find", "--regex", "total("]);
+    assert_eq!(invalid.code, Some(2), "{}", invalid.stderr);
+    assert!(
+        invalid.stderr.contains("invalid regular expression"),
+        "{}",
+        invalid.stderr
+    );
+}
+
+#[test]
 fn def_by_name_id_and_location() {
     check("", &["def", "Cart.total"], "def-cart-total");
     let (_guard, root) = indexed(BILLING);

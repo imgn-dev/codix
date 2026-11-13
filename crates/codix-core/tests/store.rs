@@ -183,6 +183,7 @@ fn replacing_a_file_drops_its_old_symbols_only() {
             .find(&NameQuery {
                 text: q.to_owned(),
                 mode: MatchMode::Exact,
+                case_sensitive: true,
             })
             .unwrap()
             .into_iter()
@@ -275,11 +276,20 @@ fn search_store(dir: &Path) -> Store {
 }
 
 fn qualified(store: &mut Store, text: &str, mode: MatchMode) -> Vec<String> {
+    matching(store, text, mode, false)
+}
+
+fn qualified_matching_case(store: &mut Store, text: &str, mode: MatchMode) -> Vec<String> {
+    matching(store, text, mode, true)
+}
+
+fn matching(store: &mut Store, text: &str, mode: MatchMode, case_sensitive: bool) -> Vec<String> {
     let snapshot = store.snapshot().expect("test setup");
     let mut names: Vec<String> = snapshot
         .find(&NameQuery {
             text: text.to_owned(),
             mode,
+            case_sensitive,
         })
         .expect("test setup")
         .into_iter()
@@ -292,16 +302,116 @@ fn qualified(store: &mut Store, text: &str, mode: MatchMode) -> Vec<String> {
 }
 
 #[test]
-fn exact_match_is_case_sensitive() {
+fn exact_match_ignores_case_unless_asked() {
     let dir = tempfile::tempdir().unwrap();
     let mut store = search_store(dir.path());
     assert_eq!(
-        qualified(&mut store, "total", MatchMode::Exact),
+        qualified(&mut store, "Total", MatchMode::Exact),
         ["Cart.total", "Invoice.total"]
     );
     assert_eq!(
-        qualified(&mut store, "Total", MatchMode::Exact),
+        qualified_matching_case(&mut store, "total", MatchMode::Exact),
+        ["Cart.total", "Invoice.total"]
+    );
+    assert_eq!(
+        qualified_matching_case(&mut store, "Total", MatchMode::Exact),
         Vec::<String>::new()
+    );
+}
+
+#[test]
+fn prefix_match_can_match_case() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = search_store(dir.path());
+    assert_eq!(
+        qualified_matching_case(&mut store, "tot", MatchMode::Prefix),
+        ["Cart.total", "Invoice.total", "Invoice.totalWithTax"]
+    );
+    assert_eq!(
+        qualified_matching_case(&mut store, "TOT", MatchMode::Prefix),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn glob_ignores_case_unless_asked() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = search_store(dir.path());
+    assert_eq!(
+        qualified(&mut store, "invoice.*with*", MatchMode::Glob),
+        ["Invoice.totalWithTax"]
+    );
+    assert_eq!(
+        qualified(&mut store, "[bc]*.TOTAL", MatchMode::Glob),
+        ["Cart.total"]
+    );
+    assert_eq!(
+        qualified(&mut store, "Report.build_*", MatchMode::Glob),
+        ["Report.build_report"]
+    );
+    assert_eq!(
+        qualified(&mut store, "Report.build%", MatchMode::Glob),
+        Vec::<String>::new(),
+        "LIKE's wildcards are literal"
+    );
+    assert_eq!(
+        qualified_matching_case(&mut store, "invoice.*", MatchMode::Glob),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn regex_matches_anywhere_in_qualified_names_unless_anchored() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = search_store(dir.path());
+    assert_eq!(
+        qualified(&mut store, "TOTAL", MatchMode::Regex),
+        ["Cart.total", "Invoice.total", "Invoice.totalWithTax"]
+    );
+    assert_eq!(
+        qualified(&mut store, r"\.total$", MatchMode::Regex),
+        ["Cart.total", "Invoice.total"]
+    );
+    assert_eq!(
+        qualified(&mut store, "^(cart|report)\\.", MatchMode::Regex),
+        ["Cart.total", "Report.build_report"]
+    );
+    assert_eq!(
+        qualified_matching_case(&mut store, "TOTAL", MatchMode::Regex),
+        Vec::<String>::new()
+    );
+}
+
+#[test]
+fn an_invalid_regex_is_a_usage_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = search_store(dir.path());
+    let snapshot = store.snapshot().unwrap();
+    let error = snapshot
+        .find(&NameQuery {
+            text: "get(".to_owned(),
+            mode: MatchMode::Regex,
+            case_sensitive: false,
+        })
+        .unwrap_err();
+    assert!(
+        matches!(error, codix_core::Error::Usage { .. }),
+        "{error:?}"
+    );
+}
+
+#[test]
+fn fuzzy_can_match_case() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = search_store(dir.path());
+    assert_eq!(
+        qualified(&mut store, "TOTL", MatchMode::Fuzzy),
+        ["Cart.total", "Invoice.total"]
+    );
+    assert_eq!(
+        qualified_matching_case(&mut store, "TOTL", MatchMode::Fuzzy),
+        Vec::<String>::new(),
+        "four edits away"
     );
 }
 

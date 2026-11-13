@@ -330,6 +330,9 @@ impl TextRender for FindResponse {
                 let q = &self.query;
                 match self.mode {
                     MatchMode::Glob => writeln!(w, "no qualified name matches \"{q}\"")?,
+                    MatchMode::Regex => {
+                        writeln!(w, "no qualified name matches the regex \"{q}\"")?;
+                    }
                     MatchMode::Exact => writeln!(w, "no symbol named exactly \"{q}\"")?,
                     MatchMode::Prefix => writeln!(w, "no symbol name starts with \"{q}\"")?,
                     MatchMode::Fuzzy => {
@@ -431,6 +434,7 @@ fn mode_name(mode: MatchMode) -> &'static str {
         MatchMode::Prefix => "prefix",
         MatchMode::Fuzzy => "fuzzy",
         MatchMode::Glob => "glob",
+        MatchMode::Regex => "regex",
     }
 }
 

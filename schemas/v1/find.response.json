@@ -4,7 +4,7 @@
       "description": "A close name a fuzzy match did not take.",
       "properties": {
         "distance": {
-          "description": "Edits from the query to it, ignoring case.",
+          "description": "Edits from the query to it, ignoring case unless the request matches it.",
           "format": "uint",
           "minimum": 0,
           "type": "integer"
@@ -57,7 +57,7 @@
       "type": "object"
     },
     "MatchMode": {
-      "description": "How a name query matches.",
+      "description": "How a name query matches; every mode ignores case unless asked to match it, `exact` and `prefix` for ASCII letters only.",
       "oneOf": [
         {
           "const": "exact",
@@ -66,17 +66,22 @@
         },
         {
           "const": "prefix",
-          "description": "The name starts with the query, ignoring case.",
+          "description": "The name starts with the query.",
           "type": "string"
         },
         {
           "const": "glob",
-          "description": "The qualified name matches a glob (`*`, `?`, `[…]`), case-sensitively.",
+          "description": "The qualified name matches a glob (`*`, `?`, `[…]`).",
           "type": "string"
         },
         {
           "const": "fuzzy",
-          "description": "The name is within a few edits of the query, ignoring case.",
+          "description": "The name is within a few edits of the query.",
+          "type": "string"
+        },
+        {
+          "const": "regex",
+          "description": "The qualified name holds a match of a regular expression; `^` and `$` anchor it.",
           "type": "string"
         }
       ]

@@ -1,4 +1,4 @@
-Find symbols by name: exact match, then prefix, then fuzzy.
+Find symbols by name, ignoring case: exact match, then prefix, then fuzzy.
 
 When: Instead of grep to locate a class, function or method: it matches names, not text, and returns IDs the other commands accept.
 Returns: Matching symbols with kind, location and ID; for a misspelled name, the symbols of the closest name and the other close names.
@@ -18,16 +18,22 @@ Options:
           Print JSON instead of text
 
       --prefix
-          The name starts with the query, ignoring case
+          The name starts with the query
 
       --root <PATH>
           Use the project at this directory instead of searching upward
 
       --fuzzy
-          The name is within a few edits of the query, ignoring case
+          The name is within a few edits of the query
 
       --glob
           The qualified name matches a glob, such as 'Invoice.*', quoted for the shell
+
+  -E, --regex
+          The qualified name holds a match of a regular expression, such as '^Invoice\.get', quoted for the shell
+
+  -s, --case-sensitive
+          Match case, which every mode ignores by default
 
       --kind <KIND>
           Keep symbols of this kind, such as method; repeatable

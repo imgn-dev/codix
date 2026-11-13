@@ -9,7 +9,11 @@ use std::ffi::OsString;
 use clap::Command;
 
 /// The flags that each select a `find` mode.
-const MODES: [&str; 4] = ["--exact", "--prefix", "--fuzzy", "--glob"];
+const MODES: [&str; 6] = ["--exact", "--prefix", "--fuzzy", "--glob", "--regex", "-E"];
+
+/// The short flag selecting a `find` mode, which may share its argument with
+/// other short flags, as in `-sE`.
+const SHORT_MODE: char = 'E';
 
 /// A command line, and which of its long options take a value.
 pub(crate) struct Invocation {
@@ -46,7 +50,15 @@ impl Invocation {
         for (field, _) in fields {
             match *field {
                 "symbol" | "query" | "after" => {}
-                "mode" => args.retain(|a| !MODES.contains(&a.as_str())),
+                "mode" => {
+                    args.retain(|a| !MODES.contains(&a.as_str()));
+                    let end = args.iter().position(|a| a == "--").unwrap_or(args.len());
+                    for arg in &mut args[..end] {
+                        if is_short_cluster(arg) {
+                            arg.retain(|c| c != SHORT_MODE);
+                        }
+                    }
+                }
                 // A place replaces the directories the command is limited to.
                 "path" => {
                     self.remove_option(&mut args, "--path");
@@ -132,6 +144,11 @@ impl Invocation {
 
 /// Whether `codix` on `PATH` is `program`, the binary running: then
 /// `codix` names it, shorter than the path it was run by.
+/// Whether `arg` is several short flags together, such as `-sE`.
+fn is_short_cluster(arg: &str) -> bool {
+    arg.len() > 2 && arg.starts_with('-') && !arg.starts_with("--")
+}
+
 fn found_on_path(program: &str) -> bool {
     let Ok(running) = std::env::current_exe().and_then(std::fs::canonicalize) else {
         return false;
@@ -280,6 +297,17 @@ mod tests {
                 &[("mode", "prefix"), ("after", "c.rs:3:1")]
             ),
             "codix find m --prefix --after c.rs:3:1"
+        );
+    }
+
+    #[test]
+    fn a_short_mode_flag_is_replaced_alone_or_among_others() {
+        assert_eq!(
+            next(
+                &["codix", "find", "-E", "^get", "-sE"],
+                &[("mode", "regex"), ("after", "a.rs")]
+            ),
+            "codix find '^get' -s --regex --after a.rs"
         );
     }
 

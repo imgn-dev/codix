@@ -1,7 +1,7 @@
 {
   "$defs": {
     "MatchMode": {
-      "description": "How a name query matches.",
+      "description": "How a name query matches; every mode ignores case unless asked to match it, `exact` and `prefix` for ASCII letters only.",
       "oneOf": [
         {
           "const": "exact",
@@ -10,17 +10,22 @@
         },
         {
           "const": "prefix",
-          "description": "The name starts with the query, ignoring case.",
+          "description": "The name starts with the query.",
           "type": "string"
         },
         {
           "const": "glob",
-          "description": "The qualified name matches a glob (`*`, `?`, `[…]`), case-sensitively.",
+          "description": "The qualified name matches a glob (`*`, `?`, `[…]`).",
           "type": "string"
         },
         {
           "const": "fuzzy",
-          "description": "The name is within a few edits of the query, ignoring case.",
+          "description": "The name is within a few edits of the query.",
+          "type": "string"
+        },
+        {
+          "const": "regex",
+          "description": "The qualified name holds a match of a regular expression; `^` and `$` anchor it.",
           "type": "string"
         }
       ]
@@ -61,6 +66,10 @@
         "string",
         "null"
       ]
+    },
+    "case_sensitive": {
+      "description": "Match case, which every mode ignores by default.",
+      "type": "boolean"
     },
     "count": {
       "default": false,
@@ -118,7 +127,7 @@
         }
       ],
       "default": null,
-      "description": "How to match: `exact`, `prefix` and `fuzzy` ignore case, `glob` matches\nthe qualified name; by default exact, then prefix, then fuzzy."
+      "description": "How to match: `glob` and `regex` match the qualified name, a regex anywhere unless `^` or `$` anchor it; by default exact, then prefix, then fuzzy."
     },
     "path": {
       "default": [],

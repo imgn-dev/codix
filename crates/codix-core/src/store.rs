@@ -962,7 +962,11 @@ impl Snapshot<'_> {
 
     /// Symbols whose name matches `query`; see [`NameQuery`].
     pub fn find(&self, query: &NameQuery) -> Result<Vec<SymbolHit>, Error> {
-        search::find(&self.tx, query).map_err(|e| self.err(&e))
+        let pattern = search::pattern(query).map_err(|e| Error::Usage {
+            cause: format!("invalid regular expression: {e}"),
+            hint: "check the pattern's syntax; quote it for the shell".to_owned(),
+        })?;
+        search::find(&self.tx, query, pattern.as_ref()).map_err(|e| self.err(&e))
     }
 
     /// Number of symbols in the index.

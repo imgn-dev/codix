@@ -155,10 +155,12 @@ pub struct FindOp;
 pub struct FindRequest {
     /// Name to look for.
     pub query: String,
-    /// How to match: `exact`, `prefix` and `fuzzy` ignore case, `glob` matches
-    /// the qualified name; by default exact, then prefix, then fuzzy.
+    /// How to match: `glob` and `regex` match the qualified name, a regex anywhere unless `^` or `$` anchor it; by default exact, then prefix, then fuzzy.
     #[serde(default)]
     pub mode: Option<MatchMode>,
+    /// Match case, which every mode ignores by default.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub case_sensitive: bool,
     /// Keep symbols of this kind, such as method; repeatable.
     #[serde(default, rename = "kind")]
     pub kinds: Vec<String>,
@@ -213,7 +215,7 @@ pub struct FindNext {
 pub struct Alternative {
     /// The name.
     pub name: String,
-    /// Edits from the query to it, ignoring case.
+    /// Edits from the query to it, ignoring case unless the request matches it.
     pub distance: usize,
     /// Its symbols, as `find <name> --exact` gives them.
     pub symbols: usize,
@@ -227,17 +229,23 @@ const ALTERNATIVES: usize = 8;
 fn correct(
     snapshot: &Snapshot<'_>,
     query: &str,
+    case_sensitive: bool,
     hits: &[SymbolHit],
     keep: &dyn Fn(&SymbolHit) -> bool,
 ) -> Result<(String, Vec<SymbolHit>, Vec<Alternative>), Error> {
-    // Hits come closest first; exact lookups ignore case, so do names here.
+    let fold = |s: &str| {
+        if case_sensitive {
+            s.to_owned()
+        } else {
+            s.to_lowercase()
+        }
+    };
+    // Hits come closest first; exact lookups match case as the query does,
+    // so do names here.
     let mut names: Vec<&str> = Vec::new();
     for hit in hits {
         let name = hit.symbol.name.as_str();
-        if !names
-            .iter()
-            .any(|n| n.to_lowercase() == name.to_lowercase())
-        {
+        if !names.iter().any(|n| fold(n) == fold(name)) {
             names.push(name);
         }
     }
@@ -246,26 +254,23 @@ fn correct(
             .find(&NameQuery {
                 text: name.to_owned(),
                 mode: MatchMode::Exact,
+                case_sensitive,
             })?
             .into_iter()
             .filter(|hit| keep(hit))
             .collect())
     };
-    let lower: Vec<char> = query.to_lowercase().chars().collect();
+    let query: Vec<char> = fold(query).chars().collect();
     let mut alternatives = Vec::new();
     for name in names.iter().skip(1).take(ALTERNATIVES) {
+        let chars: Vec<char> = fold(name).chars().collect();
         alternatives.push(Alternative {
             name: (*name).to_owned(),
-            distance: distance(&lower, name),
+            distance: crate::store::edit_distance(&query, &chars),
             symbols: exact(name)?.len(),
         });
     }
     Ok((names[0].to_owned(), exact(names[0])?, alternatives))
-}
-
-fn distance(query: &[char], name: &str) -> usize {
-    let name: Vec<char> = name.to_lowercase().chars().collect();
-    crate::store::edit_distance(query, &name)
 }
 
 impl Outcome for FindResponse {
@@ -299,6 +304,7 @@ impl Operation for FindOp {
                         .find(&NameQuery {
                             text: request.query.clone(),
                             mode,
+                            case_sensitive: request.case_sensitive,
                         })?
                         .into_iter()
                         .filter(|hit| keep(hit))
@@ -311,8 +317,13 @@ impl Operation for FindOp {
                 let (mode, mut hits) = last;
                 let mut correction = None;
                 if mode == MatchMode::Fuzzy && !hits.is_empty() {
-                    let (name, exact, alternatives) =
-                        correct(snapshot, &request.query, &hits, &keep)?;
+                    let (name, exact, alternatives) = correct(
+                        snapshot,
+                        &request.query,
+                        request.case_sensitive,
+                        &hits,
+                        &keep,
+                    )?;
                     hits = exact;
                     correction = Some((name, alternatives));
                 }

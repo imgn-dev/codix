@@ -70,7 +70,7 @@ codix config index.max_file_size 4MB
 
 ## `codix find`
 
-Find symbols by name: exact match, then prefix, then fuzzy.
+Find symbols by name, ignoring case: exact match, then prefix, then fuzzy.
 
 - **When:** Instead of grep to locate a class, function or method: it matches names, not text, and returns IDs the other commands accept.
 - **Returns:** Matching symbols with kind, location and ID; for a misspelled name, the symbols of the closest name and the other close names.
